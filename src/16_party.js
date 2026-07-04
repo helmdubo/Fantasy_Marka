@@ -50,7 +50,7 @@ function sendDelve(bi){
   S.uiDirty=true;return true;
 }
 function partyTick(dt){
-  const P=S.party;if(!P)return;
+  const P=S.party;if(!P||P.inBattle)return; // бой идёт на экране — не дёргать partyArrive
   P.px=P.x;P.py=P.y;
   const wp=P.path[P.pathI];
   if(!wp){partyArrive();return}
@@ -99,11 +99,12 @@ function partyArrive(){
       goBack(steal);
     }else{
       log('🥷 Обнос сорвался — стража подняла тревогу! Бой с внезапностью врага.');
-      const res=resolveBattle(true,1);
-      if(!partyHeroes().length){log('☠ Из похода не вернулся никто.');S.party=null;endSlotMission(true);S.uiDirty=true;return}
-      if(res.win){const loot=L.hoard*0.4;L.hoard-=loot;
-        log('⚔ Стража перебита в свалке — урвали '+loot.toFixed(0)+' з.');goBack(loot)}
-      else{L.aggro=Math.min(99,L.aggro+30);goBack(0)}
+      beginBattle({ambushed:true,mul:1,enemy:L},res=>{
+        if(!partyHeroes().length){log('☠ Из похода не вернулся никто.');S.party=null;endSlotMission(true);S.uiDirty=true;return}
+        if(res.win){const loot=L.hoard*0.4;L.hoard-=loot;
+          log('⚔ Стража перебита в свалке — урвали '+loot.toFixed(0)+' з.');goBack(loot)}
+        else{L.aggro=Math.min(99,L.aggro+30);goBack(0)}
+      });
     }
     return;
   }
@@ -116,9 +117,7 @@ function delveNextFloor(){
   const hs=partyHeroes();
   // подземный страж: сила растёт с глубиной и тиром
   const fake={str:5+fl*4+(b?b.tier:1)*2,id:'delve',name:CFG.DELVE[fl],hoard:0};
-  const savedT=P.target;S.lairs.push(fake);P.target=S.lairs.length-1;
-  const res=resolveBattle(false,1,fl);
-  S.lairs.pop();P.target=savedT;
+  beginBattle({ambushed:false,mul:1,stageIdx:fl,enemy:fake},res=>{
   if(!partyHeroes().length){log('☠ Спуск поглотил всех.');if(b)b.delve=false;S.party=null;endSlotMission(true);S.uiDirty=true;return}
   if(res.win){
     P.floor=fl+1;
@@ -145,54 +144,18 @@ function delveNextFloor(){
     log('🏳 Партия бежит из шахты с этажа «'+CFG.DELVE[fl]+'».');
     if(b)b.delve=false;goBack(P.gain||0);
   }
+  });
 }
 function aggroWord(L){return L.aggro<30?'дремлет':(L.aggro<60?'ворчит':(L.aggro<90?'злится':'в ярости'))}
 function lairStages(L){return CFG.STAGES[L.id]||['Логово','Сердце']}
 function itemAtk(u){return (u.hero.items||[]).reduce((a,it)=>a+(it.atk||0),0)}
-function resolveBattle(ambushed,stageMul,stageIdx){
-  const P=S.party,L=S.lairs[P.target];
-  const hs=partyHeroes();
-  const mul=stageMul||1;
-  let ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
-  const thief=hs.some(u=>u.hero.thief);
-  let rounds=0,retreat=false;
-  if(ambushed){ // «Дозор» (п.9) упреждает засаду — урон внезапности гасится
-    const vig=partyVigil(hs);
-    distributeDamage(hs,eatk*1.5*Math.max(0.4,1-0.12*vig));
-  }
-  while(rounds++<14){
-    // party strike (thief grants opening tempo on round 1)
-    let dmg=0;
-    for(const u of hs){if(u.hero.hp<=0)continue;
-      dmg+=(u.hero.atk+itemAtk(u)+skillAtkBonus(u,stageIdx))*(u.hero.cls==='mage'?1.3:1)*(rounds===1&&thief?1.5:1)}
-    ehp-=dmg;
-    if(ehp<=0)break;
-    distributeDamage(hs,eatk);
-    const alive=hs.filter(u=>u.hero.hp>0);
-    const hpFrac=alive.reduce((a,u)=>a+u.hero.hp,0)/hs.reduce((a,u)=>a+u.hero.maxHp,0);
-    if(!alive.length||hpFrac<0.3){retreat=true;break}
-  }
-  if(ehp<=0){ // «Знахарство» (п.9): после победы знахарь латает раны
-    const healed=partyHerbHeal(hs);
-    if(healed>=3)log('🌿 Знахарь отряда перевязывает раны (+'+healed.toFixed(0)+' HP).');
-  }
-  // deaths
-  const dead=hs.filter(u=>u.hero.hp<=0);
-  for(const u of dead){
-    S.heroDeaths++;breakSlotByDeath(u.id);
-    log('☠ '+u.hero.name+' пал в бою у «'+L.name+'».');
-    S.party.heroes=S.party.heroes.filter(id=>id!==u.id);
-    S.settlers.splice(S.settlers.indexOf(u),1);
-  }
-  return {win:ehp<=0,rounds,retreat};
-}
 function clearNextStage(){
   const P=S.party;if(!P)return;
   const L=S.lairs[P.target];
   const st=lairStages(L);
   const i=L.stage||0;
   const mulArr=[0.55,0.85,1.3];
-  const res=resolveBattle(false,mulArr[Math.min(i,2)]*(st.length===2?1.15:1),i);
+  beginBattle({ambushed:false,mul:mulArr[Math.min(i,2)]*(st.length===2?1.15:1),stageIdx:i,enemy:L},res=>{
   if(!partyHeroes().length){log('☠ Из похода не вернулся никто.');S.party=null;endSlotMission(true);S.uiDirty=true;return}
   if(res.win){
     L.stage=i+1;
@@ -220,20 +183,12 @@ function clearNextStage(){
     log('🏳 Партия отступает от «'+L.name+'» с этапа «'+st[i]+'»'+(res.retreat?' — тяжёлые раны':'')+'.');
     goBack(P.gain||0);
   }
+  });
 }
 function endSlotMission(broken){
   const P=S.party;
   const sl=P?S.partySlots.find(x=>x.id===P.slot):null;
   if(sl&&!broken)sl.status='ready';
-}
-function distributeDamage(hs,dmg){
-  const alive=hs.filter(u=>u.hero.hp>0);
-  if(!alive.length)return;
-  if(alive.some(u=>u.hero.cls==='support'))dmg*=0.85;
-  const tank=alive.find(u=>u.hero.cls==='tank');
-  if(tank){tank.hero.hp-=dmg*0.5;dmg*=0.5}
-  const t=alive[(S.rng()*alive.length)|0];
-  t.hero.hp-=dmg;
 }
 function goBack(gain){
   const P=S.party;

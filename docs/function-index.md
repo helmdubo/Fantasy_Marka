@@ -106,9 +106,15 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 ## src/16_party.js
 
-экспедиции: sendParty/sendDelve, бой resolveBattle, этапы, шахтные этажи
+экспедиции: sendParty/sendDelve, этапы логовищ, шахтные этажи
 
-`sendParty()` · `partyHeroes()` · `sendDelve()` · `partyTick()` · `partyArrive()` · `delveNextFloor()` · `aggroWord()` · `lairStages()` · `itemAtk()` · `resolveBattle()` · `clearNextStage()` · `endSlotMission()` · `distributeDamage()` · `goBack()`
+`sendParty()` · `partyHeroes()` · `sendDelve()` · `partyTick()` · `partyArrive()` · `delveNextFloor()` · `aggroWord()` · `lairStages()` · `itemAtk()` · `clearNextStage()` · `endSlotMission()` · `goBack()`
+
+## src/16b_battle.js
+
+боевое ядро (п.11): ряды, цели, раунды; составы врагов
+
+`ENEMY_DEFS` · `BATTLE_COMPS` · `battleComp()` · `makeBattle()` · `btAlive()` · `btPickTarget()` · `btStrike()` · `stepBattleRound()` · `finishBattle()` · `beginBattle()`
 
 ## src/17_daycycle.js
 
@@ -120,13 +126,13 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 палитра PAL и пиксельные гриды спрайтов (расы, здания)
 
-`PAL` · `OUTL` · `G_HUMAN` · `G_DWARF` · `G_ELF` · `G_TROLL` · `G_HUT` · `G_HOUSE2` · `HOUSE2_MAP` · `G_TOWNHALL` · `G_TOWER` · `G_NECRO` · `G_TAVERN` · `TAVERN_MAP` · `G_RAIDER` · `RAIDER_MAP` · `UNIT_MAPS` · `UNIT_GRIDS` · `HUT_MAPS` · `TH_MAP` · `TOWER_MAP` · `NECRO_MAP` · `validateSprites()` · `bobFrame()` · `terrPix()`
+`PAL` · `OUTL` · `G_HUMAN` · `G_DWARF` · `G_ELF` · `G_TROLL` · `G_HUT` · `G_GOBLIN` · `GOBLIN_MAP` · `G_GOBSHAMAN` · `GOBSHAMAN_MAP` · `G_SKELETON` · `SKELETON_MAP` · `G_BEAST` · `BEAST_MAP` · `G_FIREATR` · `FIREATR_MAP` · `G_MAGMAATR` · `MAGMAATR_MAP` · `G_NECRO_U` · `NECRO_U_MAP` · `G_HOUSE2` · `HOUSE2_MAP` · `G_TOWNHALL` · `G_TOWER` · `G_NECRO` · `G_TAVERN` · `TAVERN_MAP` · `G_RAIDER` · `RAIDER_MAP` · `UNIT_MAPS` · `UNIT_GRIDS` · `HUT_MAPS` · `TH_MAP` · `TOWER_MAP` · `NECRO_MAP` · `validateSprites()` · `bobFrame()` · `terrPix()`
 
 ## src/19_atlas.js
 
 canvas-атлас: отрисовка тайлов/зданий/иконок, buildAtlas (browser only)
 
-`ATLAS` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triBary()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverHex()` · `paintWaterfall()` · `paintBridge()` · `paintFull()` · `px()` · `rect()` · `paintBerry()` · `paintDeadfall()` · `paintRubble()` · `paintVein()` · `paintFish()` · `paintRuins()` · `paintSite()` · `paintFarm()` · `paintMine()` · `paintCamp()` · `paintCliff()` · `paintGraves()` · `paintFisher()` · `paintLumber()` · `paintPort()` · `paintGuild()` · `paintAdvGuild()` · `paintShip()` · `paintCrafters()` · `paintStake()` · `paintPennant()` · `paintHammer()` · `paintSmoke()` · `paintWheat()` · `paintStump()` · `paintWatchtower()` · `paintLibrary()` · `paintKnowledge()` · `paintIcon()` · `buildAtlas()`
+`ATLAS` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triBary()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverHex()` · `paintWaterfall()` · `paintBridge()` · `paintFull()` · `px()` · `rect()` · `paintBerry()` · `paintDeadfall()` · `paintRubble()` · `paintVein()` · `paintFish()` · `paintRuins()` · `paintSite()` · `paintFarm()` · `paintMine()` · `paintCamp()` · `paintDen()` · `paintCliff()` · `paintGraves()` · `paintFisher()` · `paintLumber()` · `paintPort()` · `paintGuild()` · `paintAdvGuild()` · `paintShip()` · `paintCrafters()` · `paintStake()` · `paintPennant()` · `paintHammer()` · `paintSmoke()` · `paintWheat()` · `paintStump()` · `paintWatchtower()` · `paintLibrary()` · `paintKnowledge()` · `paintIcon()` · `buildAtlas()`
 
 ## src/20_render.js
 
@@ -145,6 +151,12 @@ three.js: батчи, меши террейна/дорог/зданий/юнит
 DOM UI: панели, дебаг, пати-окно, инспектор, updateUI
 
 `el()` · `togglePause()` · `setSpeed()` · `debugBuilt` · `toggleDebug()` · `buildDebug()` · `updateDebug()` · `PICK` · `toggleParty()` · `renderParty()` · `buildUI()` · `raceCounts()` · `ammoCount()` · `updateUI()` · `dispName()` · `updateInspector()`
+
+## src/22b_battle_ui.js
+
+экран боя (п.11, browser only): карточки рядов, лог, отступление
+
+`BTUI` · `btUnitGrid()` · `btUnitCard()` · `btRender()` · `openBattleScreen()`
 
 ## src/23_main.js
 

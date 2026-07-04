@@ -93,6 +93,27 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 .fxpop.info{color:var(--gold)}
 .portbar{position:absolute;width:38px;height:6px;background:#171209;border:1px solid var(--edge);box-shadow:0 1px 0 #000;z-index:33;pointer-events:none}
 .portbar>div{height:100%;background:var(--gold);image-rendering:pixelated}
+/* -------- экран боя (п.11) -------- */
+#battle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,94vw);
+  z-index:40;display:none;text-align:center}
+#bt_field{display:flex;align-items:stretch;justify-content:center;gap:8px;margin:10px 0}
+.bt-side{display:flex;gap:6px}
+.bt-col{display:flex;flex-direction:column;gap:8px;justify-content:center;min-width:86px}
+.bt-vs{align-self:center;color:var(--gold);font-size:20px;padding:0 4px}
+.bt-unit{background:var(--panel2);border:2px solid var(--edge);box-shadow:inset 0 0 0 1px var(--hl);
+  padding:4px;width:86px}
+.bt-unit canvas{width:48px;height:48px;image-rendering:pixelated}
+.bt-unit .nm{font-size:10px;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt-unit .hpbar{height:6px;background:#171209;border:1px solid var(--edge);margin-top:3px}
+.bt-unit .hpbar>div{height:100%;background:var(--ok)}
+.bt-unit.dead{opacity:.35;filter:grayscale(1)}
+.bt-unit.hitfx{outline:2px solid var(--bad)}
+.bt-unit.healfx{outline:2px solid var(--ok)}
+#bt_log{max-height:90px;overflow:hidden;font-size:11px;text-align:left;margin:6px 0;
+  background:rgba(20,14,9,.6);border:1px solid var(--edge);padding:4px 7px}
+#bt_log .e{margin:1px 0;color:var(--dim)}
+#bt_log .e:first-child{color:var(--tx)}
+.bt-rowlabel{font-size:9px;color:var(--dim);letter-spacing:1px}
 </style>
 </head>
 <body>
@@ -149,6 +170,16 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
   <div id="sc_body" style="margin:8px 0;text-align:left"></div>
   <div><button id="sc_go">Дальше</button> <button id="sc_back">Отступить с добычей</button></div>
 </div>
+<div id="battle" class="panel">
+  <div class="ptitle" id="bt_title">Бой</div>
+  <div id="bt_field">
+    <div class="bt-side"><div class="bt-col" id="bt_p_back"></div><div class="bt-col" id="bt_p_front"></div></div>
+    <div class="bt-vs">⚔</div>
+    <div class="bt-side"><div class="bt-col" id="bt_e_front"></div><div class="bt-col" id="bt_e_back"></div></div>
+  </div>
+  <div id="bt_log"></div>
+  <div><button id="bt_flee">Отступить</button> <button id="bt_fast">Быстрее ×2</button></div>
+</div>
 <div id="gameover" class="panel" style="display:none;left:50%;top:40%;transform:translate(-50%,-50%);width:320px;text-align:center;z-index:30">
   <div class="ptitle" style="color:var(--bad)">МАРКА ПАЛА</div>
   <div id="go_body" style="margin:8px 0;text-align:left"></div>
@@ -192,7 +223,7 @@ const CFG={
   CRAFT_EVERY:3,
   STAGES:{tower:['Двор','Залы','Вершина'],camp:['Частокол','Шатры'],
     cliff:['Тропа','Гнездо'],graves:['Ограда','Склепы','Алтарь'],
-    necro:['Врата','Лаборатория','Шпиль']},
+    necro:['Врата','Лаборатория','Шпиль'],den:['Тропы','Логовище']},
   DELVE:['Штольни','Глубины','Бездна'],
   PRICE:{food:0.25,wood:0.45,stone:0.35,gems:4}, TRADE_Q:12, MARKET_TAX:0.10,
   TRIBUTE:{every:24,base:10,perDay:0.20,perPop:0.45,warn:3},
@@ -236,6 +267,7 @@ const ACTNAME={idle:'без дела',goto:'в пути',work:'работает'
 const LAIR_DEFS=[
   {id:'tower', name:'Заброшенная башня', tier:1, ring:[12,20], terr:[T.GRASS]},
   {id:'camp',  name:'Лагерь в чащобе',   tier:1, ring:[13,22], terr:[T.FOREST]},
+  {id:'den',   name:'Звериное логово',   tier:1, ring:[11,20], terr:[T.FOREST]}, // п.11: лесной энкаунтер со зверями
   {id:'cliff', name:'Скалистый утёс',    tier:2, ring:[20,30], terr:[T.ROCK,T.GRASS]},
   {id:'graves',name:'Заброшенное кладбище',tier:2, ring:[20,30], terr:[T.GRASS]},
   {id:'necro', name:'Башня некроманта',  tier:3, ring:[32,90], terr:[T.GRASS,T.ROCK]},
@@ -3107,7 +3139,7 @@ function sendDelve(bi){
   S.uiDirty=true;return true;
 }
 function partyTick(dt){
-  const P=S.party;if(!P)return;
+  const P=S.party;if(!P||P.inBattle)return; // бой идёт на экране — не дёргать partyArrive
   P.px=P.x;P.py=P.y;
   const wp=P.path[P.pathI];
   if(!wp){partyArrive();return}
@@ -3156,11 +3188,12 @@ function partyArrive(){
       goBack(steal);
     }else{
       log('🥷 Обнос сорвался — стража подняла тревогу! Бой с внезапностью врага.');
-      const res=resolveBattle(true,1);
-      if(!partyHeroes().length){log('☠ Из похода не вернулся никто.');S.party=null;endSlotMission(true);S.uiDirty=true;return}
-      if(res.win){const loot=L.hoard*0.4;L.hoard-=loot;
-        log('⚔ Стража перебита в свалке — урвали '+loot.toFixed(0)+' з.');goBack(loot)}
-      else{L.aggro=Math.min(99,L.aggro+30);goBack(0)}
+      beginBattle({ambushed:true,mul:1,enemy:L},res=>{
+        if(!partyHeroes().length){log('☠ Из похода не вернулся никто.');S.party=null;endSlotMission(true);S.uiDirty=true;return}
+        if(res.win){const loot=L.hoard*0.4;L.hoard-=loot;
+          log('⚔ Стража перебита в свалке — урвали '+loot.toFixed(0)+' з.');goBack(loot)}
+        else{L.aggro=Math.min(99,L.aggro+30);goBack(0)}
+      });
     }
     return;
   }
@@ -3173,9 +3206,7 @@ function delveNextFloor(){
   const hs=partyHeroes();
   // подземный страж: сила растёт с глубиной и тиром
   const fake={str:5+fl*4+(b?b.tier:1)*2,id:'delve',name:CFG.DELVE[fl],hoard:0};
-  const savedT=P.target;S.lairs.push(fake);P.target=S.lairs.length-1;
-  const res=resolveBattle(false,1,fl);
-  S.lairs.pop();P.target=savedT;
+  beginBattle({ambushed:false,mul:1,stageIdx:fl,enemy:fake},res=>{
   if(!partyHeroes().length){log('☠ Спуск поглотил всех.');if(b)b.delve=false;S.party=null;endSlotMission(true);S.uiDirty=true;return}
   if(res.win){
     P.floor=fl+1;
@@ -3202,54 +3233,18 @@ function delveNextFloor(){
     log('🏳 Партия бежит из шахты с этажа «'+CFG.DELVE[fl]+'».');
     if(b)b.delve=false;goBack(P.gain||0);
   }
+  });
 }
 function aggroWord(L){return L.aggro<30?'дремлет':(L.aggro<60?'ворчит':(L.aggro<90?'злится':'в ярости'))}
 function lairStages(L){return CFG.STAGES[L.id]||['Логово','Сердце']}
 function itemAtk(u){return (u.hero.items||[]).reduce((a,it)=>a+(it.atk||0),0)}
-function resolveBattle(ambushed,stageMul,stageIdx){
-  const P=S.party,L=S.lairs[P.target];
-  const hs=partyHeroes();
-  const mul=stageMul||1;
-  let ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
-  const thief=hs.some(u=>u.hero.thief);
-  let rounds=0,retreat=false;
-  if(ambushed){ // «Дозор» (п.9) упреждает засаду — урон внезапности гасится
-    const vig=partyVigil(hs);
-    distributeDamage(hs,eatk*1.5*Math.max(0.4,1-0.12*vig));
-  }
-  while(rounds++<14){
-    // party strike (thief grants opening tempo on round 1)
-    let dmg=0;
-    for(const u of hs){if(u.hero.hp<=0)continue;
-      dmg+=(u.hero.atk+itemAtk(u)+skillAtkBonus(u,stageIdx))*(u.hero.cls==='mage'?1.3:1)*(rounds===1&&thief?1.5:1)}
-    ehp-=dmg;
-    if(ehp<=0)break;
-    distributeDamage(hs,eatk);
-    const alive=hs.filter(u=>u.hero.hp>0);
-    const hpFrac=alive.reduce((a,u)=>a+u.hero.hp,0)/hs.reduce((a,u)=>a+u.hero.maxHp,0);
-    if(!alive.length||hpFrac<0.3){retreat=true;break}
-  }
-  if(ehp<=0){ // «Знахарство» (п.9): после победы знахарь латает раны
-    const healed=partyHerbHeal(hs);
-    if(healed>=3)log('🌿 Знахарь отряда перевязывает раны (+'+healed.toFixed(0)+' HP).');
-  }
-  // deaths
-  const dead=hs.filter(u=>u.hero.hp<=0);
-  for(const u of dead){
-    S.heroDeaths++;breakSlotByDeath(u.id);
-    log('☠ '+u.hero.name+' пал в бою у «'+L.name+'».');
-    S.party.heroes=S.party.heroes.filter(id=>id!==u.id);
-    S.settlers.splice(S.settlers.indexOf(u),1);
-  }
-  return {win:ehp<=0,rounds,retreat};
-}
 function clearNextStage(){
   const P=S.party;if(!P)return;
   const L=S.lairs[P.target];
   const st=lairStages(L);
   const i=L.stage||0;
   const mulArr=[0.55,0.85,1.3];
-  const res=resolveBattle(false,mulArr[Math.min(i,2)]*(st.length===2?1.15:1),i);
+  beginBattle({ambushed:false,mul:mulArr[Math.min(i,2)]*(st.length===2?1.15:1),stageIdx:i,enemy:L},res=>{
   if(!partyHeroes().length){log('☠ Из похода не вернулся никто.');S.party=null;endSlotMission(true);S.uiDirty=true;return}
   if(res.win){
     L.stage=i+1;
@@ -3277,20 +3272,12 @@ function clearNextStage(){
     log('🏳 Партия отступает от «'+L.name+'» с этапа «'+st[i]+'»'+(res.retreat?' — тяжёлые раны':'')+'.');
     goBack(P.gain||0);
   }
+  });
 }
 function endSlotMission(broken){
   const P=S.party;
   const sl=P?S.partySlots.find(x=>x.id===P.slot):null;
   if(sl&&!broken)sl.status='ready';
-}
-function distributeDamage(hs,dmg){
-  const alive=hs.filter(u=>u.hero.hp>0);
-  if(!alive.length)return;
-  if(alive.some(u=>u.hero.cls==='support'))dmg*=0.85;
-  const tank=alive.find(u=>u.hero.cls==='tank');
-  if(tank){tank.hero.hp-=dmg*0.5;dmg*=0.5}
-  const t=alive[(S.rng()*alive.length)|0];
-  t.hero.hp-=dmg;
 }
 function goBack(gain){
   const P=S.party;
@@ -3303,6 +3290,139 @@ function goBack(gain){
   if(p){P.path=p;P.pathI=0}
   else{P.path=[];P.pathI=0}
   S.uiDirty=true;
+}
+/* ---------- БОЕВОЕ ЯДРО (п.11) ----------
+   Бой отрядов в стиле Disciples: у каждой стороны передний и задний ряд.
+   Ближний боец бьёт передний ряд врага (задний — только когда передний пал),
+   заклинатели бьют любой ряд, саппорт лечит. Раунды периодические.
+   Одно ядро на всех: headless/autoQuest прокручивает бой мгновенно,
+   в браузере экран боя (22b_battle_ui) анимирует те же раунды. */
+const ENEMY_DEFS={
+  goblin:    {nm:'Гоблин',          row:'front', hpW:1.0, atkW:1.0, grid:'G_GOBLIN',    map:'GOBLIN_MAP'},
+  gobshaman: {nm:'Гоблин-шаман',    row:'back',  hpW:0.7, atkW:1.3, grid:'G_GOBSHAMAN', map:'GOBSHAMAN_MAP', caster:true},
+  bandit:    {nm:'Разбойник',       row:'front', hpW:1.1, atkW:1.1, grid:'G_RAIDER',    map:'RAIDER_MAP'},
+  skeleton:  {nm:'Скелет',          row:'front', hpW:0.9, atkW:0.9, grid:'G_SKELETON',  map:'SKELETON_MAP'},
+  necromancer:{nm:'Некромант',      row:'back',  hpW:0.8, atkW:1.6, grid:'G_NECRO_U',   map:'NECRO_U_MAP', caster:true},
+  beast:     {nm:'Лютый зверь',     row:'front', hpW:1.2, atkW:1.2, grid:'G_BEAST',     map:'BEAST_MAP'},
+  fireatr:   {nm:'Огненный атронах',row:'back',  hpW:1.0, atkW:1.8, grid:'G_FIREATR',   map:'FIREATR_MAP', caster:true},
+  magmaatr:  {nm:'Магмовый атронах',row:'front', hpW:1.6, atkW:1.2, grid:'G_MAGMAATR',  map:'MAGMAATR_MAP'},
+};
+// составы врагов: по типу логова и этапу (или этажу шахты для delve)
+const BATTLE_COMPS={
+  tower:[['bandit','bandit'],['bandit','bandit','gobshaman'],['bandit','necromancer','bandit']],
+  camp:[['bandit','goblin'],['bandit','bandit','goblin']],
+  den:[['beast','beast'],['beast','beast','beast']],
+  cliff:[['goblin','goblin','goblin'],['goblin','gobshaman','goblin']],
+  graves:[['skeleton','skeleton'],['skeleton','skeleton','necromancer'],['necromancer','skeleton','skeleton']],
+  necro:[['skeleton','skeleton','necromancer'],['skeleton','necromancer','necromancer'],['necromancer','skeleton','skeleton','skeleton']],
+  delve:[['goblin','goblin','goblin'],['magmaatr','goblin','goblin'],['fireatr','magmaatr']],
+};
+function battleComp(lairId,stageIdx){
+  const arr=BATTLE_COMPS[lairId]||BATTLE_COMPS.camp;
+  return arr[Math.min(stageIdx||0,arr.length-1)];
+}
+function makeBattle(opts){
+  // opts:{ambushed,mul,stageIdx,enemy:{id,str,name}}
+  const P=S.party,L=opts.enemy;
+  const hs=partyHeroes();
+  const mul=opts.mul||1;
+  const stageIdx=opts.stageIdx||0;
+  const party=hs.map(u=>({side:'party',name:u.hero.name,cls:u.hero.cls,
+    row:(u.hero.cls==='tank'||u.hero.cls==='bruiser')?'front':'back',
+    hp:u.hero.hp,maxHp:u.hero.maxHp,
+    atk:(u.hero.atk+itemAtk(u)+skillAtkBonus(u,stageIdx))*(u.hero.cls==='mage'?1.3:1),
+    caster:u.hero.cls==='mage',healer:u.hero.cls==='support',uref:u}));
+  const comp=battleComp(L.id,stageIdx);
+  const ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
+  let hpW=0,atkW=0;
+  for(const k of comp){hpW+=ENEMY_DEFS[k].hpW;atkW+=ENEMY_DEFS[k].atkW}
+  const enemies=comp.map(k=>{const d=ENEMY_DEFS[k];
+    const hp=Math.max(3,Math.round(ehp*d.hpW/hpW));
+    return {side:'enemy',name:d.nm,key:k,row:d.row,hp,maxHp:hp,
+      atk:eatk*d.atkW/atkW,caster:!!d.caster,def:d};
+  });
+  return {party,enemies,round:0,over:false,win:false,retreat:false,
+    ambushed:!!opts.ambushed,thief:hs.some(u=>u.hero.thief),
+    vigil:partyVigil(hs),lairName:L.name,stageIdx,events:[],fleeReq:false};
+}
+function btAlive(arr){return arr.filter(x=>x.hp>0)}
+function btPickTarget(att,foes){
+  const alive=btAlive(foes);
+  if(!alive.length)return null;
+  if(att.caster){ // заклинатель бьёт слабейшего в любом ряду
+    return alive.slice().sort((a,b)=>a.hp-b.hp)[0];
+  }
+  const front=alive.filter(x=>x.row==='front');
+  const pool=front.length?front:alive; // ближний бой: сначала передний ряд
+  return pool[(S.rng()*pool.length)|0];
+}
+function btStrike(bt,att,foes,mulDmg){
+  if(att.healer){ // саппорт: лечит самого раненого, если есть кого
+    const allies=btAlive(att.side==='party'?bt.party:bt.enemies)
+      .filter(x=>x.hp<x.maxHp&&x!==att).sort((a,b)=>(a.hp/a.maxHp)-(b.hp/b.maxHp));
+    if(allies.length){
+      const t=allies[0],h=att.atk*1.2;
+      t.hp=Math.min(t.maxHp,t.hp+h);
+      bt.events.push({t:'heal',a:att.name,b:t.name,v:h});
+      return;
+    }
+  }
+  const t=btPickTarget(att,foes);
+  if(!t)return;
+  const dmg=att.atk*(mulDmg||1);
+  t.hp-=dmg;
+  bt.events.push({t:'hit',a:att.name,b:t.name,v:dmg,kill:t.hp<=0});
+}
+function stepBattleRound(bt){
+  if(bt.over)return;
+  bt.round++;bt.events.length=0;
+  if(bt.fleeReq){bt.over=true;bt.retreat=true;bt.win=false;
+    bt.events.push({t:'flee'});return}
+  // засада: враги бьют первыми, «Дозор» отряда гасит внезапность
+  if(bt.round===1&&bt.ambushed){
+    const m=1.5*Math.max(0.4,1-0.12*bt.vigil);
+    for(const e of btAlive(bt.enemies))btStrike(bt,e,bt.party,m);
+    if(bt.vigil>0)bt.events.push({t:'note',m:'«Дозор» упреждает засаду'});
+  }
+  // ход отряда (вор даёт темп в первом раунде)
+  const tempo=(bt.round===1&&bt.thief)?1.5:1;
+  for(const h of btAlive(bt.party))btStrike(bt,h,bt.enemies,tempo);
+  if(!btAlive(bt.enemies).length){bt.over=true;bt.win=true;return}
+  // ход врага
+  for(const e of btAlive(bt.enemies))btStrike(bt,e,bt.party);
+  const alive=btAlive(bt.party);
+  const hpFrac=alive.reduce((a,u)=>a+u.hp,0)/bt.party.reduce((a,u)=>a+u.maxHp,0);
+  if(!alive.length||hpFrac<0.3||bt.round>=20){bt.over=true;bt.retreat=true}
+}
+function finishBattle(bt){
+  // перенести исход на героев: HP, лечение знахаря, гибель
+  for(const c of bt.party)if(c.uref&&c.uref.hero)c.uref.hero.hp=Math.max(0,c.hp);
+  const hs=partyHeroes();
+  if(bt.win){
+    const healed=partyHerbHeal(hs);
+    if(healed>=3)log('🌿 Знахарь отряда перевязывает раны (+'+healed.toFixed(0)+' HP).');
+  }
+  const dead=hs.filter(u=>u.hero.hp<=0);
+  for(const u of dead){
+    S.heroDeaths++;breakSlotByDeath(u.id);
+    log('☠ '+u.hero.name+' пал в бою у «'+bt.lairName+'».');
+    S.party.heroes=S.party.heroes.filter(id=>id!==u.id);
+    S.settlers.splice(S.settlers.indexOf(u),1);
+  }
+  return {win:bt.win,rounds:bt.round,retreat:bt.retreat};
+}
+function beginBattle(opts,cont){
+  const bt=makeBattle(opts);
+  const P=S.party;
+  const done=(res)=>{if(S.party)S.party.inBattle=false;cont(res)};
+  if(!IS_BROWSER||S.autoQuest){
+    while(!bt.over)stepBattleRound(bt);
+    done(finishBattle(bt));
+    return;
+  }
+  if(P)P.inBattle=true; // partyTick не должен снова звать partyArrive
+  S.paused=true;S.uiDirty=true;
+  openBattleScreen(bt,()=>done(finishBattle(bt)));
 }
 function brewDaily(){
   // п.5: таверна варит эль из зерна, принесённого разносчиком в её локальный
@@ -3554,6 +3674,133 @@ const G_HUT=[
 "................",
 "................",
 "................"];
+/* ---------- ВРАГИ ЭКРАНА БОЯ (п.11) ---------- */
+const G_GOBLIN=[
+"................",
+"................",
+"................",
+"...g......g.....",
+"...g.gggg.g.....",
+"....geggeg......",
+"....gggggg......",
+".....dddd.......",
+"....dddddd.w....",
+"....d.dd.d.w....",
+"......dd...w....",
+".....g..g..w....",
+".....g..g.......",
+"................",
+"................",
+"................"];
+const GOBLIN_MAP={g:PAL.TR,e:PAL.BER,d:PAL.D,w:PAL.Wd};
+const G_GOBSHAMAN=[
+"................",
+"................",
+"...g......g.....",
+"...g.gggg.g.....",
+"....geggeg......",
+"....gggggg......",
+".p...nnnn.......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..n.nn.n......",
+".w....nn........",
+".....g..g.......",
+"................",
+"................",
+"................"];
+const GOBSHAMAN_MAP={g:PAL.TR,e:PAL.BER,n:PAL.M1,w:PAL.Wd,p:PAL.GEM};
+const G_SKELETON=[
+"................",
+"................",
+".....ssss.......",
+"....ssssss......",
+"....skssks......",
+"....ssssss......",
+".....s..s.......",
+"....ssssss.b....",
+"....s.ss.s.b....",
+"....ssssss.b....",
+"....s.ss.s.b....",
+".....ssss..b....",
+".....s..s.......",
+".....s..s.......",
+"................",
+"................"];
+const SKELETON_MAP={s:PAL.SN,k:PAL.k,b:PAL.R2};
+const G_BEAST=[
+"................",
+"................",
+"................",
+"..k........k....",
+"..kk......kk....",
+"..kkkk..kkkkk...",
+"..kekkkkkkkkkk..",
+"...kkkkkkkkkkkk.",
+"....kkkkkkkkkk..",
+"....kk.kkk.kk...",
+"....k...k...k...",
+"....k...k...k...",
+"................",
+"................",
+"................",
+"................"];
+const BEAST_MAP={k:PAL.R2,e:PAL.BER};
+const G_FIREATR=[
+"................",
+".....y..f.......",
+"....fyffyf......",
+"....fyffyf......",
+"....ffkkff......",
+"....ffffff......",
+"...f.ffff.f.....",
+"..ff.ffff.ff....",
+".f...ffff...f...",
+".....ffff.......",
+"....ff..ff......",
+"...ff....ff.....",
+"..ff......ff....",
+"................",
+"................",
+"................"];
+const FIREATR_MAP={f:'#ff7a2e',y:PAL.y,k:PAL.k};
+const G_MAGMAATR=[
+"................",
+"................",
+"....mmmm........",
+"...mmmmmm.......",
+"...mymmym.......",
+"...mmmmmm.......",
+"..mmmfmmmm......",
+".mm.mfffm.mm....",
+".mm.mffmm.mm....",
+".m..mmmm...m....",
+"....mmmm........",
+"...mm..mm.......",
+"..mm....mm......",
+".mm......mm.....",
+"................",
+"................"];
+const MAGMAATR_MAP={m:PAL.M1,f:'#ff5a2e',y:PAL.y};
+const G_NECRO_U=[
+"................",
+".....nnnn.......",
+"....nnnnnn......",
+"....nvnnvn......",
+"....nnnnnn......",
+".p...nnnn.......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nn..nn......",
+"....nn..nn......",
+"................",
+"................",
+"................"];
+const NECRO_U_MAP={n:'#2a2333',v:PAL.NEC,w:PAL.Wd,p:PAL.NEC};
 const G_HOUSE2=[ // дом переселенцев (лачуга тир 2, п.10): каменный низ, деревянный верх
 "................",
 "......oooo......",
@@ -3674,7 +3921,7 @@ const TOWER_MAP={s:PAL.R2,S:PAL.R1,k:PAL.k};
 const NECRO_MAP={n:PAL.M1,N:PAL.o,k:PAL.NEC,v:PAL.NEC};
 
 function validateSprites(){
-  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO};
+  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO,G_GOBLIN,G_GOBSHAMAN,G_SKELETON,G_BEAST,G_FIREATR,G_MAGMAATR,G_NECRO_U};
   const errs=[];
   for(const n in all){
     const g=all[n];
@@ -3934,6 +4181,13 @@ function paintCamp(ctx,x,y){
   for(let i=0;i<4;i++){rect(ctx,x,y,9+i,12-i,1,i+1,PAL.Cr);rect(ctx,x,y,14-i,12-i,1,i+1,PAL.R)}
   px(ctx,x,y,5,12,PAL.y);px(ctx,x,y,6,13,PAL.r);px(ctx,x,y,5,13,PAL.r);
 }
+function paintDen(ctx,x,y){
+  // звериное логово (п.11): тёмная нора под корягой, кости у входа
+  rect(ctx,x,y,3,8,10,6,PAL.DI);rect(ctx,x,y,4,9,8,4,PAL.k);
+  rect(ctx,x,y,2,7,12,1,PAL.Wd);px(ctx,x,y,2,6,PAL.Wd);px(ctx,x,y,13,6,PAL.Wd);
+  px(ctx,x,y,5,13,PAL.SN);px(ctx,x,y,6,14,PAL.SN);px(ctx,x,y,10,13,PAL.SN);
+  px(ctx,x,y,11,14,PAL.SN);px(ctx,x,y,8,14,PAL.SN);
+}
 function paintCliff(ctx,x,y){
   rect(ctx,x,y,3,7,10,8,PAL.R1);rect(ctx,x,y,4,6,8,1,PAL.R2);
   rect(ctx,x,y,5,5,5,1,PAL.R2);rect(ctx,x,y,6,9,2,2,PAL.k);
@@ -4160,6 +4414,7 @@ function buildAtlas(){
   p=place(16,12);drawGrid(ctx,p.x,p.y,G_TOWER,TOWER_MAP);reg('l_tower',p.x,p.y,16,12);
   p=place(16,15);drawGrid(ctx,p.x,p.y,G_NECRO,NECRO_MAP);reg('l_necro',p.x,p.y,16,15);
   p=place(16,16);paintCamp(ctx,p.x,p.y);reg('l_camp',p.x,p.y,16,16);
+  p=place(16,16);paintDen(ctx,p.x,p.y);reg('l_den',p.x,p.y,16,16);
   p=place(16,16);paintCliff(ctx,p.x,p.y);reg('l_cliff',p.x,p.y,16,16);
   p=place(16,16);paintGraves(ctx,p.x,p.y);reg('l_graves',p.x,p.y,16,16);
   // features
@@ -5345,6 +5600,97 @@ function updateInspector(){
   if(opb)opb.onclick=()=>toggleParty(true);
 }
 
+/* ---------- ЭКРАН БОЯ (п.11, browser only) ----------
+   Отряды стоят друг напротив друга: передний/задний ряд с каждой стороны.
+   Раунды тикают сами (интервал), урон подсвечивается, есть «Отступить».
+   По завершении вызывается continuation из beginBattle. */
+let BTUI=null;
+function btUnitGrid(c){
+  if(c.side==='party')return {grid:UNIT_GRIDS[c.uref.race],map:UNIT_MAPS[c.uref.race]};
+  // имена гридов/карт врагов заданы строками в ENEMY_DEFS — берём из общего scope
+  const G={G_GOBLIN,G_GOBSHAMAN,G_RAIDER,G_SKELETON,G_NECRO_U,G_BEAST,G_FIREATR,G_MAGMAATR};
+  const M={GOBLIN_MAP,GOBSHAMAN_MAP,RAIDER_MAP,SKELETON_MAP,NECRO_U_MAP,BEAST_MAP,FIREATR_MAP,MAGMAATR_MAP};
+  return {grid:G[c.def.grid],map:M[c.def.map]};
+}
+function btUnitCard(c){
+  const div=document.createElement('div');
+  div.className='bt-unit';
+  const cv=document.createElement('canvas');cv.width=16;cv.height=16;
+  const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
+  const g=btUnitGrid(c);
+  if(g.grid)drawGrid(ctx,0,0,g.grid,g.map);
+  if(c.side==='enemy'){ // враг смотрит влево
+    const flip=document.createElement('canvas');flip.width=16;flip.height=16;
+    const fx=flip.getContext('2d');fx.imageSmoothingEnabled=false;
+    fx.translate(16,0);fx.scale(-1,1);fx.drawImage(cv,0,0);
+    cv.getContext('2d').clearRect(0,0,16,16);
+    cv.getContext('2d').drawImage(flip,0,0);
+  }
+  div.appendChild(cv);
+  const nm=document.createElement('div');nm.className='nm';nm.textContent=c.name;div.appendChild(nm);
+  const bar=document.createElement('div');bar.className='hpbar';
+  const fill=document.createElement('div');bar.appendChild(fill);div.appendChild(bar);
+  c._el=div;c._hp=fill;
+  return div;
+}
+function btRender(bt){
+  for(const c of bt.party.concat(bt.enemies)){
+    if(!c._el)continue;
+    const f=Math.max(0,c.hp/c.maxHp);
+    c._hp.style.width=(f*100).toFixed(0)+'%';
+    c._hp.style.background=f<0.3?'var(--bad)':(f<0.6?'#c9b458':'var(--ok)');
+    c._el.classList.toggle('dead',c.hp<=0);
+  }
+  const lg=el('bt_log');
+  const lines=[];
+  for(const e of bt.events.slice().reverse()){
+    if(e.t==='hit')lines.push('<div class="e">⚔ '+e.a+' → '+e.b+': −'+e.v.toFixed(0)+(e.kill?' ☠':'')+'</div>');
+    else if(e.t==='heal')lines.push('<div class="e">🌿 '+e.a+' лечит '+e.b+': +'+e.v.toFixed(0)+'</div>');
+    else if(e.t==='note')lines.push('<div class="e">👁 '+e.m+'</div>');
+    else if(e.t==='flee')lines.push('<div class="e">🏳 Отряд отступает!</div>');
+  }
+  if(lines.length)lg.innerHTML=lines.join('')+lg.innerHTML;
+  while(lg.children.length>18)lg.removeChild(lg.lastChild);
+  // подсветка последних целей
+  for(const c of bt.party.concat(bt.enemies)){if(c._el){c._el.classList.remove('hitfx','healfx')}}
+  for(const e of bt.events){
+    const all=bt.party.concat(bt.enemies);
+    const t=all.find(c=>c.name===e.b);
+    if(t&&t._el)t._el.classList.add(e.t==='heal'?'healfx':'hitfx');
+  }
+}
+function openBattleScreen(bt,done){
+  const box=el('battle');
+  el('bt_title').textContent='Бой: «'+bt.lairName+'»'+(bt.ambushed?' · засада!':'');
+  for(const id of ['bt_p_front','bt_p_back','bt_e_front','bt_e_back'])el(id).innerHTML='';
+  el('bt_log').innerHTML='<div class="e">Отряды сходятся…</div>';
+  for(const c of bt.party)el(c.row==='front'?'bt_p_front':'bt_p_back').appendChild(btUnitCard(c));
+  for(const c of bt.enemies)el(c.row==='front'?'bt_e_front':'bt_e_back').appendChild(btUnitCard(c));
+  box.style.display='block';
+  let speed=1;
+  const fleeBtn=el('bt_flee'),fastBtn=el('bt_fast');
+  fleeBtn.disabled=false;
+  fleeBtn.onclick=()=>{bt.fleeReq=true;fleeBtn.disabled=true};
+  fastBtn.onclick=()=>{speed=speed===1?2:1;fastBtn.classList.toggle('on',speed===2)};
+  btRender(bt);
+  const finish=()=>{
+    clearInterval(BTUI.iv);BTUI=null;
+    setTimeout(()=>{
+      box.style.display='none';
+      done(); // continuation из beginBattle (finishBattle внутри)
+      S.uiDirty=true;
+    },900);
+  };
+  BTUI={bt,iv:setInterval(()=>{
+    if(!BTUI)return;
+    for(let k=0;k<speed;k++)if(!bt.over)stepBattleRound(bt);
+    btRender(bt);
+    if(bt.over){
+      el('bt_log').innerHTML='<div class="e">'+(bt.win?'🏆 Победа!':'🏳 Отряд отходит…')+'</div>'+el('bt_log').innerHTML;
+      finish();
+    }
+  },850)};
+}
 /* ================= MAIN ================= */
 function restart(seedStr){
   clearFeedbackLayer();

@@ -232,6 +232,13 @@ function paintCamp(ctx,x,y){
   for(let i=0;i<4;i++){rect(ctx,x,y,9+i,12-i,1,i+1,PAL.Cr);rect(ctx,x,y,14-i,12-i,1,i+1,PAL.R)}
   px(ctx,x,y,5,12,PAL.y);px(ctx,x,y,6,13,PAL.r);px(ctx,x,y,5,13,PAL.r);
 }
+function paintDen(ctx,x,y){
+  // звериное логово (п.11): тёмная нора под корягой, кости у входа
+  rect(ctx,x,y,3,8,10,6,PAL.DI);rect(ctx,x,y,4,9,8,4,PAL.k);
+  rect(ctx,x,y,2,7,12,1,PAL.Wd);px(ctx,x,y,2,6,PAL.Wd);px(ctx,x,y,13,6,PAL.Wd);
+  px(ctx,x,y,5,13,PAL.SN);px(ctx,x,y,6,14,PAL.SN);px(ctx,x,y,10,13,PAL.SN);
+  px(ctx,x,y,11,14,PAL.SN);px(ctx,x,y,8,14,PAL.SN);
+}
 function paintCliff(ctx,x,y){
   rect(ctx,x,y,3,7,10,8,PAL.R1);rect(ctx,x,y,4,6,8,1,PAL.R2);
   rect(ctx,x,y,5,5,5,1,PAL.R2);rect(ctx,x,y,6,9,2,2,PAL.k);
@@ -458,6 +465,7 @@ function buildAtlas(){
   p=place(16,12);drawGrid(ctx,p.x,p.y,G_TOWER,TOWER_MAP);reg('l_tower',p.x,p.y,16,12);
   p=place(16,15);drawGrid(ctx,p.x,p.y,G_NECRO,NECRO_MAP);reg('l_necro',p.x,p.y,16,15);
   p=place(16,16);paintCamp(ctx,p.x,p.y);reg('l_camp',p.x,p.y,16,16);
+  p=place(16,16);paintDen(ctx,p.x,p.y);reg('l_den',p.x,p.y,16,16);
   p=place(16,16);paintCliff(ctx,p.x,p.y);reg('l_cliff',p.x,p.y,16,16);
   p=place(16,16);paintGraves(ctx,p.x,p.y);reg('l_graves',p.x,p.y,16,16);
   // features

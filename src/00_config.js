@@ -34,7 +34,7 @@ const CFG={
   CRAFT_EVERY:3,
   STAGES:{tower:['Двор','Залы','Вершина'],camp:['Частокол','Шатры'],
     cliff:['Тропа','Гнездо'],graves:['Ограда','Склепы','Алтарь'],
-    necro:['Врата','Лаборатория','Шпиль']},
+    necro:['Врата','Лаборатория','Шпиль'],den:['Тропы','Логовище']},
   DELVE:['Штольни','Глубины','Бездна'],
   PRICE:{food:0.25,wood:0.45,stone:0.35,gems:4}, TRADE_Q:12, MARKET_TAX:0.10,
   TRIBUTE:{every:24,base:10,perDay:0.20,perPop:0.45,warn:3},
@@ -78,6 +78,7 @@ const ACTNAME={idle:'без дела',goto:'в пути',work:'работает'
 const LAIR_DEFS=[
   {id:'tower', name:'Заброшенная башня', tier:1, ring:[12,20], terr:[T.GRASS]},
   {id:'camp',  name:'Лагерь в чащобе',   tier:1, ring:[13,22], terr:[T.FOREST]},
+  {id:'den',   name:'Звериное логово',   tier:1, ring:[11,20], terr:[T.FOREST]}, // п.11: лесной энкаунтер со зверями
   {id:'cliff', name:'Скалистый утёс',    tier:2, ring:[20,30], terr:[T.ROCK,T.GRASS]},
   {id:'graves',name:'Заброшенное кладбище',tier:2, ring:[20,30], terr:[T.GRASS]},
   {id:'necro', name:'Башня некроманта',  tier:3, ring:[32,90], terr:[T.GRASS,T.ROCK]},

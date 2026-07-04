@@ -98,6 +98,133 @@ const G_HUT=[
 "................",
 "................",
 "................"];
+/* ---------- ВРАГИ ЭКРАНА БОЯ (п.11) ---------- */
+const G_GOBLIN=[
+"................",
+"................",
+"................",
+"...g......g.....",
+"...g.gggg.g.....",
+"....geggeg......",
+"....gggggg......",
+".....dddd.......",
+"....dddddd.w....",
+"....d.dd.d.w....",
+"......dd...w....",
+".....g..g..w....",
+".....g..g.......",
+"................",
+"................",
+"................"];
+const GOBLIN_MAP={g:PAL.TR,e:PAL.BER,d:PAL.D,w:PAL.Wd};
+const G_GOBSHAMAN=[
+"................",
+"................",
+"...g......g.....",
+"...g.gggg.g.....",
+"....geggeg......",
+"....gggggg......",
+".p...nnnn.......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..n.nn.n......",
+".w....nn........",
+".....g..g.......",
+"................",
+"................",
+"................"];
+const GOBSHAMAN_MAP={g:PAL.TR,e:PAL.BER,n:PAL.M1,w:PAL.Wd,p:PAL.GEM};
+const G_SKELETON=[
+"................",
+"................",
+".....ssss.......",
+"....ssssss......",
+"....skssks......",
+"....ssssss......",
+".....s..s.......",
+"....ssssss.b....",
+"....s.ss.s.b....",
+"....ssssss.b....",
+"....s.ss.s.b....",
+".....ssss..b....",
+".....s..s.......",
+".....s..s.......",
+"................",
+"................"];
+const SKELETON_MAP={s:PAL.SN,k:PAL.k,b:PAL.R2};
+const G_BEAST=[
+"................",
+"................",
+"................",
+"..k........k....",
+"..kk......kk....",
+"..kkkk..kkkkk...",
+"..kekkkkkkkkkk..",
+"...kkkkkkkkkkkk.",
+"....kkkkkkkkkk..",
+"....kk.kkk.kk...",
+"....k...k...k...",
+"....k...k...k...",
+"................",
+"................",
+"................",
+"................"];
+const BEAST_MAP={k:PAL.R2,e:PAL.BER};
+const G_FIREATR=[
+"................",
+".....y..f.......",
+"....fyffyf......",
+"....fyffyf......",
+"....ffkkff......",
+"....ffffff......",
+"...f.ffff.f.....",
+"..ff.ffff.ff....",
+".f...ffff...f...",
+".....ffff.......",
+"....ff..ff......",
+"...ff....ff.....",
+"..ff......ff....",
+"................",
+"................",
+"................"];
+const FIREATR_MAP={f:'#ff7a2e',y:PAL.y,k:PAL.k};
+const G_MAGMAATR=[
+"................",
+"................",
+"....mmmm........",
+"...mmmmmm.......",
+"...mymmym.......",
+"...mmmmmm.......",
+"..mmmfmmmm......",
+".mm.mfffm.mm....",
+".mm.mffmm.mm....",
+".m..mmmm...m....",
+"....mmmm........",
+"...mm..mm.......",
+"..mm....mm......",
+".mm......mm.....",
+"................",
+"................"];
+const MAGMAATR_MAP={m:PAL.M1,f:'#ff5a2e',y:PAL.y};
+const G_NECRO_U=[
+"................",
+".....nnnn.......",
+"....nnnnnn......",
+"....nvnnvn......",
+"....nnnnnn......",
+".p...nnnn.......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nnnnnn......",
+".w..nn..nn......",
+"....nn..nn......",
+"................",
+"................",
+"................"];
+const NECRO_U_MAP={n:'#2a2333',v:PAL.NEC,w:PAL.Wd,p:PAL.NEC};
 const G_HOUSE2=[ // дом переселенцев (лачуга тир 2, п.10): каменный низ, деревянный верх
 "................",
 "......oooo......",
@@ -218,7 +345,7 @@ const TOWER_MAP={s:PAL.R2,S:PAL.R1,k:PAL.k};
 const NECRO_MAP={n:PAL.M1,N:PAL.o,k:PAL.NEC,v:PAL.NEC};
 
 function validateSprites(){
-  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO};
+  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO,G_GOBLIN,G_GOBSHAMAN,G_SKELETON,G_BEAST,G_FIREATR,G_MAGMAATR,G_NECRO_U};
   const errs=[];
   for(const n in all){
     const g=all[n];

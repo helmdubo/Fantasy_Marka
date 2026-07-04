@@ -35,13 +35,15 @@ export const MANIFEST = [
   '13_heroes_pop.js',   // герои (makeHero, слоты пати), иммиграция/отток, крафт и покупка снаряжения
   '14_port_trade.js',   // порт: корабли, автоимпорт; ежедневная торговля tradeDaily; сквоттеры
   '15_raids.js',        // логовища: агро, рейды, warbandTick, грабёж
-  '16_party.js',        // экспедиции: sendParty/sendDelve, бой resolveBattle, этапы, шахтные этажи
+  '16_party.js',        // экспедиции: sendParty/sendDelve, этапы логовищ, шахтные этажи
+  '16b_battle.js',      // боевое ядро (п.11): ряды, цели, раунды; составы врагов
   '17_daycycle.js',     // дань империи, смена дня onNewDay, роль поселения, главный tick(dt)
   '18_sprites.js',      // палитра PAL и пиксельные гриды спрайтов (расы, здания)
   '19_atlas.js',        // canvas-атлас: отрисовка тайлов/зданий/иконок, buildAtlas (browser only)
   '20_render.js',       // three.js: батчи, меши террейна/дорог/зданий/юнитов, glow, fx (browser only)
   '21_fog_input.js',    // канва тумана, камера, тултип, инспектор-пик, ввод (мышь/тач/клавиатура)
   '22_ui.js',           // DOM UI: панели, дебаг, пати-окно, инспектор, updateUI
+  '22b_battle_ui.js',   // экран боя (п.11, browser only): карточки рядов, лог, отступление
   '23_main.js',         // restart(seed) и boot(): игровой цикл requestAnimationFrame
   '24_headless.js',     // node smoke-test: hexSelfTest, runHeadless, questScenario
   '25_boot.js',         // точка входа: браузер -> boot(), node -> runHeadless()
