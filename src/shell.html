@@ -1,0 +1,162 @@
+<!doctype html>
+<!-- ФАЙЛ ГЕНЕРИРУЕТСЯ автоматически из src/ командой `node build.mjs`.
+     Не редактируйте index.html руками — правьте модули в src/ и пересобирайте. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Дальняя Марка — Дроп I · hex/triangle dual grid</title>
+<style>
+:root{
+  --ink:#131017; --panel:#241b13; --panel2:#2e2318; --edge:#0d0a07; --hl:#4a3a26;
+  --tx:#e8dcbf; --dim:#9d8f74; --gold:#eec658; --bad:#d05a4e; --ok:#8fbf5a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);touch-action:none;overscroll-behavior:none;
+  font-family:"Iosevka","JetBrains Mono","Consolas",ui-monospace,monospace;color:var(--tx);font-size:13px}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;
+  touch-action:none;-webkit-user-select:none;user-select:none}
+.panel{position:absolute;background:var(--panel);border:2px solid var(--edge);
+  box-shadow:inset 0 0 0 1px var(--hl), 0 4px 0 rgba(0,0,0,.45);padding:8px 10px}
+#topbar{top:8px;left:8px;right:8px;display:flex;align-items:center;gap:14px;height:44px}
+#brand{font-weight:700;letter-spacing:2px;color:var(--gold);white-space:nowrap}
+#brand small{color:var(--dim);letter-spacing:0;font-weight:400;margin-left:6px}
+#role{color:var(--tx);letter-spacing:1px;white-space:nowrap}
+#role b{color:var(--gold)}
+#stats{display:flex;gap:14px;margin-left:auto;white-space:nowrap;align-items:center}
+#stats .st{display:flex;gap:5px;align-items:center}
+#stats img{image-rendering:pixelated;width:18px;height:18px}
+#timectl{display:flex;gap:4px;align-items:center}
+button{background:var(--panel2);border:2px solid var(--edge);color:var(--tx);
+  font:inherit;padding:3px 8px;cursor:pointer;box-shadow:inset 0 0 0 1px var(--hl)}
+button:hover{color:var(--gold)}
+button.on{color:var(--ink);background:var(--gold);box-shadow:none}
+input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx);font:inherit;padding:3px 6px;width:90px}
+#left{top:64px;left:8px;width:286px;background:rgba(36,27,19,.85)}
+#cityControls{margin-top:10px;padding-top:8px;border-top:1px solid var(--hl)}
+#cityControls #timectl{margin:0 0 7px;flex-wrap:wrap}
+#seedbox{display:flex;gap:5px;align-items:center;width:100%}
+#seedbox input{flex:1;min-width:0;width:auto}
+#seedbox button{white-space:nowrap}
+.ptitle{color:var(--dim);letter-spacing:2px;font-size:11px;margin:4px 0 6px;text-transform:uppercase}
+.lvlrow{display:flex;align-items:center;gap:7px;margin:5px 0}
+.lvlrow img{width:16px;height:16px;image-rendering:pixelated}
+.lvlrow .nm{width:76px;color:var(--dim)}
+.lvlrow .word{width:64px}
+.pips{display:flex;gap:2px}
+.pip{width:9px;height:12px;background:#171209;border:1px solid var(--edge)}
+.priorow{display:flex;align-items:center;gap:8px;margin:6px 0}
+.priorow .nm{width:86px;color:var(--dim)}
+.priorow input[type=range]{flex:1;accent-color:var(--gold);height:14px}
+.priorow .val{width:14px;text-align:center;color:var(--gold)}
+#logbox{position:absolute;left:8px;bottom:8px;width:330px;max-height:130px;overflow:hidden;
+  background:rgba(20,14,9,.88);border:2px solid var(--edge);box-shadow:inset 0 0 0 1px var(--hl);padding:6px 9px;font-size:12px}
+#logbox .e{margin:2px 0;color:var(--tx)}
+#logbox .e .d{color:var(--dim)}
+#logbox .e:first-child{color:var(--gold)}
+#tip{position:absolute;display:none;pointer-events:none;background:rgba(16,11,7,.94);
+  border:2px solid var(--edge);box-shadow:inset 0 0 0 1px var(--hl);padding:6px 9px;font-size:12px;max-width:240px;z-index:20}
+#tip .t1{color:var(--gold)}
+#tip .t2{color:var(--dim)}
+#tip .warn{color:var(--bad)}
+#hint{position:absolute;right:10px;bottom:8px;color:var(--dim);font-size:11px;text-shadow:0 1px 0 #000}
+#debug{top:64px;right:8px;width:300px;font-size:11px;max-height:70vh;overflow:auto;z-index:15}
+#debug .row{margin:2px 0;color:var(--dim)}
+#debug b{color:var(--gold)}
+#debug button{font-size:11px;padding:2px 6px;margin:2px 3px 2px 0}
+.hidden{display:none !important}
+#inspector{position:absolute;right:8px;bottom:8px;width:230px;display:none;z-index:16}
+#inspector .hdr{color:var(--gold);margin-bottom:4px}
+#inspector .row{color:var(--dim);margin:3px 0}
+#inspector .row b{color:var(--tx)}
+.stambar{height:8px;background:#171209;border:1px solid var(--edge);margin-top:3px}
+.stambar>div{height:100%;background:var(--ok)}
+.pol{display:flex;gap:2px;margin-left:auto}
+.polbtn{font-size:10px;padding:1px 4px;border-width:1px;box-shadow:none;color:var(--dim)}
+.polbtn.on{color:var(--ink);background:var(--gold)}
+.qbtn{font-size:11px;padding:2px 6px}
+.qbtn:disabled{opacity:.4;cursor:default}
+#leftHead{cursor:pointer;user-select:none}
+#leftHead .car{color:var(--gold)}
+#pausemark{position:absolute;top:60px;left:50%;transform:translateX(-50%);color:var(--gold);
+  letter-spacing:4px;font-size:15px;text-shadow:0 2px 0 #000;display:none}
+
+.lvlrow .amt{width:70px;color:var(--gold);text-align:right;font-weight:700}
+.lvlrow.meta .nm{width:94px}
+.lvlrow.meta .amt{width:auto;flex:1;text-align:left}
+.lvlrow.race .nm{width:76px}
+#fxLayer{position:absolute;inset:0;pointer-events:none;z-index:34;overflow:hidden;font-size:12px}
+.fxpop{position:absolute;display:flex;transform:translate(-50%,-100%);align-items:center;gap:3px;padding:1px 5px;background:rgba(16,11,7,.62);border:1px solid rgba(13,10,7,.9);box-shadow:0 2px 0 rgba(0,0,0,.35);color:var(--tx);font-weight:700;text-shadow:0 1px 0 #000;will-change:transform,opacity;image-rendering:pixelated}
+.fxpop img{width:14px;height:14px;image-rendering:pixelated}
+.fxpop.pos{color:var(--ok)}
+.fxpop.neg{color:var(--bad)}
+.fxpop.info{color:var(--gold)}
+.portbar{position:absolute;width:38px;height:6px;background:#171209;border:1px solid var(--edge);box-shadow:0 1px 0 #000;z-index:33;pointer-events:none}
+.portbar>div{height:100%;background:var(--gold);image-rendering:pixelated}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="fxLayer"></div>
+<div id="topbar" class="panel">
+  <div id="brand">ДАЛЬНЯЯ МАРКА<small id="ver"></small></div>
+  <div id="role">— <b id="rolename">Лагерь переселенцев</b></div>
+  <div id="stats">
+    <span class="st"><img id="ic_gold" alt=""><b id="st_gold">0</b></span>
+    <span class="st"><img id="ic_pop" alt=""><span id="st_pop">0/0</span></span>
+    <span class="st"><span id="st_phase">☀</span> день <b id="st_day">1</b></span>
+    <span class="st" id="st_trib" title="Дань империи">⚖ —</span>
+    <span class="st" id="st_alarm" style="display:none;color:var(--bad)">🔔 НАБЕГ</span>
+    <span class="st" id="st_hero" style="display:none">🗡 <b id="st_heroN">0</b></span>
+  </div>
+</div>
+<div id="left" class="panel">
+  <div class="ptitle" id="leftHead"><span class="car">▾</span> Ведомость поселения</div>
+  <div id="leftBody">
+    <div class="ptitle">Запасы · режим</div>
+    <div id="levels"></div>
+    <div id="cityControls">
+      <div class="ptitle">Управление временем</div>
+      <div id="timectl">
+        <button id="btnPause">⏸</button>
+        <button id="spd1" class="on">×1</button>
+        <button id="spd2">×2</button>
+        <button id="spd4">×4</button>
+      </div>
+      <div class="ptitle">Новый мир</div>
+      <div id="seedbox">
+        <input type="text" id="seed" placeholder="сид">
+        <button id="btnNew">Запуск</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="inspector" class="panel"></div>
+<div id="logbox"></div>
+<div id="tip"></div>
+<div id="pausemark">— ПАУЗА —</div>
+<div id="hint">драг — карта · колесо/пинч — зум · тап/клик — инспектор · пробел — пауза · ~ — отладка</div>
+<div id="debug" class="panel hidden"></div>
+<div id="party" class="panel" style="display:none;right:8px;top:52px;width:270px;max-height:70vh;overflow:auto;z-index:25">
+  <div class="ptitle">Отряды <span id="party_x" style="float:right;cursor:pointer">✕</span></div>
+  <div id="party_slots"></div>
+  <div class="ptitle" style="margin-top:8px">Герои</div>
+  <div id="party_heroes"></div>
+  <button id="party_form" style="margin-top:6px;width:100%">Сформировать пати (0/3)</button>
+</div>
+<div id="stagecard" class="panel" style="display:none;left:50%;top:38%;transform:translate(-50%,-50%);width:300px;text-align:center;z-index:30">
+  <div class="ptitle" id="sc_title">Этап пройден</div>
+  <div id="sc_body" style="margin:8px 0;text-align:left"></div>
+  <div><button id="sc_go">Дальше</button> <button id="sc_back">Отступить с добычей</button></div>
+</div>
+<div id="gameover" class="panel" style="display:none;left:50%;top:40%;transform:translate(-50%,-50%);width:320px;text-align:center;z-index:30">
+  <div class="ptitle" style="color:var(--bad)">МАРКА ПАЛА</div>
+  <div id="go_body" style="margin:8px 0;text-align:left"></div>
+  <button id="go_new">Новый мир</button>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*__GAME_JS__*/
+</script>
+</body>
+</html>

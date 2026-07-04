@@ -1,0 +1,489 @@
+/* ================= SETTLE (auto-builder) ================= */
+function countB(type,builtOnly){let n=0;for(const b of S.buildings)if(b.type===type&&(!builtOnly||b.built))n++;return n}
+function housingCap(){let c=0;for(const b of S.buildings)if(b.built&&!b.ruined&&connected(b)&&CFG.HOUSE[b.type])c+=CFG.HOUSE[b.type];return c}
+const NEAR_ROAD_TYPES={hut:1,tavern:1,advguild:1,guild:1,crafters:1};
+// v2.1: зона застройки = радиус ратуши (INFLUENCE) + радиусы действующих дозорных
+// вышек (TOWER_INFLUENCE, на 40% меньше). Экспансия — цепочкой вышек к фронтиру.
+function influenceAnchors(){
+  const a=[{x:S.th.x,y:S.th.y,r:CFG.INFLUENCE}];
+  for(const b of S.buildings)
+    if(b.built&&!b.ruined&&b.type==='tower'&&connected(b))a.push({x:b.x,y:b.y,r:CFG.TOWER_INFLUENCE});
+  return a;
+}
+function inInfluence(x,y){
+  for(const an of influenceAnchors())if(cheb(x,y,an.x,an.y)<=an.r)return true;
+  return false;
+}
+function siteOk(type,x,y){
+  const i=idx(x,y);
+  if(S.road[i])return false; // не на дороге
+  const t=S.terr[i];
+  const terrOk=(t===T.GRASS)||(type==='mine'&&t===T.ROCK);
+  if(!terrOk||S.feat[i]!==F.NONE||S.bld[i]>=0||S.lairAt[i]>=0)return false;
+  if(NEAR_ROAD_TYPES[type]){
+    let nr=false;
+    for(const d of hexDirs(x))
+      if(inMap(x+d[0],y+d[1])&&S.road[idx(x+d[0],y+d[1])]&&S.roadConn[idx(x+d[0],y+d[1])])nr=true;
+    if(!nr)return false;
+  }
+  if(!S.explored[i]||S.fear[i]||!S.pass[i])return false;
+  if(!inInfluence(x,y))return false;
+  const orth=hexDirs(x); // hex: «примыкание» = любой из 6 соседей
+  if(type==='fisher'){
+    let w=false;for(const d of orth)if(inMap(x+d[0],y+d[1])&&S.terr[idx(x+d[0],y+d[1])]===T.WATER)w=true;
+    if(!w)return false;
+    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)
+      if(inMap(x+dx,y+dy)&&S.feat[idx(x+dx,y+dy)]===F.FISH)return true;
+    return false;
+  }
+  if(type==='tower'){
+    if(cheb(x,y,S.th.x,S.th.y)<6)return false;
+    for(const b of S.buildings)if(b.type==='tower'&&cheb(x,y,b.x,b.y)<6)return false;
+    return true;
+  }
+  if(type==='port'){
+    // v2.1: гавань строится только на берегу МОРЯ (waterKind===2). Реки/озёра больше
+    // не годятся: если моря в досягаемости нет, торговая труба идёт через гильдию.
+    for(const d of orth){const nx=x+d[0],ny=y+d[1];
+      if(inMap(nx,ny)&&S.terr[idx(nx,ny)]===T.WATER&&S.waterKind[idx(nx,ny)]===2)return true}
+    return false;
+  }
+  if(type==='guild'||type==='advguild'){
+    for(const d of orth){const nx=x+d[0],ny=y+d[1];
+      if(inMap(nx,ny)&&S.road[idx(nx,ny)])return true}
+    return false;
+  }
+  if(type==='mine'){let m=false;for(const d of orth)if(inMap(x+d[0],y+d[1])&&S.terr[idx(x+d[0],y+d[1])]===T.MTN)m=true;return m}
+  if(type==='lumber'){let f=0;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){if(inMap(x+dx,y+dy)&&S.terr[idx(x+dx,y+dy)]===T.FOREST&&S.terrHp[idx(x+dx,y+dy)]>0)f++}return f>=1}
+  if(type==='farm'){
+    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)
+      if(inMap(x+dx,y+dy)&&S.feat[idx(x+dx,y+dy)]===F.WHEAT)return true;
+    return false;
+  }
+  return true; // hut, tavern
+}
+function engineTarget(){
+  const lumberSite=anySite('lumber');
+  const mineSite=anySite('mine');
+  // Не резервируем дерево под несуществующую лесопилку: иначе старты с 1-2 лесными клетками
+  // застревают в еде/домах и не переходят к шахте, хотя каменный двигатель уже доступен.
+  if(countB('lumber')===0&&lumberSite&&(S.noForestDays||0)<=10)return 'lumber';
+  if(countB('mine')===0&&mineSite)return 'mine';
+  return null;
+}
+/* ---------- RESEARCH (v2.1): открытия строений в библиотеке ---------- */
+function researchNext(){
+  for(const t of CFG.RESEARCH.order)if(!S.research.unlocked[t])return t;
+  return null;
+}
+function typeUnlocked(t){
+  if(!CFG.RESEARCH.cost[t])return true; // базовые постройки открыты всегда
+  return !!S.research.unlocked[t];
+}
+function researchCycle(u,b){
+  const nxt=researchNext();
+  if(!nxt)return;
+  if(CFG.RESEARCH.tier2[nxt]&&(b.tier||1)<2){
+    if(!b.t2WarnDay||b.t2WarnDay!==S.day){b.t2WarnDay=S.day;
+      log('📚 Библиотека: открытие «'+CFG.BNAME[nxt]+'» требует Башни знаний (тир 2, самоцветы).')}
+    return;
+  }
+  S.research.pts+=0.35*(u.race==='elf'?1.3:1)*(b.tier||1); // ~6 pts/день на тире 1
+  addInfoPopup('📜',b.x,b.y,'info');
+  const cost=CFG.RESEARCH.cost[nxt];
+  if(S.research.pts>=cost){
+    S.research.pts-=cost;
+    S.research.unlocked[nxt]=true;
+    log('📜 Открытие: '+CFG.BNAME[nxt].toLowerCase()+' — губернатор может выдать разрешение на стройку.');
+    S.uiDirty=true;
+  }
+}
+function tryLibraryTier2(){
+  const b=S.buildings.find(b=>b.built&&!b.ruined&&b.type==='library'&&(b.tier||1)<2);
+  if(!b)return false;
+  const cost=CFG.RESEARCH.libTier2;
+  for(const r in cost)if(S.stock[r]<cost[r])return false;
+  for(const r in cost){S.stock[r]-=cost[r];addResourcePopup(r,-cost[r],b.x,b.y)}
+  b.tier=2;S.bldDirty=true;computeLevels();
+  log('🔮 Библиотека перестроена в Башню знаний — путь к высоким искусствам открыт.');
+  S.dbgBuilder='башня знаний';
+  return true;
+}
+function stockWorld(r){
+  let v=S.stock[r]||0;
+  for(const b of S.buildings)if(b.built)v+=b.buf[r]||0;
+  return v;
+}
+function pendingConstructionNeed(r){
+  let v=0;
+  for(const b of S.buildings){
+    if(!b||b.built||!b.need)continue;
+    v+=Math.max(0,(b.need[r]||0)-(b.got&&b.got[r]||0));
+  }
+  return v;
+}
+function stockWorldAvailable(r){
+  return Math.max(0,stockWorld(r)-pendingConstructionNeed(r));
+}
+function activeConstructionCount(){return S.buildings.filter(b=>!b.built).length}
+function constructionCap(){
+  // v1.9: стартовые производства доступны сразу. Ограничение — не технология,
+  // а реальные ресурсы/рабочие руки. Малое поселение может иметь 4 разрешения
+  // на стройку, чтобы лесопилка+шахта+ферма+причал закладывались параллельно.
+  const p=S.settlers.length;
+  if(p>=18)return 7;
+  if(p>=10)return 5;
+  return 4;
+}
+function canPayWorld(type){
+  if(!typeUnlocked(type))return false; // v2.1: строение ещё не открыто в библиотеке
+  const cost=CFG.COSTS[type],gate=CFG.GATE[type];
+  for(const r in gate)if(bandIdx(r)<gate[r])return false;
+  // При параллельном строительстве нельзя считать одни и те же доски дважды.
+  // Поэтому новые площадки смотрят на свободный world-stock после уже обещанных строек.
+  for(const r in cost)if(stockWorldAvailable(r)<cost[r])return false;
+  return true;
+}
+function resScore(type,x,y){
+  const R=CFG.HARVEST_R;let n=0;
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+    const cx=x+dx,cy=y+dy;if(!inMap(cx,cy))continue;
+    const i=idx(cx,cy);
+    if(type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0)n++;
+    else if(type==='farm'&&S.feat[i]===F.WHEAT)n++;
+    else if(type==='fisher'&&S.feat[i]===F.FISH)n++;
+    else if(type==='mine'){if(S.terr[i]===T.MTN)n++;if(S.feat[i]===F.VEIN)n+=3}
+  }
+  return n;
+}
+const PROD_TYPES={farm:1,fisher:1,lumber:1,mine:1};
+function tryPlace(type){
+  if(!canPayWorld(type))return false;
+  // v1.9: больше нет скрытого технологического резерва под один двигатель.
+  // Если ресурсов хватает с учётом уже обещанных строек — можно закладывать параллельно.
+  let best=null,bd=1e9;
+  const tx=S.th.x,ty=S.th.y;
+  const seen=new Set(); // v2.1: строим в объединённой зоне ратуши и вышек
+  for(const an of influenceAnchors()){
+    const R=an.r;
+    for(let y=Math.max(0,an.y-R);y<=Math.min(S.H-1,an.y+R);y++)
+    for(let x=Math.max(0,an.x-R);x<=Math.min(S.W-1,an.x+R);x++){
+      const key=idx(x,y);
+      if(seen.has(key))continue;seen.add(key);
+      if(!siteOk(type,x,y))continue;
+      const d=cheb(x,y,tx,ty);
+      if(d<2)continue;
+      let score;
+      if(type==='tower')score=-d;
+      else if(PROD_TYPES[type])score=-(resScore(type,x,y)*100-d);
+      else score=d;
+      if(score<bd){bd=score;best={x,y}}
+    }
+  }
+  if(!best)return false;
+  const p=findPath(S,tx,ty,best.x,best.y,true);
+  if(p===null)return false;
+  placeBuilding(type,best.x,best.y,false);
+  S.dbgBuilder=CFG.BNAME[type]+' @'+best.x+','+best.y;
+  log('⚒ Артель закладывает: '+CFG.BNAME[type].toLowerCase()+'.');
+  computeLevels();
+  return true;
+}
+function buildRoad(b){
+  let p=findPath(S,b.x,b.y,S.th.x,S.th.y,true,true);
+  if(!p)p=findPath(S,b.x,b.y,S.th.x,S.th.y,true);
+  if(!p)return;
+  const cells=p.filter(w=>!S.road[idx(w.x,w.y)]&&S.bld[idx(w.x,w.y)]<0);
+  S.road[idx(b.x,b.y)]=1;S.road[idx(S.th.x,S.th.y)]=1;S.roadDirty=true;
+  if(!cells.length)return;
+  S.roadPlans.push({cells,i:0,name:CFG.BNAME[b.type].toLowerCase()+' — ратуша'});
+  log('🚩 Размечен дорожный фундамент: '+CFG.BNAME[b.type].toLowerCase()+' → ратуша.');
+}
+function finishBuilding(b){
+  b.built=true;S.bldDirty=true;
+  S.road[idx(b.x,b.y)]=1;S.roadDirty=true;
+  recomputeRoadConn();
+  if(b.type==='farm'||b.type==='fisher'||b.type==='lumber'||b.type==='mine'||b.type==='tower'||b.type==='port'||b.type==='guild'||b.type==='library'){
+    buildRoad(b);
+    log('🛤 Проложена дорога: '+CFG.BNAME[b.type].toLowerCase()+' — ратуша.');
+  }
+  // v2.1: стартовый комплект локальных припасов со склада (дальше носит разносчик)
+  const sd0=CFG.STORE[b.type];
+  if(sd0)for(const r in sd0){
+    const take=Math.min(sd0[r],Math.floor(S.stock[r]||0));
+    if(take>0){S.stock[r]-=take;b.store[r]=(b.store[r]||0)+take;addResourcePopup(r,-take,S.th.x,S.th.y)}
+  }
+  assignHauler();
+  addInfoPopup('🏠 '+CFG.BNAME[b.type],b.x,b.y,'info');
+  log('🏠 Готово: '+CFG.BNAME[b.type].toLowerCase()+'.');
+  computeLevels();S.uiDirty=true;
+}
+function forestInInfluence(){
+  let n=0;const seen=new Set();
+  for(const an of influenceAnchors()){
+    const R=an.r;
+    for(let y=Math.max(0,an.y-R);y<=Math.min(S.H-1,an.y+R);y++)
+    for(let x=Math.max(0,an.x-R);x<=Math.min(S.W-1,an.x+R);x++){
+      const i=idx(x,y);
+      if(seen.has(i))continue;seen.add(i);
+      if(S.explored[i]&&S.terr[i]===T.FOREST&&S.terrHp[i]>0)n++;
+    }
+  }
+  return n;
+}
+function anySite(type){
+  const R=CFG.INFLUENCE,tx=S.th.x,ty=S.th.y;
+  for(let y=Math.max(0,ty-R);y<=Math.min(S.H-1,ty+R);y++)
+  for(let x=Math.max(0,tx-R);x<=Math.min(S.W-1,tx+R);x++)
+    if(siteOk(type,x,y)&&cheb(x,y,tx,ty)>=2)return true;
+  return false;
+}function anySite(type){
+  const R=CFG.INFLUENCE,tx=S.th.x,ty=S.th.y;
+  for(let y=Math.max(0,ty-R);y<=Math.min(S.H-1,ty+R);y++)
+  for(let x=Math.max(0,tx-R);x<=Math.min(S.W-1,tx+R);x++)
+    if(siteOk(type,x,y)&&cheb(x,y,tx,ty)>=2)return true;
+  return false;
+}
+function bestSiteScore(type){
+  let best=0;
+  const R=CFG.INFLUENCE,tx=S.th.x,ty=S.th.y;
+  for(let y=Math.max(0,ty-R);y<=Math.min(S.H-1,ty+R);y++)
+  for(let x=Math.max(0,tx-R);x<=Math.min(S.W-1,tx+R);x++){
+    if(siteOk(type,x,y)&&cheb(x,y,tx,ty)>=2)best=Math.max(best,resScore(type,x,y));
+  }
+  return best;
+}
+function starterCells(minD,maxD){
+  const arr=[],tx=S.th.x,ty=S.th.y;
+  for(let y=Math.max(1,ty-maxD-2);y<=Math.min(S.H-2,ty+maxD+2);y++)
+  for(let x=Math.max(1,tx-maxD-2);x<=Math.min(S.W-2,tx+maxD+2);x++){
+    const d=cheb(x,y,tx,ty),i=idx(x,y);
+    if(d<minD||d>maxD)continue;
+    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
+    arr.push({x,y,d,roll:hash2(x,y,S.seed+4242)});
+  }
+  arr.sort((a,b)=>(a.d-b.d)||(a.roll-b.roll));
+  return arr;
+}
+function clearStarterCell(x,y,t){
+  const i=idx(x,y);
+  S.terr[i]=t;S.terrHp[i]=(t===T.FOREST)?3:0;
+  S.feat[i]=F.NONE;S.featHp[i]=0;
+}
+function plantStarterForest(x,y){
+  if(!inMap(x,y))return;
+  const i=idx(x,y);
+  if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])return;
+  S.terr[i]=T.FOREST;S.terrHp[i]=3;S.feat[i]=F.NONE;S.featHp[i]=0;
+}
+function ensureStarterProductionSites(){
+  // Дизайн-инвариант дропа: первая экономика всегда имеет лесопилку.
+  // Если процедурный старт не дал валидную площадку, создаём маленькую лесную делянку рядом с ратушей.
+  rebuildPass();
+  let changed=false;
+  if(bestSiteScore('lumber')<6){
+    const cells=starterCells(3,6);
+    let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
+    if(c){
+      clearStarterCell(c.x,c.y,T.GRASS);
+      const offs=hexDirs(c.x).concat([[2,0],[-2,0],[0,2],[0,-2],[2,1],[-2,1]]);
+      let planted=0;
+      for(const o of offs){
+        const x=c.x+o[0],y=c.y+o[1];
+        if(!inMap(x,y)||cheb(x,y,S.th.x,S.th.y)<2)continue;
+        plantStarterForest(x,y);planted++;
+        if(planted>=6)break;
+      }
+      log('🌲 Губернаторский указ: рядом с ратушей размечена стартовая лесная делянка.');
+      changed=true;
+    }
+  }
+  rebuildPass();
+  // Второй двигатель: желательно шахта. Если гор рядом нет, создаём малую каменную гряду, чтобы после лесопилки
+  // артель могла перейти к камню, а не зациклиться на рыбе/еде.
+  if(bestSiteScore('mine')<3){
+    const cells=starterCells(5,9);
+    let c=cells.find(p=>S.terr[idx(p.x,p.y)]!==T.WATER&&S.terr[idx(p.x,p.y)]!==T.MTN)||cells[0];
+    if(c){
+      clearStarterCell(c.x,c.y,T.ROCK);
+      const offs=hexDirs(c.x);
+      let m=null;
+      for(const o of offs){
+        const x=c.x+o[0],y=c.y+o[1],i=idx(x,y);
+        if(inMap(x,y)&&S.bld[i]<0&&S.lairAt[i]<0&&!S.road[i]&&!S.fear[i]){m={x,y};break}
+      }
+      if(m){
+        const mi=idx(m.x,m.y);
+        S.terr[mi]=T.MTN;S.terrHp[mi]=0;S.feat[mi]=F.VEIN;S.featHp[mi]=3;
+        log('⛰ Губернаторский указ: разведана стартовая каменная гряда для первой шахты.');
+        changed=true;
+      }
+    }
+  }
+  if(!anySite('farm')&&!anySite('fisher')){
+    const cells=starterCells(3,7);
+    let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
+    if(c){
+      clearStarterCell(c.x,c.y,T.GRASS);
+      const offs=[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
+      for(const o of offs){
+        const x=c.x+o[0],y=c.y+o[1];
+        if(!inMap(x,y))continue;
+        const i=idx(x,y);
+        if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
+        S.terr[i]=T.GRASS;S.terrHp[i]=0;S.feat[i]=F.WHEAT;S.featHp[i]=5;
+      }
+      log('🌾 Губернаторский указ: размечено стартовое пшеничное поле.');
+      changed=true;
+    }
+  }
+  if(changed){S.terrDirty=true;S.featDirty=true;rebuildPass();}
+}
+
+
+function ensureStarterFisherSite(){
+  // Доступный с начала рыболовный причал: если генератор не дал shore+fish,
+  // создаём малый пруд/затон с рыбным местом и сухой клеткой под причал.
+  if(anySite('fisher'))return false;
+  const cells=starterCells(4,8);
+  let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
+  if(!c)return false;
+  clearStarterCell(c.x,c.y,T.GRASS);
+  const water=[{x:c.x+1,y:c.y},{x:c.x+1,y:c.y+1},{x:c.x,y:c.y+1}];
+  for(const w of water){
+    if(!inMap(w.x,w.y))continue;
+    const i=idx(w.x,w.y);
+    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
+    S.terr[i]=T.WATER;S.waterKind[i]=1;S.feat[i]=F.FISH;S.featHp[i]=5;S.terrHp[i]=0;
+  }
+  S.terrDirty=true;S.featDirty=true;rebuildPass();classifyWater();
+  log('🐟 Губернаторский указ: размечен стартовый рыбный затон.');
+  return true;
+}
+
+function ensureEmergencyFoodSite(){
+  // v1.8 diagnostic: если рынок/стройки разогнали население, а природные food-sites кончились,
+  // губернатор размечает малое поле. Это временная страховка, пока нет полноценного указа экспансии/ирригации.
+  if(bestSiteScore('farm')>=4)return false;
+  const cells=starterCells(4,10);
+  let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
+  if(!c)return false;
+  clearStarterCell(c.x,c.y,T.GRASS);
+  const offs=[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1],[2,0],[-2,0],[0,2],[0,-2]];
+  for(const o of offs){
+    const x=c.x+o[0],y=c.y+o[1];
+    if(!inMap(x,y))continue;
+    const i=idx(x,y);
+    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
+    S.terr[i]=T.GRASS;S.terrHp[i]=0;S.feat[i]=F.WHEAT;S.featHp[i]=5;
+  }
+  S.terrDirty=true;S.featDirty=true;rebuildPass();
+  log('🌾 Губернаторский указ: из-за угрозы голода размечено аварийное поле.');
+  return true;
+}
+
+
+function constructionOpen(){return activeConstructionCount()<constructionCap()}
+function tryPlaceIfOpen(type){
+  if(!constructionOpen())return false;
+  return tryPlace(type);
+}
+function ensureCoreProductionSites(){
+  ensureStarterProductionSites();
+  if(!anySite('fisher'))ensureStarterFisherSite();
+  if(!anySite('farm'))ensureEmergencyFoodSite();
+  rebuildPass();
+}
+function settleThink(){
+  const L=r=>bandIdx(r);
+  const fc=forestInInfluence();
+  let placed=0;
+  const put=(type)=>{if(tryPlaceIfOpen(type)){placed++;return true}return false};
+
+  ensureCoreProductionSites();
+
+  // 0. CORE PRODUCTION PERMITS — не технология, а одновременная стартовая повестка.
+  // Если хватает ресурсов, губернатор сразу выдаёт разрешения на лесопилку, шахту,
+  // ферму и рыбацкий причал. Исполняет AI через market/job layer.
+  if(countB('lumber')===0)put('lumber');
+  if(countB('mine')===0)put('mine');
+  if(countB('farm')===0)put('farm');
+  if(countB('fisher')===0)put('fisher');
+
+  // Если стартовые четыре стройки заняли весь лимит — это нормальное состояние.
+  if(!constructionOpen()){
+    S.dbgBuilder='параллельные стройки '+activeConstructionCount()+'/'+constructionCap();
+    return;
+  }
+
+  const foodN=countB('farm')+countB('fisher');
+  const foodCap=1+Math.ceil(S.settlers.length/5);
+  const prodN=countB('farm',true)+countB('fisher',true)+countB('lumber',true)+countB('mine',true);
+
+  // 1. FOOD SAFETY — при просадке еды расширяем питание до жилья.
+  if(L('food')<=1&&foodN<foodCap){
+    if(!anySite('farm')&&!anySite('fisher'))ensureEmergencyFoodSite();
+    const first=(countB('fisher')<=countB('farm'))?'fisher':'farm';
+    const second=(first==='fisher')?'farm':'fisher';
+    if(put(first)||put(second)){S.dbgBuilder='расширение еды';return}
+  }
+
+  // 1b. KNOWLEDGE (v2.1) — библиотека открывает таверну/порт/гильдии, закладываем рано.
+  if(countB('library')===0&&prodN>=2&&put('library')){S.dbgBuilder='библиотека';return}
+  {const nxt=researchNext();
+   if(nxt&&CFG.RESEARCH.tier2[nxt]&&tryLibraryTier2())return}
+
+  // 2. TRADE/EXPORT PIPE — строим раньше таверны/героев, чтобы ресурсы не забивали склад.
+  const surplus=['food','wood','stone','gems'].some(r=>bandIdx(r)>=3);
+  const tradePressure=surplus||stockWorld('stone')>=42||stockWorld('wood')>=48||stockWorld('food')>=S.settlers.length*7;
+  if(prodN>=3&&tradePressure&&countB('port')===0&&countB('guild')===0){
+    if(put('port')||put('guild')){S.dbgBuilder='торговая артерия';return}
+  }
+
+  // 3. housing, but only after production and food are not in crisis.
+  if(housingCap()-S.settlers.length<2&&L('food')>=2){if(put('hut'))return}
+
+  // 4. production growth.
+  if(L('wood')>=2){
+    if(fc>=8&&countB('lumber')<Math.min(2,1+Math.floor(fc/32))&&put('lumber'))return;
+    if(L('food')<=2&&foodN<foodCap){
+      const first=(countB('farm')<=countB('fisher'))?'farm':'fisher';
+      if(put(first))return;
+    }
+  }
+
+  // 5. watchtower and mid-tier stone sinks. v2.1: вышки — цепочка экспансии,
+  // каждая добавляет зону застройки (−40% от ратуши) и дневную разведку.
+  if(prodN>=2&&countB('tower')<1+Math.floor(S.settlers.length/6)&&put('tower'))return;
+  if(S.settlers.length>=5&&countB('tavern')===0&&put('tavern'))return;
+  if(S.settlers.length>=8&&countB('tavern',true)>0&&countB('advguild')===0&&put('advguild'))return;
+  if(countB('advguild',true)>0&&countB('crafters')===0&&stockWorld('gems')>=2&&put('crafters'))return;
+
+  // 6. fallback trade building if no pipe was possible earlier.
+  if((surplus||S.day>=18)&&countB('port')===0&&countB('guild')===0){
+    if(put('port')||put('guild'))return;
+  }
+
+  // 7. tier upgrades consume stone deliberately.
+  if(L('wood')>=3&&L('stone')>=2&&tryUpgrade())return;
+  S.dbgBuilder=placed?('выдано разрешений: '+placed):('нужд нет ('+S.day+'д)');
+}
+function tryUpgrade(){
+  let best=null;
+  for(const b of S.buildings){
+    if(!b.built)continue;
+    if(b.type!=='farm'&&b.type!=='fisher'&&b.type!=='lumber'&&b.type!=='mine')continue;
+    if((b.tier||1)>=3)continue;
+    if(!best||b.tier<best.tier)best=b;
+  }
+  if(!best)return false;
+  const cost=CFG.TIER_COST[best.tier+1];
+  for(const r in cost)if(S.stock[r]<cost[r])return false;
+  for(const r in cost)S.stock[r]-=cost[r];
+  best.tier++;
+  S.bldDirty=true;computeLevels();
+  log('⭐ '+CFG.BNAME[best.type]+' расширена до тира '+best.tier+'.');
+  S.dbgBuilder='апгрейд '+best.type+'→'+best.tier;
+  return true;
+}
+
