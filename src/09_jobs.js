@@ -245,19 +245,29 @@ function completeJob(u){
     case 'oper':{
       const b=S.buildings[j.b];
       if(b.type==='port'){
-        if(holdTotal(b)>=CFG.PORT_HOLD){
+        // п.3: без корабля в море не выйти — рабочий строит его на верфи
+        if(!b.ship){
+          if((b.shipWork||0)>0){
+            b.shipWork--;
+            addInfoPopup('🔨⛵',b.x,b.y,'info');
+            if(b.shipWork<=0){b.ship=true;S.uiDirty=true;
+              log('⛵ Корабль спущен на воду! Порт готов к морской торговле.')}
+            u.workT=CFG.OPER_T/workMul(u,'build');return;
+          }
+          u.workT=CFG.OPER_T;return; // ждём закладки корабля (дерево на верфь)
+        }
+        // п.4: погрузка золота под импортный заказ
+        if(b.importPlan&&(b.holdGold||0)<b.importPlan.cost){
+          const take=Math.min(24,b.importPlan.cost-(b.holdGold||0),Math.floor(S.gold));
+          if(take>0){S.gold-=take;b.holdGold=(b.holdGold||0)+take;
+            addResourcePopup('gold',-take,b.x,b.y)}
+        }
+        if(sailReady(b)){
           if(!consumeBuildingUpkeep(b,CFG.UPKEEP.portSail,'подготовка доков')){u.workT=CFG.OPER_T;return}
-          // отплытие: оператор становится капитаном
-          b.sailing=true;
-          u.sailT=CFG.SAIL_DAYS*(CFG.DAY+CFG.NIGHT);
-          b.sailTotal=u.sailT;b.sailLeft=u.sailT;b.captainId=u.id;
-          u.act='sail';
-          launchShip(b,1);
-          addInfoPopup('⛵',b.x,b.y,'info');
-          log('⛵ Трюмы полны — капитан '+RNAME[u.race].toLowerCase()+' №'+u.id+' выходит в море.');
+          startPortSail(b,u); // оператор становится капитаном
           return; // keep claim & workerId & inside
         }
-        u.workT=CFG.OPER_T;return; // ждём наполнения трюма
+        u.workT=CFG.OPER_T;return; // ждём наполнения трюма/казны
       }
       if(b.type==='library'){
         // v2.1: книжник ведёт исследование — открытия новых строений

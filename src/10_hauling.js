@@ -152,7 +152,7 @@ function deposit(u){
   u.selfHaul=false;u.haulReserveAmt=0;marketClearRefs(u,'haulMarketRefs',false);u.worksToday++;u.act='idle';u.wanderT=0.3;S.uiDirty=true;
 }
 function exportTask(){
-  const port=S.buildings.findIndex(b=>b.built&&!b.ruined&&connected(b)&&b.type==='port'&&holdTotal(b)<CFG.PORT_HOLD);
+  const port=S.buildings.findIndex(b=>b.built&&!b.ruined&&connected(b)&&b.type==='port'&&holdTotal(b)<shipHold());
   if(port<0)return null;
   for(const r of ['gems','stone','wood','food']){
     if(S.policy[r]!=='export')continue;
@@ -191,13 +191,13 @@ function haulThink(u){
 }
 function expPick(u){
   const b=S.buildings[u.expPort];
-  if(!b||b.sailing&&holdTotal(b)>=CFG.PORT_HOLD){u.act='idle';return}
+  if(!b||b.sailing&&holdTotal(b)>=shipHold()){u.act='idle';return}
   const r=u.expRes;
   const thr=(r==='food')?S.settlers.length*CFG.FOOD_DAYS[3]:CFG.BANDS[r][3];
   const excess=Math.floor(S.stock[r]-thr);
   const cap=Math.round(CFG.HAUL_TAKE*CFG.RACE[u.race].carry);
   const reserved=u.expReserveAmt||cap;
-  const room=CFG.PORT_HOLD-holdTotal(b);
+  const room=shipHold()-holdTotal(b);
   const take=Math.max(0,Math.min(excess,cap,reserved,room));
   if(take<=0){marketClearRefs(u,'haulMarketRefs',true);u.act='idle';u.wanderT=1.5;return}
   S.stock[r]-=take;addResourcePopup(r,-take,S.th.x,S.th.y);computeLevels();
@@ -211,12 +211,12 @@ function expDrop(u){
   u.carry=null;
   if(b&&u.expRes){
     if(!b.sailing){
-      const room=Math.max(0,CFG.PORT_HOLD-holdTotal(b));
+      const room=Math.max(0,shipHold()-holdTotal(b));
       const drop=Math.min(room,u.expAmt||0);
       b.hold[u.expRes]=(b.hold[u.expRes]||0)+drop;if(drop>0)addResourcePopup(u.expRes,drop,b.x,b.y);
       const overflow=(u.expAmt||0)-drop;
       if(overflow>0){S.stock[u.expRes]=(S.stock[u.expRes]||0)+overflow;addResourcePopup(u.expRes,overflow,S.th.x,S.th.y)}
-      if(holdTotal(b)>=CFG.PORT_HOLD)log('📦 Трюмы порта полны — ждём отплытия.');
+      if(holdTotal(b)>=shipHold())log('📦 Трюмы порта полны — ждём отплытия.');
     }else{
       S.stock[u.expRes]=(S.stock[u.expRes]||0)+(u.expAmt||0);addResourcePopup(u.expRes,u.expAmt||0,S.th.x,S.th.y);
     }

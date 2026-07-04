@@ -96,14 +96,7 @@ function settlerTick(u,dt){
       {const b=S.buildings[u.inside];if(b&&b.type==='port')b.sailLeft=Math.max(0,u.sailT)}
       if(u.sailT<=0){
         const b=S.buildings[u.inside];
-        if(b&&b.type==='port'){
-          let g=0;
-          for(const r in b.hold){g+=b.hold[r]*CFG.PRICE[r]*CFG.SEA_MARKUP;b.hold[r]=0}
-          S.gold+=g;addResourcePopup('gold',g,b.x,b.y);S.tradeGold+=g;b.sailing=false;b.sailLeft=0;b.sailTotal=0;b.captainId=null;
-          launchShip(b,-1);addInfoPopup('⚓',b.x,b.y,'info');
-          log('⚓ Корабль вернулся: выручка '+g.toFixed(0)+' з в казну.');
-          computeLevels();S.uiDirty=true;
-        }
+        if(b&&b.type==='port')returnPortShip(b); // выручка экспорта + привоз импорта (п.4)
         u.act='work';u.workT=CFG.OPER_T;
       }
       break;

@@ -137,7 +137,6 @@ function tick(dt){
     sh.x+=sh.dx*0.55*dt;sh.y+=sh.dy*0.55*dt;
     if(sh.t>=sh.ttl)S.ships.splice(i,1);
   }
-  portAutoTick(dt);
   if(S.party)partyTick(dt);
   if(S.warbands.length&&S.warbands.every(w=>w.done))S.warbands.length=0;
   if(S.settlers.length>(S.peakPop||0))S.peakPop=S.settlers.length;

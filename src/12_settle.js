@@ -469,6 +469,10 @@ function settleThink(){
     if(put('port')||put('guild')){S.dbgBuilder='торговая артерия';return}
   }
 
+  // 2b. SHIP (п.3): порт без корабля бесполезен — закладываем при первом достатке дерева.
+  {const port=S.buildings.find(b=>b.built&&!b.ruined&&b.type==='port'&&!b.ship&&!(b.shipWork>0));
+   if(port&&(S.stock.wood||0)>=CFG.SHIP.cost.wood&&orderShip(port)){S.dbgBuilder='корабль на верфи';return}}
+
   // 3. housing, but only after production and food are not in crisis.
   // Сначала пробуем достроить лачугу до дома (п.10) — дешевле по месту, дороже по камню.
   if(housingCap()-S.settlers.length<2&&L('food')>=2){

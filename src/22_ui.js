@@ -267,12 +267,17 @@ function updateInspector(){
     }
     if(b.built&&b.type==='port'){
       const ht=holdTotal(b);
-      const bar='▰'.repeat(Math.round(ht/CFG.PORT_HOLD*8))+'▱'.repeat(8-Math.round(ht/CFG.PORT_HOLD*8));
+      const bar='▰'.repeat(Math.round(ht/shipHold()*8))+'▱'.repeat(8-Math.round(ht/shipHold()*8));
       const sailP=b.sailing&&b.sailTotal?Math.round((1-(b.sailLeft||0)/b.sailTotal)*100):0;
-      const sailLabel=b.sailMode==='import'?'импорт '+(b.importRes||''):'капитан в плавании';
-      extra+='<div class="row">трюм: '+bar+' '+ht+'/'+CFG.PORT_HOLD+'</div>'+
-        (b.sailing?'<div class="row">⛵ '+sailLabel+': <b>'+sailP+'%</b><div class="stambar"><div style="width:'+sailP+'%"></div></div></div>':'')+
-        '<div class="row" style="font-size:10px;color:var(--dim)">складской несёт сюда ресурсы с политикой «Экспорт»</div>';
+      let shipLine;
+      if(b.ship)shipLine='⛵ корабль: <b>'+(b.sailing?'в море':'у причала')+'</b>';
+      else if((b.shipWork||0)>0)shipLine='🔨 верфь: осталось <b>'+b.shipWork+'</b> смен';
+      else shipLine='⚓ корабля нет — верфь ждёт '+CFG.SHIP.cost.wood+' дерева';
+      extra+='<div class="row">'+shipLine+'</div>'+
+        '<div class="row">трюм: '+bar+' '+ht+'/'+shipHold()+'</div>'+
+        (b.importPlan?'<div class="row">📦 заказ: '+b.importPlan.qty+' '+b.importPlan.res+' · золото '+Math.floor(b.holdGold||0)+'/'+b.importPlan.cost+'</div>':'')+
+        (b.sailing?'<div class="row">⛵ рейс: <b>'+sailP+'%</b><div class="stambar"><div style="width:'+sailP+'%"></div></div></div>':'')+
+        '<div class="row" style="font-size:10px;color:var(--dim)">трюм наполняется и без корабля; море торгует только рейсами</div>';
     }
     if(b.built&&b.type==='tavern'){
       const ale=b.ale||0;

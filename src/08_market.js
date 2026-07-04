@@ -32,8 +32,9 @@ function marketLaborPriority(j){
       else if(b.type==='tower')p+=2;
       else if(b.type==='port'&&j.kind==='oper'){
         p+=4;
-        if(portImportCandidate(b))p+=8;
-        if(holdTotal(b)>=CFG.PORT_HOLD)p+=6;
+        if(!b.ship&&(b.shipWork||0)>0)p+=8; // строим корабль на верфи
+        if(b.importPlan&&!goldLoaded(b))p+=8; // грузим золото под импорт
+        if(sailReady(b))p+=6;
       }
       if(j.kind==='oper'){
         if(b.type==='lumber')p+=marketResourceLevelBoost('wood');
@@ -109,7 +110,7 @@ function marketPublishResourceOffers(){
   for(let bi=0;bi<S.buildings.length;bi++){
     const b=S.buildings[bi];
     if(!b.built||b.ruined||!connected(b)||b.type!=='port'||b.sailing)continue;
-    const room=CFG.PORT_HOLD-holdTotal(b);
+    const room=shipHold()-holdTotal(b);
     if(room<=0)continue;
     for(const r of MARKET_RES){
       if(S.policy[r]!=='export')continue;
@@ -193,7 +194,7 @@ function marketSelectHaulTask(u){
     const pressure=Math.max(0,((S.stock[r]||0)-thr)/12);
     const d=cheb(u.x|0,u.y|0,S.th.x,S.th.y);
     const port=S.buildings[inc.target.b];
-    const portNeed=port?((CFG.PORT_HOLD-holdTotal(port))/Math.max(1,CFG.PORT_HOLD)):0;
+    const portNeed=port?((shipHold()-holdTotal(port))/Math.max(1,shipHold())):0;
     let v=(inc.priority||1)*2.6+(src.priority||1)+pressure+portNeed*6-d*0.25;
     if(r==='stone'||r==='gems')v+=2.0;
     if(v>expV){expV=v;bestExport={mode:'export',port:inc.target.b,res:r,inc,src}}

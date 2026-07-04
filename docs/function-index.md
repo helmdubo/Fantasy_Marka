@@ -90,7 +90,7 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 порт: корабли, автоимпорт; ежедневная торговля tradeDaily; сквоттеры
 
-`portImportCandidate()` · `returnPortShip()` · `startPortAutoImport()` · `portAutoTick()` · `startPortSail()` · `launchShip()` · `tradeDaily()` · `SQUATS` · `squatDaily()`
+`shipHold()` · `portImportNeed()` · `goldLoaded()` · `sailReady()` · `returnPortShip()` · `startPortSail()` · `orderShip()` · `launchShip()` · `tradeDaily()` · `SQUATS` · `squatDaily()`
 
 ## src/15_raids.js
 

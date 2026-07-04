@@ -21,7 +21,9 @@ const CFG={
   TIER_COST:{2:{wood:18,stone:22},3:{wood:28,stone:48,gems:3}},
   HUT2_COST:{wood:8,stone:6}, HOUSE2_CAP:3, // апгрейд лачуги в дом (п.10)
   ALE:{perFood:2,cap:12,brewFood:2},        // варка эля в таверне из зерна ферм (п.5)
-  PORT_HOLD:8, SAIL_DAYS:2, SEA_MARKUP:1.45,
+  SAIL_DAYS:2, SEA_MARKUP:1.45,
+  // п.3: корабль — отдельная стройка порта. Дорогой, но трюм существенный.
+  SHIP:{cost:{wood:28},work:5,hold:24,importQty:{food:16,wood:16,stone:12,gems:4}},
   ITEMS:[
     {id:'blade',name:'Клинок самоцветной заточки',atk:2,hp:0,gems:2,price:14},
     {id:'ward',name:'Оберег горного сердца',atk:0,hp:6,gems:2,price:14},
