@@ -74,7 +74,15 @@ function siteOk(type,x,y){
       if(inMap(nx,ny)&&S.road[idx(nx,ny)])return true}
     return false;
   }
-  if(type==='mine'){let m=false;for(const d of orth)if(inMap(x+d[0],y+d[1])&&S.terr[idx(x+d[0],y+d[1])]===T.MTN)m=true;return m}
+  if(type==='mine'){
+    let m=false,rock=0;
+    for(const d of orth){const nx=x+d[0],ny=y+d[1];
+      if(!inMap(nx,ny))continue;
+      if(S.terr[idx(nx,ny)]===T.MTN)m=true;
+      if(S.terr[idx(nx,ny)]===T.ROCK)rock++;
+    }
+    return m||rock>=2; // богатая шахта у гор или бедная холмовая (предгорья)
+  }
   if(type==='lumber'){let f=0;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){if(inMap(x+dx,y+dy)&&S.terr[idx(x+dx,y+dy)]===T.FOREST&&S.terrHp[idx(x+dx,y+dy)]>0)f++}return f>=1}
   if(type==='farm'){
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)
@@ -326,134 +334,7 @@ function bestSiteScore(type){
   }
   return best;
 }
-function starterCells(minD,maxD){
-  const arr=[],tx=S.th.x,ty=S.th.y;
-  for(let y=Math.max(1,ty-maxD-2);y<=Math.min(S.H-2,ty+maxD+2);y++)
-  for(let x=Math.max(1,tx-maxD-2);x<=Math.min(S.W-2,tx+maxD+2);x++){
-    const d=cheb(x,y,tx,ty),i=idx(x,y);
-    if(d<minD||d>maxD)continue;
-    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
-    arr.push({x,y,d,roll:hash2(x,y,S.seed+4242)});
-  }
-  arr.sort((a,b)=>(a.d-b.d)||(a.roll-b.roll));
-  return arr;
-}
-function clearStarterCell(x,y,t){
-  const i=idx(x,y);
-  S.terr[i]=t;S.terrHp[i]=(t===T.FOREST)?3:0;
-  S.feat[i]=F.NONE;S.featHp[i]=0;
-}
-function plantStarterForest(x,y){
-  if(!inMap(x,y))return;
-  const i=idx(x,y);
-  if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])return;
-  S.terr[i]=T.FOREST;S.terrHp[i]=3;S.feat[i]=F.NONE;S.featHp[i]=0;
-}
-function ensureStarterProductionSites(){
-  // Дизайн-инвариант дропа: первая экономика всегда имеет лесопилку.
-  // Если процедурный старт не дал валидную площадку, создаём маленькую лесную делянку рядом с ратушей.
-  rebuildPass();
-  let changed=false;
-  if(bestSiteScore('lumber')<6){
-    const cells=starterCells(3,6);
-    let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
-    if(c){
-      clearStarterCell(c.x,c.y,T.GRASS);
-      const offs=hexDirs(c.x).concat([[2,0],[-2,0],[0,2],[0,-2],[2,1],[-2,1]]);
-      let planted=0;
-      for(const o of offs){
-        const x=c.x+o[0],y=c.y+o[1];
-        if(!inMap(x,y)||cheb(x,y,S.th.x,S.th.y)<2)continue;
-        plantStarterForest(x,y);planted++;
-        if(planted>=6)break;
-      }
-      log('🌲 Губернаторский указ: рядом с ратушей размечена стартовая лесная делянка.');
-      changed=true;
-    }
-  }
-  rebuildPass();
-  // Второй двигатель: желательно шахта. Если гор рядом нет, создаём малую каменную гряду, чтобы после лесопилки
-  // артель могла перейти к камню, а не зациклиться на рыбе/еде.
-  if(bestSiteScore('mine')<3){
-    const cells=starterCells(5,9);
-    let c=cells.find(p=>S.terr[idx(p.x,p.y)]!==T.WATER&&S.terr[idx(p.x,p.y)]!==T.MTN)||cells[0];
-    if(c){
-      clearStarterCell(c.x,c.y,T.ROCK);
-      const offs=hexDirs(c.x);
-      let m=null;
-      for(const o of offs){
-        const x=c.x+o[0],y=c.y+o[1],i=idx(x,y);
-        if(inMap(x,y)&&S.bld[i]<0&&S.lairAt[i]<0&&!S.road[i]&&!S.fear[i]){m={x,y};break}
-      }
-      if(m){
-        const mi=idx(m.x,m.y);
-        S.terr[mi]=T.MTN;S.terrHp[mi]=0;S.feat[mi]=F.VEIN;S.featHp[mi]=3;
-        log('⛰ Губернаторский указ: разведана стартовая каменная гряда для первой шахты.');
-        changed=true;
-      }
-    }
-  }
-  if(!anySite('farm')&&!anySite('fisher')){
-    const cells=starterCells(3,7);
-    let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
-    if(c){
-      clearStarterCell(c.x,c.y,T.GRASS);
-      const offs=[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
-      for(const o of offs){
-        const x=c.x+o[0],y=c.y+o[1];
-        if(!inMap(x,y))continue;
-        const i=idx(x,y);
-        if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
-        S.terr[i]=T.GRASS;S.terrHp[i]=0;S.feat[i]=F.WHEAT;S.featHp[i]=5;
-      }
-      log('🌾 Губернаторский указ: размечено стартовое пшеничное поле.');
-      changed=true;
-    }
-  }
-  if(changed){S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();}
-}
 
-
-function ensureStarterFisherSite(){
-  // Доступный с начала рыболовный причал: если генератор не дал shore+fish,
-  // создаём малый пруд/затон с рыбным местом и сухой клеткой под причал.
-  if(anySite('fisher'))return false;
-  const cells=starterCells(4,8);
-  let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
-  if(!c)return false;
-  clearStarterCell(c.x,c.y,T.GRASS);
-  const water=[{x:c.x+1,y:c.y},{x:c.x+1,y:c.y+1},{x:c.x,y:c.y+1}];
-  for(const w of water){
-    if(!inMap(w.x,w.y))continue;
-    const i=idx(w.x,w.y);
-    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
-    S.terr[i]=T.WATER;S.waterKind[i]=1;S.feat[i]=F.FISH;S.featHp[i]=5;S.terrHp[i]=0;
-  }
-  S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();classifyWater();
-  log('🐟 Губернаторский указ: размечен стартовый рыбный затон.');
-  return true;
-}
-
-function ensureEmergencyFoodSite(){
-  // v1.8 diagnostic: если рынок/стройки разогнали население, а природные food-sites кончились,
-  // губернатор размечает малое поле. Это временная страховка, пока нет полноценного указа экспансии/ирригации.
-  if(bestSiteScore('farm')>=4)return false;
-  const cells=starterCells(4,10);
-  let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
-  if(!c)return false;
-  clearStarterCell(c.x,c.y,T.GRASS);
-  const offs=[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1],[2,0],[-2,0],[0,2],[0,-2]];
-  for(const o of offs){
-    const x=c.x+o[0],y=c.y+o[1];
-    if(!inMap(x,y))continue;
-    const i=idx(x,y);
-    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
-    S.terr[i]=T.GRASS;S.terrHp[i]=0;S.feat[i]=F.WHEAT;S.featHp[i]=5;
-  }
-  S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();
-  log('🌾 Губернаторский указ: из-за угрозы голода размечено аварийное поле.');
-  return true;
-}
 
 
 function constructionOpen(){return activeConstructionCount()<constructionCap()}
@@ -461,19 +342,12 @@ function tryPlaceIfOpen(type){
   if(!constructionOpen())return false;
   return tryPlace(type);
 }
-function ensureCoreProductionSites(){
-  ensureStarterProductionSites();
-  if(!anySite('fisher'))ensureStarterFisherSite();
-  if(!anySite('farm'))ensureEmergencyFoodSite();
-  rebuildPass();
-}
 function settleThink(){
+  if(S.phase==='scout')return; // ратуша ещё не выбрана
   const L=r=>bandIdx(r);
   const fc=forestInInfluence();
   let placed=0;
   const put=(type)=>{if(tryPlaceIfOpen(type)){placed++;return true}return false};
-
-  ensureCoreProductionSites();
 
   // 0. CORE PRODUCTION PERMITS — не технология, а одновременная стартовая повестка.
   // Если хватает ресурсов, губернатор сразу выдаёт разрешения на лесопилку, шахту,
@@ -495,7 +369,6 @@ function settleThink(){
 
   // 1. FOOD SAFETY — при просадке еды расширяем питание до жилья.
   if(L('food')<=1&&foodN<foodCap){
-    if(!anySite('farm')&&!anySite('fisher'))ensureEmergencyFoodSite();
     const first=(countLive('fisher')<=countLive('farm'))?'fisher':'farm';
     const second=(first==='fisher')?'farm':'fisher';
     if(put(first)||put(second)){S.dbgBuilder='расширение еды';return}

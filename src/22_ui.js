@@ -91,6 +91,7 @@ function renderParty(){
   });
 }
 function buildUI(){
+  {const b=el('btnAutoTH');if(b)b.onclick=()=>{if(S.phase==='scout')autoPlaceTownhall()}}
   el('st_hero').onclick=()=>toggleParty();
   el('party_x').onclick=()=>toggleParty(false);
   el('party_form').onclick=()=>{
@@ -165,6 +166,7 @@ function buildUI(){
 function raceCounts(){const c={human:0,dwarf:0,elf:0,troll:0};for(const u of S.settlers)c[u.race]=(c[u.race]||0)+1;return c}
 function ammoCount(){let n=S.showcase?S.showcase.length:0;for(const u of S.settlers)if(u.hero&&u.hero.items)n+=u.hero.items.length;return n}
 function updateUI(fps){
+  {const bn=el('thbanner');if(bn)bn.style.display=(S.phase==='scout')?'block':'none'}
   el('st_gold').textContent=S.gold.toFixed(0);
   el('st_pop').textContent=S.settlers.length+'/'+housingCap();
   el('st_day').textContent=S.day;

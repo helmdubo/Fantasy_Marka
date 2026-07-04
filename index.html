@@ -156,6 +156,10 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 <div id="logbox"></div>
 <div id="tip"></div>
 <div id="pausemark">— ПАУЗА —</div>
+<div id="thbanner" class="panel" style="display:none;position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:30;text-align:center">
+  ⛺ Разведка окрестностей — <b>выберите место для ратуши</b> (тап по разведанному лугу)
+  <button id="btnAutoTH" style="margin-left:8px">Авто</button>
+</div>
 <div id="hint">драг — карта · колесо/пинч — зум · тап/клик — инспектор · пробел — пауза · ~ — отладка</div>
 <div id="debug" class="panel hidden"></div>
 <div id="party" class="panel" style="display:none;right:8px;top:52px;width:270px;max-height:70vh;overflow:auto;z-index:25">
@@ -243,8 +247,8 @@ const CFG={
   COSTS:{hut:{wood:6},farm:{wood:6},fisher:{wood:8},lumber:{wood:8},mine:{wood:8},tavern:{wood:14,stone:8,food:4},tower:{wood:8,food:4},port:{wood:20,stone:14},guild:{wood:8,stone:6},advguild:{wood:12,stone:10},crafters:{wood:14,stone:18,gems:1},library:{wood:26,stone:18}},
   GATE:{hut:{wood:1},farm:{wood:1},fisher:{wood:1},lumber:{wood:1},mine:{wood:1},tavern:{wood:2,stone:1,food:1},tower:{wood:2,food:1},port:{wood:2,stone:1},guild:{wood:1,stone:1},advguild:{wood:2,stone:1},crafters:{wood:2,stone:2,gems:1},library:{wood:2,stone:2}},
   BUILD_WORK:3, BUILD_EVERY:1,
-  HOUSE:{townhall:3,hut:2,tavern:1},
-  BNAME:{townhall:'Ратуша',hut:'Лачуга',farm:'Ферма',fisher:'Рыбацкий причал',lumber:'Лесопилка',mine:'Шахта',tavern:'Таверна',tower:'Дозорная вышка',port:'Порт',guild:'Торговая гильдия',advguild:'Гильдия авантюристов',crafters:'Гильдия ремесленников',library:'Библиотека'},
+  HOUSE:{townhall:3,hut:2,tavern:1,tent:4},
+  BNAME:{townhall:'Ратуша',tent:'Палатка переселенцев',hut:'Лачуга',farm:'Ферма',fisher:'Рыбацкий причал',lumber:'Лесопилка',mine:'Шахта',tavern:'Таверна',tower:'Дозорная вышка',port:'Порт',guild:'Торговая гильдия',advguild:'Гильдия авантюристов',crafters:'Гильдия ремесленников',library:'Библиотека'},
   RUINS_GOLD:8,
   UPKEEP:{mine:{wood:0.2}, portSail:{wood:1}, portTradeWoodPerBatch:0.25, towerDaily:{food:1,wood:0.25}, libraryDaily:{food:1}},
   // v2.1: локальные припасы зданий. Расход идёт из b.store; пополняет складской
@@ -773,19 +777,21 @@ function newGame(seedStr){
     nextId:1,hungry:false,dbgBuilder:'—',atlasMs:0,hoverLair:-1,revealAll:false};
   genWorld();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
   S.road=new Uint8Array(N);S.roadConn=new Uint8Array(N);
-  placeBuilding('townhall',S.th.x,S.th.y,true);
-  recomputeRoadConn();
+  // Старт с ПАЛАТКИ: поселенцы разведывают округу, затем игрок (или авто
+  // в headless) выбирает место ратуши. Губернаторских указов больше нет —
+  // качество стартовой зоны обеспечивает генератор + выбор игрока.
+  S.phase='scout';
+  placeBuilding('tent',S.th.x,S.th.y,true);
   spawnSettlers();
-  for(let dy=-7;dy<=7;dy++)for(let dx=-7;dx<=7;dx++){
-    if(dx*dx+dy*dy>52)continue;
+  for(let dy=-5;dy<=5;dy++)for(let dx=-5;dx<=5;dx++){
+    if(dx*dx+dy*dy>27)continue;
     const x=S.th.x+dx,y=S.th.y+dy;
     if(inMap(x,y))S.explored[idx(x,y)]=1;
   }
-  ensureStarterProductionSites();
-  computeLevels();recomputeVision();settleThink();rebuildJobs();
+  computeLevels();recomputeVision();
   log('Императорский тракт остался позади. Здесь начинается Марка.');
-  log('⚒ Артель размечает первые постройки — смотри значки стройплощадок.');
-  log('Переселенцы разбивают лагерь у ратуши ('+S.settlers.map(u=>RNAME[u.race]).join(', ')+').');
+  log('⛺ Переселенцы ставят палатку и расходятся на разведку ('+S.settlers.map(u=>RNAME[u.race]).join(', ')+').');
+  log('👁 Выберите место для ратуши: тап по разведанной клетке луга.');
   return S;
 }
 
@@ -1037,8 +1043,69 @@ function pickStart(){
     }
     if(open>=24&&forest>=2)cand.push({x,y}); // простор лугов + лес поблизости
   }
-  const p=cand.length?cand[(S.rng()*cand.length)|0]:{x:(W/2)|0,y:(H/2)|0};
+  // прибрежный уклон: марка — заморская колония, лагерь ближе к берегу
+  let best=null,bv=-1e9;
+  for(const c of cand){
+    const dc=S.distCoast[idx(c.x,c.y)];
+    const v=-Math.abs(dc-6)*2+hash2(c.x,c.y,S.seed+99)*3;
+    if(v>bv){bv=v;best=c}
+  }
+  const p=best||{x:(W/2)|0,y:(H/2)|0};
   S.th.x=p.x;S.th.y=p.y;
+}
+/* ---------- выбор места ратуши (фаза scout) ---------- */
+function thSiteScore(x,y){
+  const i=idx(x,y);
+  if(!S.explored[i]||S.terr[i]!==T.GRASS||!S.pass[i]||S.bld[i]>=0||S.lairAt[i]>=0||S.fear[i])return -1;
+  if(cellNearRiver(x,y)&&false)return -1;
+  let sc=0;
+  const dc=S.distCoast[i];
+  sc+=Math.max(0,8-Math.abs(dc-6));            // берег недалеко (порт!)
+  if(cellNearRiver(x,y))sc+=4;                  // пойма
+  let open=0,forest=0,rockMtn=0,wheat=0,fish=0;
+  for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+    const nx=x+dx,ny=y+dy;
+    if(!inMap(nx,ny))continue;
+    const ni=idx(nx,ny);
+    const t=S.terr[ni];
+    if(t===T.GRASS)open++;
+    else if(t===T.FOREST)forest++;
+    else if(t===T.ROCK||t===T.MTN)rockMtn++;
+    if(S.feat[ni]===F.WHEAT)wheat++;
+    if(S.feat[ni]===F.FISH)fish++;
+  }
+  if(open<18)return -1;                         // ратуше нужен простор
+  sc+=open*0.25+Math.min(forest,6)*1.2+Math.min(rockMtn,4)*1.0+wheat*1.5+fish*1.5;
+  return sc;
+}
+function placeTownhall(x,y){
+  if(S.phase!=='scout')return false;
+  const sc=thSiteScore(x,y);
+  if(sc<0){log('🚫 Здесь ратушу не поставить: нужен разведанный простор лугов.');return false}
+  placeBuilding('townhall',x,y,true);
+  S.th={x,y};
+  recomputeRoadConn();
+  for(let dy=-7;dy<=7;dy++)for(let dx=-7;dx<=7;dx++){
+    if(dx*dx+dy*dy>52)continue;
+    const nx=x+dx,ny=y+dy;
+    if(inMap(nx,ny))S.explored[idx(nx,ny)]=1;
+  }
+  S.phase='play';
+  computeLevels();recomputeVision();settleThink();rebuildJobs();assignHauler();
+  S.fogDirty=true;S.uiDirty=true;
+  log('🏛 Ратуша заложена — здесь начинается Марка!');
+  log('⚒ Артель размечает первые постройки — смотри значки стройплощадок.');
+  return true;
+}
+function autoPlaceTownhall(){
+  let best=null,bv=-1;
+  for(let y=1;y<S.H-1;y++)for(let x=1;x<S.W-1;x++){
+    const sc=thSiteScore(x,y);
+    if(sc>bv){bv=sc;best={x,y}}
+  }
+  if(best)return placeTownhall(best.x,best.y);
+  // разведано слишком мало — подождём ещё
+  return false;
 }
 function genFeatures(){
   const W=S.W,H=S.H;
@@ -1115,17 +1182,19 @@ function withHeroPass(fn){
 function placeBuilding(type,x,y,instant){
   const b={type,x,y,built:!!instant,work:instant?0:CFG.BUILD_WORK,cd:0,data:{},buf:{food:0,wood:0,stone:0,gems:0},hold:{food:0,wood:0,stone:0,gems:0},store:{food:0,wood:0,stone:0,gems:0},sailing:false,sailMode:null,importRes:null,importQty:0,starve:false,starveD:0,abandoned:false,workerId:null,tier:1,
     need:instant?null:Object.assign({},costOf(type)),got:instant?null:{}};
-  if(instant)S.road&&(S.road[idx(x,y)]=1);
+  if(instant&&type!=='tent')S.road&&(S.road[idx(x,y)]=1);
   if(type==='mine'){
-    let vein=false,mtn=0;
+    let vein=false,mtn=0,rock=0;
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
       if(!inMap(x+dx,y+dy))continue;
       if(S.feat[idx(x+dx,y+dy)]===F.VEIN)vein=true;
       if(S.terr[idx(x+dx,y+dy)]===T.MTN)mtn++;
+      if(S.terr[idx(x+dx,y+dy)]===T.ROCK)rock++;
     }
     b.data.vein=vein;
-    // п.6: рудное тело конечно — зависит от размера примыкающей горы
-    b.data.oreLeft=CFG.MINE.oreBase+mtn*CFG.MINE.orePerMtn;
+    // п.6: рудное тело конечно. Горная шахта богата, холмовая (предгорья) бедней.
+    b.data.oreLeft=mtn>0?CFG.MINE.oreBase+mtn*CFG.MINE.orePerMtn
+      :Math.round(CFG.MINE.oreBase*0.6)+rock*2;
   }
   S.buildings.push(b);
   S.bld[idx(x,y)]=S.buildings.length-1;
@@ -1665,7 +1734,7 @@ function marketSelectHaulTask(u){
 function claimKey(j){return j.kind+':'+j.x+':'+j.y}
 function rebuildJobs(){
   S.jobPool.length=0;
-  if(S.isNight)return;
+  if(S.isNight||S.phase==='scout')return; // до ратуши — только разведка
   const seenR=new Set();
   for(const an of influenceAnchors()){
     const R=an.r;
@@ -1831,7 +1900,7 @@ function harvestCycle(u,b){
     });
   }else if(b.type==='mine'){
     let mtn=false;
-    tryCells((x,y,i)=>{if(S.terr[i]===T.MTN){mtn=true;return true}return false});
+    tryCells((x,y,i)=>{if(S.terr[i]===T.MTN||S.terr[i]===T.ROCK){mtn=true;return true}return false});
     if(mtn){
       if((b.data.oreLeft||0)<=0){ // рудное тело выбрано (п.6)
         b.abandoned=true;S.bldDirty=true;
@@ -2488,8 +2557,9 @@ function settlerTick(u,dt){
       }
       const j=pickJob(u);
       if(j&&assignJob(u,j)){u.lastKind=j.kind;break}
-      // no work: passive scouting or wandering
-      const fr=(S.rng()<0.3*RC.scout)?findFrontier(u):null;
+      // no work: passive scouting or wandering (в фазе scout — все в разведку)
+      const scoutCh=(S.phase==='scout'?0.95:0.3)*RC.scout;
+      const fr=(S.rng()<scoutCh)?findFrontier(u):null;
       let target=null,after='wander';
       if(fr){target=fr;after='scout'}
       else{
@@ -2687,7 +2757,15 @@ function siteOk(type,x,y){
       if(inMap(nx,ny)&&S.road[idx(nx,ny)])return true}
     return false;
   }
-  if(type==='mine'){let m=false;for(const d of orth)if(inMap(x+d[0],y+d[1])&&S.terr[idx(x+d[0],y+d[1])]===T.MTN)m=true;return m}
+  if(type==='mine'){
+    let m=false,rock=0;
+    for(const d of orth){const nx=x+d[0],ny=y+d[1];
+      if(!inMap(nx,ny))continue;
+      if(S.terr[idx(nx,ny)]===T.MTN)m=true;
+      if(S.terr[idx(nx,ny)]===T.ROCK)rock++;
+    }
+    return m||rock>=2; // богатая шахта у гор или бедная холмовая (предгорья)
+  }
   if(type==='lumber'){let f=0;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){if(inMap(x+dx,y+dy)&&S.terr[idx(x+dx,y+dy)]===T.FOREST&&S.terrHp[idx(x+dx,y+dy)]>0)f++}return f>=1}
   if(type==='farm'){
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)
@@ -2939,134 +3017,7 @@ function bestSiteScore(type){
   }
   return best;
 }
-function starterCells(minD,maxD){
-  const arr=[],tx=S.th.x,ty=S.th.y;
-  for(let y=Math.max(1,ty-maxD-2);y<=Math.min(S.H-2,ty+maxD+2);y++)
-  for(let x=Math.max(1,tx-maxD-2);x<=Math.min(S.W-2,tx+maxD+2);x++){
-    const d=cheb(x,y,tx,ty),i=idx(x,y);
-    if(d<minD||d>maxD)continue;
-    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
-    arr.push({x,y,d,roll:hash2(x,y,S.seed+4242)});
-  }
-  arr.sort((a,b)=>(a.d-b.d)||(a.roll-b.roll));
-  return arr;
-}
-function clearStarterCell(x,y,t){
-  const i=idx(x,y);
-  S.terr[i]=t;S.terrHp[i]=(t===T.FOREST)?3:0;
-  S.feat[i]=F.NONE;S.featHp[i]=0;
-}
-function plantStarterForest(x,y){
-  if(!inMap(x,y))return;
-  const i=idx(x,y);
-  if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])return;
-  S.terr[i]=T.FOREST;S.terrHp[i]=3;S.feat[i]=F.NONE;S.featHp[i]=0;
-}
-function ensureStarterProductionSites(){
-  // Дизайн-инвариант дропа: первая экономика всегда имеет лесопилку.
-  // Если процедурный старт не дал валидную площадку, создаём маленькую лесную делянку рядом с ратушей.
-  rebuildPass();
-  let changed=false;
-  if(bestSiteScore('lumber')<6){
-    const cells=starterCells(3,6);
-    let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
-    if(c){
-      clearStarterCell(c.x,c.y,T.GRASS);
-      const offs=hexDirs(c.x).concat([[2,0],[-2,0],[0,2],[0,-2],[2,1],[-2,1]]);
-      let planted=0;
-      for(const o of offs){
-        const x=c.x+o[0],y=c.y+o[1];
-        if(!inMap(x,y)||cheb(x,y,S.th.x,S.th.y)<2)continue;
-        plantStarterForest(x,y);planted++;
-        if(planted>=6)break;
-      }
-      log('🌲 Губернаторский указ: рядом с ратушей размечена стартовая лесная делянка.');
-      changed=true;
-    }
-  }
-  rebuildPass();
-  // Второй двигатель: желательно шахта. Если гор рядом нет, создаём малую каменную гряду, чтобы после лесопилки
-  // артель могла перейти к камню, а не зациклиться на рыбе/еде.
-  if(bestSiteScore('mine')<3){
-    const cells=starterCells(5,9);
-    let c=cells.find(p=>S.terr[idx(p.x,p.y)]!==T.WATER&&S.terr[idx(p.x,p.y)]!==T.MTN)||cells[0];
-    if(c){
-      clearStarterCell(c.x,c.y,T.ROCK);
-      const offs=hexDirs(c.x);
-      let m=null;
-      for(const o of offs){
-        const x=c.x+o[0],y=c.y+o[1],i=idx(x,y);
-        if(inMap(x,y)&&S.bld[i]<0&&S.lairAt[i]<0&&!S.road[i]&&!S.fear[i]){m={x,y};break}
-      }
-      if(m){
-        const mi=idx(m.x,m.y);
-        S.terr[mi]=T.MTN;S.terrHp[mi]=0;S.feat[mi]=F.VEIN;S.featHp[mi]=3;
-        log('⛰ Губернаторский указ: разведана стартовая каменная гряда для первой шахты.');
-        changed=true;
-      }
-    }
-  }
-  if(!anySite('farm')&&!anySite('fisher')){
-    const cells=starterCells(3,7);
-    let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
-    if(c){
-      clearStarterCell(c.x,c.y,T.GRASS);
-      const offs=[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
-      for(const o of offs){
-        const x=c.x+o[0],y=c.y+o[1];
-        if(!inMap(x,y))continue;
-        const i=idx(x,y);
-        if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
-        S.terr[i]=T.GRASS;S.terrHp[i]=0;S.feat[i]=F.WHEAT;S.featHp[i]=5;
-      }
-      log('🌾 Губернаторский указ: размечено стартовое пшеничное поле.');
-      changed=true;
-    }
-  }
-  if(changed){S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();}
-}
 
-
-function ensureStarterFisherSite(){
-  // Доступный с начала рыболовный причал: если генератор не дал shore+fish,
-  // создаём малый пруд/затон с рыбным местом и сухой клеткой под причал.
-  if(anySite('fisher'))return false;
-  const cells=starterCells(4,8);
-  let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
-  if(!c)return false;
-  clearStarterCell(c.x,c.y,T.GRASS);
-  const water=[{x:c.x+1,y:c.y},{x:c.x+1,y:c.y+1},{x:c.x,y:c.y+1}];
-  for(const w of water){
-    if(!inMap(w.x,w.y))continue;
-    const i=idx(w.x,w.y);
-    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
-    S.terr[i]=T.WATER;S.waterKind[i]=1;S.feat[i]=F.FISH;S.featHp[i]=5;S.terrHp[i]=0;
-  }
-  S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();classifyWater();
-  log('🐟 Губернаторский указ: размечен стартовый рыбный затон.');
-  return true;
-}
-
-function ensureEmergencyFoodSite(){
-  // v1.8 diagnostic: если рынок/стройки разогнали население, а природные food-sites кончились,
-  // губернатор размечает малое поле. Это временная страховка, пока нет полноценного указа экспансии/ирригации.
-  if(bestSiteScore('farm')>=4)return false;
-  const cells=starterCells(4,10);
-  let c=cells.find(p=>S.terr[idx(p.x,p.y)]===T.GRASS)||cells[0];
-  if(!c)return false;
-  clearStarterCell(c.x,c.y,T.GRASS);
-  const offs=[[0,0],[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1],[2,0],[-2,0],[0,2],[0,-2]];
-  for(const o of offs){
-    const x=c.x+o[0],y=c.y+o[1];
-    if(!inMap(x,y))continue;
-    const i=idx(x,y);
-    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
-    S.terr[i]=T.GRASS;S.terrHp[i]=0;S.feat[i]=F.WHEAT;S.featHp[i]=5;
-  }
-  S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();
-  log('🌾 Губернаторский указ: из-за угрозы голода размечено аварийное поле.');
-  return true;
-}
 
 
 function constructionOpen(){return activeConstructionCount()<constructionCap()}
@@ -3074,19 +3025,12 @@ function tryPlaceIfOpen(type){
   if(!constructionOpen())return false;
   return tryPlace(type);
 }
-function ensureCoreProductionSites(){
-  ensureStarterProductionSites();
-  if(!anySite('fisher'))ensureStarterFisherSite();
-  if(!anySite('farm'))ensureEmergencyFoodSite();
-  rebuildPass();
-}
 function settleThink(){
+  if(S.phase==='scout')return; // ратуша ещё не выбрана
   const L=r=>bandIdx(r);
   const fc=forestInInfluence();
   let placed=0;
   const put=(type)=>{if(tryPlaceIfOpen(type)){placed++;return true}return false};
-
-  ensureCoreProductionSites();
 
   // 0. CORE PRODUCTION PERMITS — не технология, а одновременная стартовая повестка.
   // Если хватает ресурсов, губернатор сразу выдаёт разрешения на лесопилку, шахту,
@@ -3108,7 +3052,6 @@ function settleThink(){
 
   // 1. FOOD SAFETY — при просадке еды расширяем питание до жилья.
   if(L('food')<=1&&foodN<foodCap){
-    if(!anySite('farm')&&!anySite('fisher'))ensureEmergencyFoodSite();
     const first=(countLive('fisher')<=countLive('farm'))?'fisher':'farm';
     const second=(first==='fisher')?'farm':'fisher';
     if(put(first)||put(second)){S.dbgBuilder='расширение еды';return}
@@ -4032,7 +3975,7 @@ function onNewDay(){
   tradeDaily();
   craftDaily();
   S.hungryDays=S.hungry?S.hungryDays+1:0;
-  if(!S.hungry&&S.day>=4&&housingCap()-S.settlers.length>=1&&bandIdx('food')>=2){
+  if(S.phase!=='scout'&&!S.hungry&&S.day>=4&&housingCap()-S.settlers.length>=1&&bandIdx('food')>=2){
     const foodSites=countB('farm',true)+countB('fisher',true);
     const foodOk=foodSites>=Math.max(1,Math.ceil(S.settlers.length/10))||bandIdx('food')>=3;
     let ch=(foodOk?0.18:0.06)+(countB('tavern',true)>0?0.10:0);
@@ -4061,6 +4004,8 @@ function onNewDay(){
 function tick(dt){
   if(S.gameOver)return;
   S.time+=dt;
+  // headless: игрока нет — ратуша ставится автоматически после разведки
+  if(S.phase==='scout'&&!IS_BROWSER&&S.time>=(CFG.DAY+CFG.NIGHT)*2)autoPlaceTownhall();
   const cyc=CFG.DAY+CFG.NIGHT;
   const day=Math.floor(S.time/cyc)+1;
   const night=(S.time%cyc)>=CFG.DAY;
@@ -4317,6 +4262,24 @@ const G_NECRO_U=[
 "................",
 "................"];
 const NECRO_U_MAP={n:'#2a2333',v:PAL.NEC,w:PAL.Wd,p:PAL.NEC};
+const G_TENT=[ // палатка переселенцев: стартовый лагерь до ратуши
+"................",
+"................",
+"................",
+"................",
+".......p........",
+".......pp.......",
+"......tttt......",
+".....tttttt.....",
+"....tttWWttt....",
+"...ttttWWtttt...",
+"...oT.tWWt.To...",
+"..cc..........c.",
+".ccc.....c..ccc.",
+"................",
+"................",
+"................"];
+const TENT_MAP={t:'#b39554',T:'#8a6f3c',W:'#5a4426',o:PAL.o,p:PAL.r,c:PAL.G1};
 const G_HOUSE2=[ // дом переселенцев (лачуга тир 2, п.10): каменный низ, деревянный верх
 "................",
 "......oooo......",
@@ -4437,7 +4400,7 @@ const TOWER_MAP={s:PAL.R2,S:PAL.R1,k:PAL.k};
 const NECRO_MAP={n:PAL.M1,N:PAL.o,k:PAL.NEC,v:PAL.NEC};
 
 function validateSprites(){
-  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO,G_GOBLIN,G_GOBSHAMAN,G_SKELETON,G_BEAST,G_FIREATR,G_MAGMAATR,G_NECRO_U};
+  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_TENT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO,G_GOBLIN,G_GOBSHAMAN,G_SKELETON,G_BEAST,G_FIREATR,G_MAGMAATR,G_NECRO_U};
   const errs=[];
   for(const n in all){
     const g=all[n];
@@ -4913,6 +4876,7 @@ function buildAtlas(){
   // buildings: distinct silhouettes
   let p=place(16,16);drawGrid(ctx,p.x,p.y,G_HUT,HUT_MAPS.hut);reg('b_hut',p.x,p.y,16,16);
   p=place(16,16);drawGrid(ctx,p.x,p.y,G_HOUSE2,HOUSE2_MAP);reg('b_house2',p.x,p.y,16,16);
+  p=place(16,16);drawGrid(ctx,p.x,p.y,G_TENT,TENT_MAP);reg('b_tent',p.x,p.y,16,16);
   p=place(16,16);paintFisher(ctx,p.x,p.y);reg('b_fisher',p.x,p.y,16,16);
   p=place(16,16);paintLumber(ctx,p.x,p.y);reg('b_lumber',p.x,p.y,16,16);
   p=place(16,16);drawGrid(ctx,p.x,p.y,G_TAVERN,TAVERN_MAP);
@@ -4968,7 +4932,7 @@ function buildAtlas(){
   p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);
   p=place(10,12);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,10,12);
   p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16);
-  for(const k of ['b_hut','b_house2','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
+  for(const k of ['b_hut','b_house2','b_tent','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),
@@ -5669,6 +5633,12 @@ function updatePinOutline(){
   R.scene.add(R.pinLoop);
 }
 function pickPin(mx,my){
+  // фаза scout: тап по карте выбирает место ратуши
+  if(S.phase==='scout'){
+    const c=screenToCell(mx,my);
+    if(c&&inMap(c.x,c.y))placeTownhall(c.x,c.y);
+    return;
+  }
   const {cx,cy}=screenToCell(mx,my);
   let pin=null;
   if(inMap(cx,cy)&&(S.explored[idx(cx,cy)]||S.revealAll)){
@@ -5942,6 +5912,7 @@ function renderParty(){
   });
 }
 function buildUI(){
+  {const b=el('btnAutoTH');if(b)b.onclick=()=>{if(S.phase==='scout')autoPlaceTownhall()}}
   el('st_hero').onclick=()=>toggleParty();
   el('party_x').onclick=()=>toggleParty(false);
   el('party_form').onclick=()=>{
@@ -6016,6 +5987,7 @@ function buildUI(){
 function raceCounts(){const c={human:0,dwarf:0,elf:0,troll:0};for(const u of S.settlers)c[u.race]=(c[u.race]||0)+1;return c}
 function ammoCount(){let n=S.showcase?S.showcase.length:0;for(const u of S.settlers)if(u.hero&&u.hero.items)n+=u.hero.items.length;return n}
 function updateUI(fps){
+  {const bn=el('thbanner');if(bn)bn.style.display=(S.phase==='scout')?'block':'none'}
   el('st_gold').textContent=S.gold.toFixed(0);
   el('st_pop').textContent=S.settlers.length+'/'+housingCap();
   el('st_day').textContent=S.day;

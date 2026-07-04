@@ -448,6 +448,7 @@ function buildAtlas(){
   // buildings: distinct silhouettes
   let p=place(16,16);drawGrid(ctx,p.x,p.y,G_HUT,HUT_MAPS.hut);reg('b_hut',p.x,p.y,16,16);
   p=place(16,16);drawGrid(ctx,p.x,p.y,G_HOUSE2,HOUSE2_MAP);reg('b_house2',p.x,p.y,16,16);
+  p=place(16,16);drawGrid(ctx,p.x,p.y,G_TENT,TENT_MAP);reg('b_tent',p.x,p.y,16,16);
   p=place(16,16);paintFisher(ctx,p.x,p.y);reg('b_fisher',p.x,p.y,16,16);
   p=place(16,16);paintLumber(ctx,p.x,p.y);reg('b_lumber',p.x,p.y,16,16);
   p=place(16,16);drawGrid(ctx,p.x,p.y,G_TAVERN,TAVERN_MAP);
@@ -503,7 +504,7 @@ function buildAtlas(){
   p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);
   p=place(10,12);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,10,12);
   p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16);
-  for(const k of ['b_hut','b_house2','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
+  for(const k of ['b_hut','b_house2','b_tent','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),

@@ -130,8 +130,9 @@ function settlerTick(u,dt){
       }
       const j=pickJob(u);
       if(j&&assignJob(u,j)){u.lastKind=j.kind;break}
-      // no work: passive scouting or wandering
-      const fr=(S.rng()<0.3*RC.scout)?findFrontier(u):null;
+      // no work: passive scouting or wandering (в фазе scout — все в разведку)
+      const scoutCh=(S.phase==='scout'?0.95:0.3)*RC.scout;
+      const fr=(S.rng()<scoutCh)?findFrontier(u):null;
       let target=null,after='wander';
       if(fr){target=fr;after='scout'}
       else{

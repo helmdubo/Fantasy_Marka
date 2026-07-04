@@ -103,7 +103,7 @@ function onNewDay(){
   tradeDaily();
   craftDaily();
   S.hungryDays=S.hungry?S.hungryDays+1:0;
-  if(!S.hungry&&S.day>=4&&housingCap()-S.settlers.length>=1&&bandIdx('food')>=2){
+  if(S.phase!=='scout'&&!S.hungry&&S.day>=4&&housingCap()-S.settlers.length>=1&&bandIdx('food')>=2){
     const foodSites=countB('farm',true)+countB('fisher',true);
     const foodOk=foodSites>=Math.max(1,Math.ceil(S.settlers.length/10))||bandIdx('food')>=3;
     let ch=(foodOk?0.18:0.06)+(countB('tavern',true)>0?0.10:0);
@@ -132,6 +132,8 @@ function onNewDay(){
 function tick(dt){
   if(S.gameOver)return;
   S.time+=dt;
+  // headless: игрока нет — ратуша ставится автоматически после разведки
+  if(S.phase==='scout'&&!IS_BROWSER&&S.time>=(CFG.DAY+CFG.NIGHT)*2)autoPlaceTownhall();
   const cyc=CFG.DAY+CFG.NIGHT;
   const day=Math.floor(S.time/cyc)+1;
   const night=(S.time%cyc)>=CFG.DAY;

@@ -25,19 +25,21 @@ function newGame(seedStr){
     nextId:1,hungry:false,dbgBuilder:'—',atlasMs:0,hoverLair:-1,revealAll:false};
   genWorld();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
   S.road=new Uint8Array(N);S.roadConn=new Uint8Array(N);
-  placeBuilding('townhall',S.th.x,S.th.y,true);
-  recomputeRoadConn();
+  // Старт с ПАЛАТКИ: поселенцы разведывают округу, затем игрок (или авто
+  // в headless) выбирает место ратуши. Губернаторских указов больше нет —
+  // качество стартовой зоны обеспечивает генератор + выбор игрока.
+  S.phase='scout';
+  placeBuilding('tent',S.th.x,S.th.y,true);
   spawnSettlers();
-  for(let dy=-7;dy<=7;dy++)for(let dx=-7;dx<=7;dx++){
-    if(dx*dx+dy*dy>52)continue;
+  for(let dy=-5;dy<=5;dy++)for(let dx=-5;dx<=5;dx++){
+    if(dx*dx+dy*dy>27)continue;
     const x=S.th.x+dx,y=S.th.y+dy;
     if(inMap(x,y))S.explored[idx(x,y)]=1;
   }
-  ensureStarterProductionSites();
-  computeLevels();recomputeVision();settleThink();rebuildJobs();
+  computeLevels();recomputeVision();
   log('Императорский тракт остался позади. Здесь начинается Марка.');
-  log('⚒ Артель размечает первые постройки — смотри значки стройплощадок.');
-  log('Переселенцы разбивают лагерь у ратуши ('+S.settlers.map(u=>RNAME[u.race]).join(', ')+').');
+  log('⛺ Переселенцы ставят палатку и расходятся на разведку ('+S.settlers.map(u=>RNAME[u.race]).join(', ')+').');
+  log('👁 Выберите место для ратуши: тап по разведанной клетке луга.');
   return S;
 }
 
@@ -289,8 +291,69 @@ function pickStart(){
     }
     if(open>=24&&forest>=2)cand.push({x,y}); // простор лугов + лес поблизости
   }
-  const p=cand.length?cand[(S.rng()*cand.length)|0]:{x:(W/2)|0,y:(H/2)|0};
+  // прибрежный уклон: марка — заморская колония, лагерь ближе к берегу
+  let best=null,bv=-1e9;
+  for(const c of cand){
+    const dc=S.distCoast[idx(c.x,c.y)];
+    const v=-Math.abs(dc-6)*2+hash2(c.x,c.y,S.seed+99)*3;
+    if(v>bv){bv=v;best=c}
+  }
+  const p=best||{x:(W/2)|0,y:(H/2)|0};
   S.th.x=p.x;S.th.y=p.y;
+}
+/* ---------- выбор места ратуши (фаза scout) ---------- */
+function thSiteScore(x,y){
+  const i=idx(x,y);
+  if(!S.explored[i]||S.terr[i]!==T.GRASS||!S.pass[i]||S.bld[i]>=0||S.lairAt[i]>=0||S.fear[i])return -1;
+  if(cellNearRiver(x,y)&&false)return -1;
+  let sc=0;
+  const dc=S.distCoast[i];
+  sc+=Math.max(0,8-Math.abs(dc-6));            // берег недалеко (порт!)
+  if(cellNearRiver(x,y))sc+=4;                  // пойма
+  let open=0,forest=0,rockMtn=0,wheat=0,fish=0;
+  for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+    const nx=x+dx,ny=y+dy;
+    if(!inMap(nx,ny))continue;
+    const ni=idx(nx,ny);
+    const t=S.terr[ni];
+    if(t===T.GRASS)open++;
+    else if(t===T.FOREST)forest++;
+    else if(t===T.ROCK||t===T.MTN)rockMtn++;
+    if(S.feat[ni]===F.WHEAT)wheat++;
+    if(S.feat[ni]===F.FISH)fish++;
+  }
+  if(open<18)return -1;                         // ратуше нужен простор
+  sc+=open*0.25+Math.min(forest,6)*1.2+Math.min(rockMtn,4)*1.0+wheat*1.5+fish*1.5;
+  return sc;
+}
+function placeTownhall(x,y){
+  if(S.phase!=='scout')return false;
+  const sc=thSiteScore(x,y);
+  if(sc<0){log('🚫 Здесь ратушу не поставить: нужен разведанный простор лугов.');return false}
+  placeBuilding('townhall',x,y,true);
+  S.th={x,y};
+  recomputeRoadConn();
+  for(let dy=-7;dy<=7;dy++)for(let dx=-7;dx<=7;dx++){
+    if(dx*dx+dy*dy>52)continue;
+    const nx=x+dx,ny=y+dy;
+    if(inMap(nx,ny))S.explored[idx(nx,ny)]=1;
+  }
+  S.phase='play';
+  computeLevels();recomputeVision();settleThink();rebuildJobs();assignHauler();
+  S.fogDirty=true;S.uiDirty=true;
+  log('🏛 Ратуша заложена — здесь начинается Марка!');
+  log('⚒ Артель размечает первые постройки — смотри значки стройплощадок.');
+  return true;
+}
+function autoPlaceTownhall(){
+  let best=null,bv=-1;
+  for(let y=1;y<S.H-1;y++)for(let x=1;x<S.W-1;x++){
+    const sc=thSiteScore(x,y);
+    if(sc>bv){bv=sc;best={x,y}}
+  }
+  if(best)return placeTownhall(best.x,best.y);
+  // разведано слишком мало — подождём ещё
+  return false;
 }
 function genFeatures(){
   const W=S.W,H=S.H;
@@ -367,17 +430,19 @@ function withHeroPass(fn){
 function placeBuilding(type,x,y,instant){
   const b={type,x,y,built:!!instant,work:instant?0:CFG.BUILD_WORK,cd:0,data:{},buf:{food:0,wood:0,stone:0,gems:0},hold:{food:0,wood:0,stone:0,gems:0},store:{food:0,wood:0,stone:0,gems:0},sailing:false,sailMode:null,importRes:null,importQty:0,starve:false,starveD:0,abandoned:false,workerId:null,tier:1,
     need:instant?null:Object.assign({},costOf(type)),got:instant?null:{}};
-  if(instant)S.road&&(S.road[idx(x,y)]=1);
+  if(instant&&type!=='tent')S.road&&(S.road[idx(x,y)]=1);
   if(type==='mine'){
-    let vein=false,mtn=0;
+    let vein=false,mtn=0,rock=0;
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
       if(!inMap(x+dx,y+dy))continue;
       if(S.feat[idx(x+dx,y+dy)]===F.VEIN)vein=true;
       if(S.terr[idx(x+dx,y+dy)]===T.MTN)mtn++;
+      if(S.terr[idx(x+dx,y+dy)]===T.ROCK)rock++;
     }
     b.data.vein=vein;
-    // п.6: рудное тело конечно — зависит от размера примыкающей горы
-    b.data.oreLeft=CFG.MINE.oreBase+mtn*CFG.MINE.orePerMtn;
+    // п.6: рудное тело конечно. Горная шахта богата, холмовая (предгорья) бедней.
+    b.data.oreLeft=mtn>0?CFG.MINE.oreBase+mtn*CFG.MINE.orePerMtn
+      :Math.round(CFG.MINE.oreBase*0.6)+rock*2;
   }
   S.buildings.push(b);
   S.bld[idx(x,y)]=S.buildings.length-1;

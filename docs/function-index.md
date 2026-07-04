@@ -30,7 +30,7 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 глобальное состояние S; newGame, генерация мира, spawn поселенцев
 
-`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `edgeKeyCells()` · `cellNearRiver()` · `genRivers()` · `classifyWater()` · `pickStart()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `withHeroPass()` · `placeBuilding()` · `spawnSettlers()`
+`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `edgeKeyCells()` · `cellNearRiver()` · `genRivers()` · `classifyWater()` · `pickStart()` · `thSiteScore()` · `placeTownhall()` · `autoPlaceTownhall()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `withHeroPass()` · `placeBuilding()` · `spawnSettlers()`
 
 ## src/04_econ.js
 
@@ -90,7 +90,7 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 автостроитель: siteOk, settleThink, research, стартовые площадки, апгрейды
 
-`countB()` · `countLive()` · `countActive()` · `houseCapOf()` · `housingCap()` · `tryUpgradeHut()` · `NEAR_ROAD_TYPES` · `influenceAnchors()` · `inInfluence()` · `siteOk()` · `engineTarget()` · `researchNext()` · `typeUnlocked()` · `researchCycle()` · `tryLibraryTier2()` · `stockWorld()` · `pendingConstructionNeed()` · `stockWorldAvailable()` · `activeConstructionCount()` · `constructionCap()` · `costOf()` · `canPayWorld()` · `resScore()` · `PROD_TYPES` · `withBridgedPass()` · `tryPlace()` · `nearestRoadTarget()` · `buildRoad()` · `finishBuilding()` · `forestInInfluence()` · `anySite()` · `bestSiteScore()` · `starterCells()` · `clearStarterCell()` · `plantStarterForest()` · `ensureStarterProductionSites()` · `ensureStarterFisherSite()` · `ensureEmergencyFoodSite()` · `constructionOpen()` · `tryPlaceIfOpen()` · `ensureCoreProductionSites()` · `settleThink()` · `tryUpgrade()`
+`countB()` · `countLive()` · `countActive()` · `houseCapOf()` · `housingCap()` · `tryUpgradeHut()` · `NEAR_ROAD_TYPES` · `influenceAnchors()` · `inInfluence()` · `siteOk()` · `engineTarget()` · `researchNext()` · `typeUnlocked()` · `researchCycle()` · `tryLibraryTier2()` · `stockWorld()` · `pendingConstructionNeed()` · `stockWorldAvailable()` · `activeConstructionCount()` · `constructionCap()` · `costOf()` · `canPayWorld()` · `resScore()` · `PROD_TYPES` · `withBridgedPass()` · `tryPlace()` · `nearestRoadTarget()` · `buildRoad()` · `finishBuilding()` · `forestInInfluence()` · `anySite()` · `bestSiteScore()` · `constructionOpen()` · `tryPlaceIfOpen()` · `settleThink()` · `tryUpgrade()`
 
 ## src/13_heroes_pop.js
 
@@ -132,7 +132,7 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 палитра PAL и пиксельные гриды спрайтов (расы, здания)
 
-`PAL` · `OUTL` · `G_HUMAN` · `G_DWARF` · `G_ELF` · `G_TROLL` · `G_HUT` · `G_GOBLIN` · `GOBLIN_MAP` · `G_GOBSHAMAN` · `GOBSHAMAN_MAP` · `G_SKELETON` · `SKELETON_MAP` · `G_BEAST` · `BEAST_MAP` · `G_FIREATR` · `FIREATR_MAP` · `G_MAGMAATR` · `MAGMAATR_MAP` · `G_NECRO_U` · `NECRO_U_MAP` · `G_HOUSE2` · `HOUSE2_MAP` · `G_TOWNHALL` · `G_TOWER` · `G_NECRO` · `G_TAVERN` · `TAVERN_MAP` · `G_RAIDER` · `RAIDER_MAP` · `UNIT_MAPS` · `UNIT_GRIDS` · `HUT_MAPS` · `TH_MAP` · `TOWER_MAP` · `NECRO_MAP` · `validateSprites()` · `bobFrame()` · `terrPix()`
+`PAL` · `OUTL` · `G_HUMAN` · `G_DWARF` · `G_ELF` · `G_TROLL` · `G_HUT` · `G_GOBLIN` · `GOBLIN_MAP` · `G_GOBSHAMAN` · `GOBSHAMAN_MAP` · `G_SKELETON` · `SKELETON_MAP` · `G_BEAST` · `BEAST_MAP` · `G_FIREATR` · `FIREATR_MAP` · `G_MAGMAATR` · `MAGMAATR_MAP` · `G_NECRO_U` · `NECRO_U_MAP` · `G_TENT` · `TENT_MAP` · `G_HOUSE2` · `HOUSE2_MAP` · `G_TOWNHALL` · `G_TOWER` · `G_NECRO` · `G_TAVERN` · `TAVERN_MAP` · `G_RAIDER` · `RAIDER_MAP` · `UNIT_MAPS` · `UNIT_GRIDS` · `HUT_MAPS` · `TH_MAP` · `TOWER_MAP` · `NECRO_MAP` · `validateSprites()` · `bobFrame()` · `terrPix()`
 
 ## src/19_atlas.js
 

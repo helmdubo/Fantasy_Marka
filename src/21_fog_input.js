@@ -220,6 +220,12 @@ function updatePinOutline(){
   R.scene.add(R.pinLoop);
 }
 function pickPin(mx,my){
+  // фаза scout: тап по карте выбирает место ратуши
+  if(S.phase==='scout'){
+    const c=screenToCell(mx,my);
+    if(c&&inMap(c.x,c.y))placeTownhall(c.x,c.y);
+    return;
+  }
   const {cx,cy}=screenToCell(mx,my);
   let pin=null;
   if(inMap(cx,cy)&&(S.explored[idx(cx,cy)]||S.revealAll)){

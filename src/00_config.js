@@ -54,8 +54,8 @@ const CFG={
   COSTS:{hut:{wood:6},farm:{wood:6},fisher:{wood:8},lumber:{wood:8},mine:{wood:8},tavern:{wood:14,stone:8,food:4},tower:{wood:8,food:4},port:{wood:20,stone:14},guild:{wood:8,stone:6},advguild:{wood:12,stone:10},crafters:{wood:14,stone:18,gems:1},library:{wood:26,stone:18}},
   GATE:{hut:{wood:1},farm:{wood:1},fisher:{wood:1},lumber:{wood:1},mine:{wood:1},tavern:{wood:2,stone:1,food:1},tower:{wood:2,food:1},port:{wood:2,stone:1},guild:{wood:1,stone:1},advguild:{wood:2,stone:1},crafters:{wood:2,stone:2,gems:1},library:{wood:2,stone:2}},
   BUILD_WORK:3, BUILD_EVERY:1,
-  HOUSE:{townhall:3,hut:2,tavern:1},
-  BNAME:{townhall:'Ратуша',hut:'Лачуга',farm:'Ферма',fisher:'Рыбацкий причал',lumber:'Лесопилка',mine:'Шахта',tavern:'Таверна',tower:'Дозорная вышка',port:'Порт',guild:'Торговая гильдия',advguild:'Гильдия авантюристов',crafters:'Гильдия ремесленников',library:'Библиотека'},
+  HOUSE:{townhall:3,hut:2,tavern:1,tent:4},
+  BNAME:{townhall:'Ратуша',tent:'Палатка переселенцев',hut:'Лачуга',farm:'Ферма',fisher:'Рыбацкий причал',lumber:'Лесопилка',mine:'Шахта',tavern:'Таверна',tower:'Дозорная вышка',port:'Порт',guild:'Торговая гильдия',advguild:'Гильдия авантюристов',crafters:'Гильдия ремесленников',library:'Библиотека'},
   RUINS_GOLD:8,
   UPKEEP:{mine:{wood:0.2}, portSail:{wood:1}, portTradeWoodPerBatch:0.25, towerDaily:{food:1,wood:0.25}, libraryDaily:{food:1}},
   // v2.1: локальные припасы зданий. Расход идёт из b.store; пополняет складской

@@ -1,7 +1,7 @@
 function claimKey(j){return j.kind+':'+j.x+':'+j.y}
 function rebuildJobs(){
   S.jobPool.length=0;
-  if(S.isNight)return;
+  if(S.isNight||S.phase==='scout')return; // до ратуши — только разведка
   const seenR=new Set();
   for(const an of influenceAnchors()){
     const R=an.r;
@@ -167,7 +167,7 @@ function harvestCycle(u,b){
     });
   }else if(b.type==='mine'){
     let mtn=false;
-    tryCells((x,y,i)=>{if(S.terr[i]===T.MTN){mtn=true;return true}return false});
+    tryCells((x,y,i)=>{if(S.terr[i]===T.MTN||S.terr[i]===T.ROCK){mtn=true;return true}return false});
     if(mtn){
       if((b.data.oreLeft||0)<=0){ // рудное тело выбрано (п.6)
         b.abandoned=true;S.bldDirty=true;
