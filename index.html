@@ -198,7 +198,7 @@ const IS_BROWSER = (typeof window!=='undefined') && (typeof document!=='undefine
 
 /* ================= CONFIG ================= */
 const CFG={
-  MAP_W:128, MAP_H:128, DAY:108, NIGHT:20, STEP:0.1,
+  MAP_W:64, MAP_H:64, DAY:108, NIGHT:20, STEP:0.1, // укрупнение: гексов меньше, гекс крупнее
   START_POP:5, START_GOLD:32,
   START_STOCK:{food:42,wood:42,stone:10,gems:0},
   WAGE:0.15, WALK:2.4, EAT:1,
@@ -424,6 +424,7 @@ function findPath(S,sx,sy,tx,ty,adjOk,orthOnly){
    мягкие, GRASS — универсальный запасной тайл.
    Все структуры остаются как entity в S.world (хребты/реки/озёра/леса). */
 
+let WFC_DEBUG=false; // флаг вне S: restart пересоздаёт состояние
 function genWorld(){
   const W=S.W,H=S.H,N=W*H;
   for(let attempt=0;attempt<5;attempt++){
@@ -499,16 +500,16 @@ function wgBfsField(seedFn){
 function wgLakes(){
   const W=S.W,H=S.H;
   let maxDc=0;for(const v of S.distCoast)if(v<32767&&v>maxDc)maxDc=v;
-  const want=1+((S.rng()*3)|0);
+  const want=2+((S.rng()*3)|0); // 2-4 озера
   const placed=[];
-  for(let t=0;t<200&&placed.length<want;t++){
+  for(let t=0;t<400&&placed.length<want;t++){
     const x=4+((S.rng()*(W-8))|0),y=4+((S.rng()*(H-8))|0);
     const i=idx(x,y);
     if(S.terr[i]===T.WATER)continue;
     const dc=S.distCoast[i];
-    if(dc<Math.max(5,maxDc*0.3)||dc>maxDc*0.75)continue; // средний пояс
-    if(placed.some(p=>cheb(x,y,p.x,p.y)<14))continue;
-    const r=1+((S.rng()*2)|0);
+    if(dc<Math.max(4,maxDc*0.22)||dc>maxDc*0.85)continue; // не у самого берега
+    if(placed.some(p=>cheb(x,y,p.x,p.y)<10))continue;
+    const r=1+((S.rng()*2.6)|0);
     for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
       const nx=x+dx,ny=y+dy;
       if(inMap(nx,ny)&&cheb(nx,ny,x,y)<=r&&S.rng()<0.85)S.terr[idx(nx,ny)]=T.WATER;
@@ -559,7 +560,7 @@ function wgRidges(){
     return cells;
   };
   const mkRange=(sx,sy)=>{
-    const main=growChain(sx,sy,Math.round(W/9)+((S.rng()*8)|0),null);
+    const main=growChain(sx,sy,Math.round(W/5)+((S.rng()*6)|0),null);
     if(main.length<4)return null;
     const range={cells:main.slice(),spurs:[]};
     // отроги от начала, середины и конца хребта (по форме — «снежинка»)
@@ -631,7 +632,7 @@ function wgFill(){
   const prior=(i)=>{
     const x=i%W,y=(i/W)|0;
     const dc=S.distCoast[i],drr=dr[i];
-    let g=1.5,f=0.52,r=0.24;
+    let g=1.4,f=0.62,r=0.24;
     if(dc<=5){f*=0.35;r*=(dc<=2?2.2:0.6)}         // прибрежье: луга, утёсы у кромки
     else if(drr>6){f*=1.45}                         // средний пояс: лесные кластеры
     if(drr<=3){r*=3.4;f*=0.45}                      // предгорья: скалы-холмы
@@ -643,7 +644,7 @@ function wgFill(){
       if(S.terr[ni]===T.WATER)(S.waterKind[ni]===1?lake=true:sea=true);
     }
     if(lake){r*=1.6;f*=0.6}                         // скалы у озёр
-    if(cellNearRiver(x,y)){g*=3.2;f*=0.4;r*=0.3}    // поймы: луга вдоль рек
+    if(cellNearRiver(x,y)){g*=2.0;f*=0.8;r*=0.6}    // поймы мягкие: река проходит и сквозь лес/скалы
     return [g,f,r];
   };
   // волна: BFS-кольца от контуров к пустым областям (приоритет по фронту)
@@ -665,6 +666,9 @@ function wgFill(){
     for(let i=0;i<N;i++)if(!fixed[i]&&dist[i]===32767)order.push(i);
   }
   const done=new Uint8Array(N);
+  // дебаг-реплей: записываем порядок и решения волны (кнопка WFC в отладке)
+  const trace=WFC_DEBUG?{fixed:[],steps:[],relax:[]}:null;
+  if(trace)for(let i=0;i<N;i++)if(fixed[i])trace.fixed.push(i);
   for(const i of order){
     if(fixed[i]||done[i])continue;
     done[i]=1;
@@ -686,6 +690,7 @@ function wgFill(){
     else t=T.ROCK;
     S.terr[i]=t;
     if(t===T.FOREST)S.terrHp[i]=3;
+    if(trace)trace.steps.push({i,t});
   }
   // релаксация: укрупняем кластеры (одинокий лес -> луг, плотное окружение -> лес).
   // Лес станет непроходимым — нужны цельные массивы с коридорами, а не крапинки.
@@ -702,10 +707,24 @@ function wgFill(){
         n++;
         if(snap[idx(nx,ny)]===T.FOREST)f++;
       }
-      if(t===T.FOREST&&f<=1){S.terr[i]=T.GRASS;S.terrHp[i]=0}
-      else if(t===T.GRASS&&f>=4){S.terr[i]=T.FOREST;S.terrHp[i]=3}
+      if(t===T.FOREST&&f<=1){S.terr[i]=T.GRASS;S.terrHp[i]=0;if(trace)trace.relax.push({i,t:T.GRASS})}
+      else if(t===T.GRASS&&f>=4){S.terr[i]=T.FOREST;S.terrHp[i]=3;if(trace)trace.relax.push({i,t:T.FOREST})}
+    }
+    // одинокие скалы — визуальный мусор: без каменных соседей превращаем в луг
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const i=idx(x,y);
+      if(snap[i]!==T.ROCK||S.terr[i]!==T.ROCK)continue;
+      let rk=0;
+      for(const d of hexDirs(x)){
+        const nx=x+d[0],ny=y+d[1];
+        if(!inMap(nx,ny))continue;
+        const t2=S.terr[idx(nx,ny)];
+        if(t2===T.ROCK||t2===T.MTN)rk++;
+      }
+      if(rk===0){S.terr[i]=T.GRASS;if(trace)trace.relax.push({i,t:T.GRASS})}
     }
   }
+  if(trace)S.wfcTrace=trace;
 }
 
 /* --- 6. entity: леса и озёра как floodfill-кластеры --- */
@@ -978,13 +997,13 @@ function genRivers(){
     else springCand.push(rec);
   }
   const springs=[];
-  const want=Math.max(3,Math.round(W/24));
+  const want=Math.max(5,Math.round(W/12)); // рек заметно больше
   let guard=0;
   while(springs.length<want&&guard++<600&&springCand.length){
     const rec=springCand[(S.rng()*springCand.length)|0];
     if(S.riverTris.has(rec.tid))continue;
     let close=false;
-    for(const s2 of springs)if(cheb(rec.x,rec.y,s2.x,s2.y)<9)close=true;
+    for(const s2 of springs)if(cheb(rec.x,rec.y,s2.x,s2.y)<6)close=true;
     if(close)continue;
     if(flow(rec,'falls')>=5){springs.push(rec);S.riverStats.springs++}
   }
@@ -1082,6 +1101,17 @@ function placeTownhall(x,y){
   if(S.phase!=='scout')return false;
   const sc=thSiteScore(x,y);
   if(sc<0){log('🚫 Здесь ратушу не поставить: нужен разведанный простор лугов.');return false}
+  // палатка сворачивается: переселенцы переезжают к ратуше
+  const ti=S.buildings.findIndex(b=>b.type==='tent');
+  if(ti>=0){
+    const tb=S.buildings[ti];
+    for(const u of S.settlers)if(u.inside===ti){u.inside=-1;u.act='idle'}
+    S.bld[idx(tb.x,tb.y)]=-1;
+    S.buildings.splice(ti,1);
+    for(let i=0;i<S.W*S.H;i++)if(S.bld[i]>ti)S.bld[i]--;
+    for(const u of S.settlers)if(u.inside>ti)u.inside--;
+    S.bldDirty=true;
+  }
   placeBuilding('townhall',x,y,true);
   S.th={x,y};
   recomputeRoadConn();
@@ -1364,7 +1394,7 @@ GOVERNOR MARKET NOTE / заметка для дальнейшей архитек
 */
 const MARKET_RES=['food','wood','stone','gems'];
 const IMPORT_COST_MULT=5;
-const FOG_SCALE=4;
+const FOG_SCALE=6;
 const MARKET_LABOR_REASON={build:'BuildLabor',supply:'SupplyRun',oper:'OperateLabor',watch:'WatchDuty',repair:'RepairLabor',pave:'RoadWork',clear:'ClearWork',ruins:'RuinsSearch'};
 function initMarket(){return {seq:1,offers:[],byId:new Map(),stats:{labor:0,resourceIn:0,resourceOut:0,quest:0,matched:0},note:'Governor Market: simplified TransferOffer layer'}}
 function marketClear(){
@@ -2433,7 +2463,8 @@ function scoutAnchors(){
 }
 function findFrontier(u){
   let best=null,bd=1e9;
-  const R=CFG.SCOUT_R,anchors=scoutAnchors();
+  // фаза scout: держимся палатки — радиус разведки 6 гексов
+  const R=(S.phase==='scout')?6:CFG.SCOUT_R,anchors=scoutAnchors();
   for(const an of anchors){
     for(let y=Math.max(0,an.y-R);y<=Math.min(S.H-1,an.y+R);y++)
     for(let x=Math.max(0,an.x-R);x<=Math.min(S.W-1,an.x+R);x++){
@@ -5319,7 +5350,7 @@ function fillUnits(alpha){
     const frame=(u.act==='goto')?((t2+u.id)%2):0;
     const spr=SPR['u_'+u.race+'_'+frame];
     {const sh=SPR['shadow'],so=n*12,su=n*8;
-     const sx0=wx-0.42,sx1=wx+0.42,sy0=wy-0.62,sy1=wy-0.62+0.84;
+     const sx0=wx-0.22,sx1=wx+0.22,sy0=wy-0.33,sy1=wy-0.33+0.44;
      R.uPos[so]=sx0;R.uPos[so+1]=sy0;R.uPos[so+2]=0;
      R.uPos[so+3]=sx1;R.uPos[so+4]=sy0;R.uPos[so+5]=0;
      R.uPos[so+6]=sx1;R.uPos[so+7]=sy1;R.uPos[so+8]=0;
@@ -5328,7 +5359,7 @@ function fillUnits(alpha){
      R.uUv[su+4]=sh.u1;R.uUv[su+5]=sh.v1;R.uUv[su+6]=sh.u0;R.uUv[su+7]=sh.v1;
      n++;if(n>=95)break;}
     const o=n*12,uo=n*8;
-    const x0=wx-0.5,x1=wx+0.5,y0=wy-0.5,y1=wy+0.5;
+    const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
     R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
     R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
     R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -5352,7 +5383,7 @@ function fillUnits(alpha){
       const wx=x*CW+ox,wy=(S.H-y)-zig(x-0.5)+oy;
       const spr=SPR['u_raider_'+((t2+k)%2)];
       const o=n*12,uo=n*8;
-      const x0=wx-0.5,x1=wx+0.5,y0=wy-0.5,y1=wy+0.5;
+      const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
       R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
       R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
       R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -5375,7 +5406,7 @@ function fillUnits(alpha){
         const wx=x*CW+(k-1)*0.35,wy=(S.H-y)-zig(x-0.5)+(k===1?0.3:0);
         const spr=SPR['u_'+u.race+'_'+((t2+k)%2)];
         const o=n*12,uo=n*8;
-        const x0=wx-0.5,x1=wx+0.5,y0=wy-0.5,y1=wy+0.5;
+        const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
         R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
         R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
         R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -5395,7 +5426,7 @@ function fillUnits(alpha){
     const wx=sh.x*CW,wy=(S.H-sh.y)-zig(sh.x-0.5);
     const bob=0.06*Math.sin(S.time*4+sh.x);
     const o=n*12,uo=n*8;
-    const x0=wx-0.5,x1=wx+0.5,y0=wy-0.5+bob,y1=wy+0.5+bob;
+    const x0=wx-0.34,x1=wx+0.34,y0=wy-0.4+bob,y1=wy+0.28+bob;
     R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
     R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
     R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -5444,7 +5475,7 @@ function fogAlphaAt(wx,wy,px,py){
   return base;
 }
 const FOG_WX0=-CW,FOG_WTOP=null; // левый край канвы тумана в мировых X; верх = S.H+1
-function ppt(){return 16*(R&&R.ZOOMS?R.ZOOMS[R.zoomIdx]:3)} // Drop I fix: pixels per 1 world unit; CW уже учтён в WXC/WYCC
+function ppt(){return 16*(R&&R.ZOOMS?R.ZOOMS[R.zoomIdx]:6)} // Drop I fix: pixels per 1 world unit; CW уже учтён в WXC/WYCC
 function ensureFogLut(){
   // Пиксель->клетка (pickHex) считается ОДИН раз: геометрия канвы тумана
   // статична. Раньше pickHex звался на каждый пиксель каждой перерисовки.
@@ -5782,7 +5813,7 @@ function keysPan(dt){
 }
 function initRender(){
   const canvas=document.getElementById('gl');
-  R={canvas,zoomIdx:1,ZOOMS:[2,3,4],cam:{x:(S.th.x+0.5)*CW,y:(S.H-1-S.th.y)+0.5-zig(S.th.x)},
+  R={canvas,zoomIdx:1,ZOOMS:[4,6,8],cam:{x:(S.th.x+0.5)*CW,y:(S.H-1-S.th.y)+0.5-zig(S.th.x)},
      terrStaticMeshes:[],terrForestMesh:null,featMesh:null,bldMesh:null,roadMesh:null,drag:null};
   R.renderer=new THREE.WebGLRenderer({canvas,antialias:false});
   R.renderer.setPixelRatio(1);
@@ -5844,6 +5875,7 @@ function buildDebug(){
     '<button id="dbg_wood">+10 дерева</button>'+
     '<button id="dbg_food">+10 еды</button>'+
     '<button id="dbg_stone">+10 камня</button>'+
+    '<button id="dbg_wfc">WFC-реплей</button>'+
     '</div>';
   el('dbg_reveal').onclick=()=>{S.revealAll=!S.revealAll;S.fogDirty=true};
   el('dbg_grid').onclick=()=>toggleGrid();
@@ -5852,6 +5884,69 @@ function buildDebug(){
   el('dbg_wood').onclick=()=>{S.stock.wood+=10;computeLevels()};
   el('dbg_food').onclick=()=>{S.stock.food+=10;computeLevels()};
   el('dbg_stone').onclick=()=>{S.stock.stone+=10;computeLevels()};
+  el('dbg_wfc').onclick=()=>wfcReplay();
+}
+/* ---------- дебаг-реплей WFC: пошаговая сборка тайлов ----------
+   Перегенерирует текущий сид с записью трейса и проигрывает волну:
+   контуры (вода/горы) видны сразу, клетки схлопываются в порядке волны,
+   жёлтая точка — фронт; красные вспышки — релаксация (пересборка уже
+   схлопнутых тайлов; классического бэктрекинга нет: правила мягкие,
+   GRASS — запасной тайл, противоречия невозможны по построению). */
+function wfcReplay(){
+  WFC_DEBUG=true;
+  restart(S.seedStr);
+  WFC_DEBUG=false;
+  const tr=S.wfcTrace;
+  if(!tr){log('WFC-трейс пуст');return}
+  const SC=Math.max(4,Math.floor(Math.min(innerWidth,innerHeight-60)/S.W));
+  const cv=document.createElement('canvas');
+  cv.width=S.W*SC;cv.height=S.H*SC;
+  cv.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);'+
+    'z-index:60;image-rendering:pixelated;border:2px solid var(--edge);box-shadow:0 6px 0 rgba(0,0,0,.5)';
+  document.body.appendChild(cv);
+  const ctx=cv.getContext('2d');
+  const cols={};cols[T.WATER]='#2a6f92';cols[T.GRASS]='#4c8a3f';cols[T.FOREST]='#1f4526';cols[T.ROCK]='#73717c';cols[T.MTN]='#e8e8f0';
+  const cell=(i,c)=>{ctx.fillStyle=c;ctx.fillRect((i%S.W)*SC,((i/S.W)|0)*SC,SC,SC)};
+  ctx.fillStyle='#15101a';ctx.fillRect(0,0,cv.width,cv.height);
+  for(const i of tr.fixed)cell(i,S.waterKind&&S.waterKind[i]===1?'#4899b0':cols[S.terr[i]===T.MTN?T.MTN:T.WATER]);
+  let si=0,ri=0,stage=0,stop=false;
+  const speed=Math.max(6,Math.round(tr.steps.length/240)); // ~4 сек на волну
+  const drawRivers=()=>{
+    if(!S.riverEdges)return;
+    ctx.strokeStyle='#7fd4ff';ctx.lineWidth=Math.max(1,SC/4);
+    const N2=S.W*S.H;
+    for(const k of S.riverEdges){
+      const a=Math.floor(k/N2),b=k%N2;
+      ctx.beginPath();
+      ctx.moveTo((a%S.W+0.5)*SC,(((a/S.W)|0)+0.5)*SC);
+      ctx.lineTo((b%S.W+0.5)*SC,(((b/S.W)|0)+0.5)*SC);
+      ctx.stroke();
+    }
+  };
+  const frame=()=>{
+    if(stop)return;
+    if(stage===0){ // волна от контуров
+      for(let k=0;k<speed&&si<tr.steps.length;k++,si++){
+        const st=tr.steps[si];
+        cell(st.i,cols[st.t]);
+      }
+      if(si<tr.steps.length){ // жёлтый фронт
+        const st=tr.steps[si];
+        cell(st.i,'#eec658');
+      }else stage=1;
+    }else if(stage===1){ // релаксация — «пересборка» тайлов, красная вспышка
+      for(let k=0;k<3&&ri<tr.relax.length;k++,ri++){
+        const st=tr.relax[ri];
+        cell(st.i,'#d05a4e');
+        setTimeout(((i2,t2)=>()=>{if(!stop)cell(i2,cols[t2])})(st.i,st.t),220);
+      }
+      if(ri>=tr.relax.length){stage=2;setTimeout(()=>{if(!stop){drawRivers()}},350)}
+    }
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  cv.onclick=()=>{stop=true;cv.remove()};
+  log('🌀 WFC-реплей: волна от контуров; красное — релаксация; клик — закрыть.');
 }
 function updateDebug(fps){
   if(el('debug').classList.contains('hidden'))return;

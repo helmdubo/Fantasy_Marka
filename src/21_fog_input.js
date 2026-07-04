@@ -31,7 +31,7 @@ function fogAlphaAt(wx,wy,px,py){
   return base;
 }
 const FOG_WX0=-CW,FOG_WTOP=null; // левый край канвы тумана в мировых X; верх = S.H+1
-function ppt(){return 16*(R&&R.ZOOMS?R.ZOOMS[R.zoomIdx]:3)} // Drop I fix: pixels per 1 world unit; CW уже учтён в WXC/WYCC
+function ppt(){return 16*(R&&R.ZOOMS?R.ZOOMS[R.zoomIdx]:6)} // Drop I fix: pixels per 1 world unit; CW уже учтён в WXC/WYCC
 function ensureFogLut(){
   // Пиксель->клетка (pickHex) считается ОДИН раз: геометрия канвы тумана
   // статична. Раньше pickHex звался на каждый пиксель каждой перерисовки.
@@ -369,7 +369,7 @@ function keysPan(dt){
 }
 function initRender(){
   const canvas=document.getElementById('gl');
-  R={canvas,zoomIdx:1,ZOOMS:[2,3,4],cam:{x:(S.th.x+0.5)*CW,y:(S.H-1-S.th.y)+0.5-zig(S.th.x)},
+  R={canvas,zoomIdx:1,ZOOMS:[4,6,8],cam:{x:(S.th.x+0.5)*CW,y:(S.H-1-S.th.y)+0.5-zig(S.th.x)},
      terrStaticMeshes:[],terrForestMesh:null,featMesh:null,bldMesh:null,roadMesh:null,drag:null};
   R.renderer=new THREE.WebGLRenderer({canvas,antialias:false});
   R.renderer.setPixelRatio(1);

@@ -24,7 +24,7 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 генератор мира: остров, хребты-графы, высота, WFC-заполнение от контуров
 
-`genWorld()` · `wgIsland()` · `wgBfsField()` · `wgLakes()` · `wgRidges()` · `wgElevation()` · `wgFill()` · `wgEntities()` · `wgValidate()`
+`WFC_DEBUG` · `genWorld()` · `wgIsland()` · `wgBfsField()` · `wgLakes()` · `wgRidges()` · `wgElevation()` · `wgFill()` · `wgEntities()` · `wgValidate()`
 
 ## src/03_state_mapgen.js
 
@@ -156,7 +156,7 @@ three.js: батчи, меши террейна/дорог/зданий/юнит
 
 DOM UI: панели, дебаг, пати-окно, инспектор, updateUI
 
-`el()` · `togglePause()` · `setSpeed()` · `debugBuilt` · `toggleDebug()` · `buildDebug()` · `updateDebug()` · `PICK` · `toggleParty()` · `renderParty()` · `buildUI()` · `raceCounts()` · `ammoCount()` · `updateUI()` · `dispName()` · `updateInspector()`
+`el()` · `togglePause()` · `setSpeed()` · `debugBuilt` · `toggleDebug()` · `buildDebug()` · `wfcReplay()` · `updateDebug()` · `PICK` · `toggleParty()` · `renderParty()` · `buildUI()` · `raceCounts()` · `ammoCount()` · `updateUI()` · `dispName()` · `updateInspector()`
 
 ## src/22b_battle_ui.js
 

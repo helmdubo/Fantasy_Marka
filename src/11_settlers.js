@@ -6,7 +6,8 @@ function scoutAnchors(){
 }
 function findFrontier(u){
   let best=null,bd=1e9;
-  const R=CFG.SCOUT_R,anchors=scoutAnchors();
+  // фаза scout: держимся палатки — радиус разведки 6 гексов
+  const R=(S.phase==='scout')?6:CFG.SCOUT_R,anchors=scoutAnchors();
   for(const an of anchors){
     for(let y=Math.max(0,an.y-R);y<=Math.min(S.H-1,an.y+R);y++)
     for(let x=Math.max(0,an.x-R);x<=Math.min(S.W-1,an.x+R);x++){

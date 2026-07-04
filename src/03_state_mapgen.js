@@ -226,13 +226,13 @@ function genRivers(){
     else springCand.push(rec);
   }
   const springs=[];
-  const want=Math.max(3,Math.round(W/24));
+  const want=Math.max(5,Math.round(W/12)); // рек заметно больше
   let guard=0;
   while(springs.length<want&&guard++<600&&springCand.length){
     const rec=springCand[(S.rng()*springCand.length)|0];
     if(S.riverTris.has(rec.tid))continue;
     let close=false;
-    for(const s2 of springs)if(cheb(rec.x,rec.y,s2.x,s2.y)<9)close=true;
+    for(const s2 of springs)if(cheb(rec.x,rec.y,s2.x,s2.y)<6)close=true;
     if(close)continue;
     if(flow(rec,'falls')>=5){springs.push(rec);S.riverStats.springs++}
   }
@@ -330,6 +330,17 @@ function placeTownhall(x,y){
   if(S.phase!=='scout')return false;
   const sc=thSiteScore(x,y);
   if(sc<0){log('🚫 Здесь ратушу не поставить: нужен разведанный простор лугов.');return false}
+  // палатка сворачивается: переселенцы переезжают к ратуше
+  const ti=S.buildings.findIndex(b=>b.type==='tent');
+  if(ti>=0){
+    const tb=S.buildings[ti];
+    for(const u of S.settlers)if(u.inside===ti){u.inside=-1;u.act='idle'}
+    S.bld[idx(tb.x,tb.y)]=-1;
+    S.buildings.splice(ti,1);
+    for(let i=0;i<S.W*S.H;i++)if(S.bld[i]>ti)S.bld[i]--;
+    for(const u of S.settlers)if(u.inside>ti)u.inside--;
+    S.bldDirty=true;
+  }
   placeBuilding('townhall',x,y,true);
   S.th={x,y};
   recomputeRoadConn();

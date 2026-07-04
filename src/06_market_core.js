@@ -9,7 +9,7 @@ GOVERNOR MARKET NOTE / заметка для дальнейшей архитек
 */
 const MARKET_RES=['food','wood','stone','gems'];
 const IMPORT_COST_MULT=5;
-const FOG_SCALE=4;
+const FOG_SCALE=6;
 const MARKET_LABOR_REASON={build:'BuildLabor',supply:'SupplyRun',oper:'OperateLabor',watch:'WatchDuty',repair:'RepairLabor',pave:'RoadWork',clear:'ClearWork',ruins:'RuinsSearch'};
 function initMarket(){return {seq:1,offers:[],byId:new Map(),stats:{labor:0,resourceIn:0,resourceOut:0,quest:0,matched:0},note:'Governor Market: simplified TransferOffer layer'}}
 function marketClear(){

@@ -377,7 +377,7 @@ function fillUnits(alpha){
     const frame=(u.act==='goto')?((t2+u.id)%2):0;
     const spr=SPR['u_'+u.race+'_'+frame];
     {const sh=SPR['shadow'],so=n*12,su=n*8;
-     const sx0=wx-0.42,sx1=wx+0.42,sy0=wy-0.62,sy1=wy-0.62+0.84;
+     const sx0=wx-0.22,sx1=wx+0.22,sy0=wy-0.33,sy1=wy-0.33+0.44;
      R.uPos[so]=sx0;R.uPos[so+1]=sy0;R.uPos[so+2]=0;
      R.uPos[so+3]=sx1;R.uPos[so+4]=sy0;R.uPos[so+5]=0;
      R.uPos[so+6]=sx1;R.uPos[so+7]=sy1;R.uPos[so+8]=0;
@@ -386,7 +386,7 @@ function fillUnits(alpha){
      R.uUv[su+4]=sh.u1;R.uUv[su+5]=sh.v1;R.uUv[su+6]=sh.u0;R.uUv[su+7]=sh.v1;
      n++;if(n>=95)break;}
     const o=n*12,uo=n*8;
-    const x0=wx-0.5,x1=wx+0.5,y0=wy-0.5,y1=wy+0.5;
+    const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
     R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
     R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
     R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -410,7 +410,7 @@ function fillUnits(alpha){
       const wx=x*CW+ox,wy=(S.H-y)-zig(x-0.5)+oy;
       const spr=SPR['u_raider_'+((t2+k)%2)];
       const o=n*12,uo=n*8;
-      const x0=wx-0.5,x1=wx+0.5,y0=wy-0.5,y1=wy+0.5;
+      const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
       R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
       R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
       R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -433,7 +433,7 @@ function fillUnits(alpha){
         const wx=x*CW+(k-1)*0.35,wy=(S.H-y)-zig(x-0.5)+(k===1?0.3:0);
         const spr=SPR['u_'+u.race+'_'+((t2+k)%2)];
         const o=n*12,uo=n*8;
-        const x0=wx-0.5,x1=wx+0.5,y0=wy-0.5,y1=wy+0.5;
+        const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
         R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
         R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
         R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -453,7 +453,7 @@ function fillUnits(alpha){
     const wx=sh.x*CW,wy=(S.H-sh.y)-zig(sh.x-0.5);
     const bob=0.06*Math.sin(S.time*4+sh.x);
     const o=n*12,uo=n*8;
-    const x0=wx-0.5,x1=wx+0.5,y0=wy-0.5+bob,y1=wy+0.5+bob;
+    const x0=wx-0.34,x1=wx+0.34,y0=wy-0.4+bob,y1=wy+0.28+bob;
     R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
     R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
     R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;

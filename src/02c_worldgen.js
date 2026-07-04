@@ -9,6 +9,7 @@
    мягкие, GRASS — универсальный запасной тайл.
    Все структуры остаются как entity в S.world (хребты/реки/озёра/леса). */
 
+let WFC_DEBUG=false; // флаг вне S: restart пересоздаёт состояние
 function genWorld(){
   const W=S.W,H=S.H,N=W*H;
   for(let attempt=0;attempt<5;attempt++){
@@ -84,16 +85,16 @@ function wgBfsField(seedFn){
 function wgLakes(){
   const W=S.W,H=S.H;
   let maxDc=0;for(const v of S.distCoast)if(v<32767&&v>maxDc)maxDc=v;
-  const want=1+((S.rng()*3)|0);
+  const want=2+((S.rng()*3)|0); // 2-4 озера
   const placed=[];
-  for(let t=0;t<200&&placed.length<want;t++){
+  for(let t=0;t<400&&placed.length<want;t++){
     const x=4+((S.rng()*(W-8))|0),y=4+((S.rng()*(H-8))|0);
     const i=idx(x,y);
     if(S.terr[i]===T.WATER)continue;
     const dc=S.distCoast[i];
-    if(dc<Math.max(5,maxDc*0.3)||dc>maxDc*0.75)continue; // средний пояс
-    if(placed.some(p=>cheb(x,y,p.x,p.y)<14))continue;
-    const r=1+((S.rng()*2)|0);
+    if(dc<Math.max(4,maxDc*0.22)||dc>maxDc*0.85)continue; // не у самого берега
+    if(placed.some(p=>cheb(x,y,p.x,p.y)<10))continue;
+    const r=1+((S.rng()*2.6)|0);
     for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
       const nx=x+dx,ny=y+dy;
       if(inMap(nx,ny)&&cheb(nx,ny,x,y)<=r&&S.rng()<0.85)S.terr[idx(nx,ny)]=T.WATER;
@@ -144,7 +145,7 @@ function wgRidges(){
     return cells;
   };
   const mkRange=(sx,sy)=>{
-    const main=growChain(sx,sy,Math.round(W/9)+((S.rng()*8)|0),null);
+    const main=growChain(sx,sy,Math.round(W/5)+((S.rng()*6)|0),null);
     if(main.length<4)return null;
     const range={cells:main.slice(),spurs:[]};
     // отроги от начала, середины и конца хребта (по форме — «снежинка»)
@@ -216,7 +217,7 @@ function wgFill(){
   const prior=(i)=>{
     const x=i%W,y=(i/W)|0;
     const dc=S.distCoast[i],drr=dr[i];
-    let g=1.5,f=0.52,r=0.24;
+    let g=1.4,f=0.62,r=0.24;
     if(dc<=5){f*=0.35;r*=(dc<=2?2.2:0.6)}         // прибрежье: луга, утёсы у кромки
     else if(drr>6){f*=1.45}                         // средний пояс: лесные кластеры
     if(drr<=3){r*=3.4;f*=0.45}                      // предгорья: скалы-холмы
@@ -228,7 +229,7 @@ function wgFill(){
       if(S.terr[ni]===T.WATER)(S.waterKind[ni]===1?lake=true:sea=true);
     }
     if(lake){r*=1.6;f*=0.6}                         // скалы у озёр
-    if(cellNearRiver(x,y)){g*=3.2;f*=0.4;r*=0.3}    // поймы: луга вдоль рек
+    if(cellNearRiver(x,y)){g*=2.0;f*=0.8;r*=0.6}    // поймы мягкие: река проходит и сквозь лес/скалы
     return [g,f,r];
   };
   // волна: BFS-кольца от контуров к пустым областям (приоритет по фронту)
@@ -250,6 +251,9 @@ function wgFill(){
     for(let i=0;i<N;i++)if(!fixed[i]&&dist[i]===32767)order.push(i);
   }
   const done=new Uint8Array(N);
+  // дебаг-реплей: записываем порядок и решения волны (кнопка WFC в отладке)
+  const trace=WFC_DEBUG?{fixed:[],steps:[],relax:[]}:null;
+  if(trace)for(let i=0;i<N;i++)if(fixed[i])trace.fixed.push(i);
   for(const i of order){
     if(fixed[i]||done[i])continue;
     done[i]=1;
@@ -271,6 +275,7 @@ function wgFill(){
     else t=T.ROCK;
     S.terr[i]=t;
     if(t===T.FOREST)S.terrHp[i]=3;
+    if(trace)trace.steps.push({i,t});
   }
   // релаксация: укрупняем кластеры (одинокий лес -> луг, плотное окружение -> лес).
   // Лес станет непроходимым — нужны цельные массивы с коридорами, а не крапинки.
@@ -287,10 +292,24 @@ function wgFill(){
         n++;
         if(snap[idx(nx,ny)]===T.FOREST)f++;
       }
-      if(t===T.FOREST&&f<=1){S.terr[i]=T.GRASS;S.terrHp[i]=0}
-      else if(t===T.GRASS&&f>=4){S.terr[i]=T.FOREST;S.terrHp[i]=3}
+      if(t===T.FOREST&&f<=1){S.terr[i]=T.GRASS;S.terrHp[i]=0;if(trace)trace.relax.push({i,t:T.GRASS})}
+      else if(t===T.GRASS&&f>=4){S.terr[i]=T.FOREST;S.terrHp[i]=3;if(trace)trace.relax.push({i,t:T.FOREST})}
+    }
+    // одинокие скалы — визуальный мусор: без каменных соседей превращаем в луг
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const i=idx(x,y);
+      if(snap[i]!==T.ROCK||S.terr[i]!==T.ROCK)continue;
+      let rk=0;
+      for(const d of hexDirs(x)){
+        const nx=x+d[0],ny=y+d[1];
+        if(!inMap(nx,ny))continue;
+        const t2=S.terr[idx(nx,ny)];
+        if(t2===T.ROCK||t2===T.MTN)rk++;
+      }
+      if(rk===0){S.terr[i]=T.GRASS;if(trace)trace.relax.push({i,t:T.GRASS})}
     }
   }
+  if(trace)S.wfcTrace=trace;
 }
 
 /* --- 6. entity: леса и озёра как floodfill-кластеры --- */
