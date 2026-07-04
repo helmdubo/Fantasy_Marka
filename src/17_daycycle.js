@@ -64,6 +64,12 @@ function onNewDay(){
     if(r.days<=0){
       if(r.kind==='wheat'&&S.feat[r.i]===F.NONE&&S.terr[r.i]===T.GRASS){S.feat[r.i]=F.WHEAT;S.featHp[r.i]=4;S.featDirty=true}
       else if(r.kind==='fish'&&S.feat[r.i]===F.NONE&&S.terr[r.i]===T.WATER){S.feat[r.i]=F.FISH;S.featHp[r.i]=3;S.featDirty=true}
+      else if(r.kind==='forest'){ // пенёк прорастает обратно в лес (фикс дедлока дерева)
+        if(S.feat[r.i]===F.STUMP&&S.terr[r.i]===T.GRASS&&S.bld[r.i]<0&&!S.road[r.i]){
+          S.terr[r.i]=T.FOREST;S.terrHp[r.i]=3;S.feat[r.i]=F.NONE;
+          S.terrDirty=true;S.featDirty=true;
+        }
+      }
       else S.featHp[r.i]=3;
       S.regrow.splice(i,1);
     }}
@@ -74,6 +80,13 @@ function onNewDay(){
     if(!b.abandoned&&b.built&&(b.type==='farm'||b.type==='lumber'||b.type==='mine'||b.type==='fisher')&&b.starveD>=4){
       b.abandoned=true;S.bldDirty=true;
       log('🕸 Заброшено: '+CFG.BNAME[b.type].toLowerCase()+' — угодья мертвы, люди ушли.');
+    }
+    // угодья восстановились (лес вырос, поле заколосилось) — люди возвращаются.
+    // Шахты не оживают: руда выбрана навсегда, это делв-энкаунтер (п.6).
+    if(b.abandoned&&b.built&&!b.ruined&&(b.type==='farm'||b.type==='lumber'||b.type==='fisher')&&
+      resScore(b.type,b.x,b.y)>=2){
+      b.abandoned=false;b.starveD=0;b.starve=false;S.bldDirty=true;
+      log('↻ Угодья ожили — '+CFG.BNAME[b.type].toLowerCase()+' снова в деле.');
     }
   }
   squatDaily();

@@ -3,6 +3,7 @@ function rebuildJobs(){
   S.jobPool.length=0;
   if(S.isNight)return;
   const seenR=new Set();
+  let salvage=0;
   for(const an of influenceAnchors()){
     const R=an.r;
     for(let y=Math.max(0,an.y-R);y<=Math.min(S.H-1,an.y+R);y++)
@@ -11,6 +12,12 @@ function rebuildJobs(){
       if(seenR.has(i))continue;seenR.add(i);
       if(!S.explored[i]||S.fear[i])continue;
       if(S.feat[i]===F.RUINS)S.jobPool.push({kind:'ruins',x,y,adj:false});
+      // аварийный сбор дров: дерева нет вовсе и лесопилки мертвы — корчуем
+      // пеньки и разбираем бурелом (фикс дедлока: новая лесопилка стоит дерева)
+      if(salvage<3&&bandIdx('wood')===0&&countActive('lumber')===0&&
+        (S.feat[i]===F.STUMP||S.feat[i]===F.DEADFALL||(S.terr[i]===T.FOREST&&S.terrHp[i]>0))){
+        S.jobPool.push({kind:'salvage',x,y,adj:true});salvage++;
+      }
     }
   }
   for(let pi=0;pi<S.roadPlans.length;pi++){
@@ -93,6 +100,7 @@ function jobValid(j){
       return !!(pl&&pl.cells[pl.i]&&pl.cells[pl.i].x===j.x&&pl.cells[pl.i].y===j.y)}
     case 'supply':{const b=S.buildings[j.b];return !!(b&&!b.built&&missingRes(b))}
     case 'ruins':return S.feat[i]===F.RUINS;
+    case 'salvage':return S.feat[i]===F.STUMP||S.feat[i]===F.DEADFALL||(S.terr[i]===T.FOREST&&S.terrHp[i]>0);
     case 'build':{const b=S.buildings[j.b];return !!(b&&!b.built&&!missingRes(b))}
     case 'oper':{const b=S.buildings[j.b];
       if(!b||!b.built||b.ruined||b.workerId!=null)return false;
@@ -144,7 +152,8 @@ function harvestCycle(u,b){
     ok=tryCells((x,y,i)=>{
       if(S.terr[i]!==T.FOREST||S.terrHp[i]<=0)return false;
       S.terrHp[i]--;b.buf.wood+=1+b.tier;addResourcePopup('wood',1+b.tier,b.x,b.y);
-      if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true}
+      if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true;
+        S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'})}
       return true;
     });
   }else if(b.type==='farm'){
@@ -245,6 +254,22 @@ function completeJob(u){
       if(S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP){S.feat[i]=F.NONE;S.featDirty=true}
       addSkillXp(u,'axe',0.8);roadLay(j.plan);break}
     case 'pave':addSkillXp(u,'craft',0.6);roadLay(j.plan);break;
+    case 'salvage':{
+      // дровяной кризис: ручная валка леса / корчёвка пеньков / разбор бурелома
+      if(S.terr[i]===T.FOREST&&S.terrHp[i]>0){
+        S.terrHp[i]--;
+        if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;
+          S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'})}
+      }else{
+        const wasStump=S.feat[i]===F.STUMP;
+        S.feat[i]=F.NONE;
+        // расчищенная земля зарастает лесом, но медленнее пеньков
+        if(wasStump&&S.terr[i]===T.GRASS)S.regrow.push({i,days:24+((S.rng()*10)|0),kind:'forest'});
+      }
+      S.featDirty=true;
+      S.stock.wood+=2;addResourcePopup('wood',2,j.x,j.y);computeLevels();
+      addSkillXp(u,'axe',0.6);
+      log('🪓 Дровяная нужда: ручная валка дала 2 дерева.');break}
     case 'ruins':addSkillXp(u,'lore',1);S.feat[i]=F.NONE;S.featDirty=true;S.gold+=CFG.RUINS_GOLD;addResourcePopup('gold',CFG.RUINS_GOLD,j.x,j.y);
       log('🏺 В древних руинах найдено '+CFG.RUINS_GOLD+' золотых — в казну.');break;
     case 'build':{const b=S.buildings[j.b];b.work--;addSkillXp(u,'craft',1);

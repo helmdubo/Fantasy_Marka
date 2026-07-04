@@ -85,7 +85,8 @@ function fieldHarvest(u){
   let got=null;
   if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){
     S.terrHp[i]--;got={wood:1+b.tier};addSkillXp(u,'axe',1);
-    if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true}
+    if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true;
+      S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'})}
   }else if(b.type==='farm'&&S.feat[i]===F.WHEAT&&S.featHp[i]>0){
     S.featHp[i]--;got={food:1+b.tier};addSkillXp(u,'herb',1);
     if(S.featHp[i]<=0){S.feat[i]=F.NONE;S.featDirty=true;S.regrow.push({i,days:5,kind:'wheat'})}
