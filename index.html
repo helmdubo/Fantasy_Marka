@@ -256,7 +256,7 @@ const CFG={
     tier2:{advguild:1,crafters:1},
     libTier2:{stone:16,gems:3}},
 };
-const UTIL={oper:3.0,watch:2.4,build:2.6,repair:2.8,supply:2.7,pave:1.8,clear:1.8,ruins:1.6,salvage:3.2};
+const UTIL={oper:3.0,watch:2.4,build:2.6,repair:2.8,supply:2.7,pave:1.8,clear:1.8,ruins:1.6};
 const T={WATER:0,GRASS:1,FOREST:2,ROCK:3,MTN:4};
 const TNAME=['Вода','Луга','Лес','Скалы','Горы'];
 const F={NONE:0,BERRY:1,DEADFALL:2,RUBBLE:3,VEIN:4,FISH:5,RUINS:6,WHEAT:7,STUMP:8};
@@ -740,7 +740,7 @@ function rebuildPass(){
 }
 function placeBuilding(type,x,y,instant){
   const b={type,x,y,built:!!instant,work:instant?0:CFG.BUILD_WORK,cd:0,data:{},buf:{food:0,wood:0,stone:0,gems:0},hold:{food:0,wood:0,stone:0,gems:0},store:{food:0,wood:0,stone:0,gems:0},sailing:false,sailMode:null,importRes:null,importQty:0,starve:false,starveD:0,abandoned:false,workerId:null,tier:1,
-    need:instant?null:Object.assign({},CFG.COSTS[type]||{}),got:instant?null:{}};
+    need:instant?null:Object.assign({},costOf(type)),got:instant?null:{}};
   if(instant)S.road&&(S.road[idx(x,y)]=1);
   if(type==='mine'){
     let vein=false,mtn=0;
@@ -1085,7 +1085,6 @@ function marketLaborPriority(j){
   else if(j.kind==='oper')p=3;
   else if(j.kind==='watch')p=2.5;
   else if(j.kind==='ruins')p=1.5;
-  else if(j.kind==='salvage')p=9.5; // дровяной кризис — важнее всего
   if(j.b!==undefined){
     const b=S.buildings[j.b];
     if(b){
@@ -1294,7 +1293,6 @@ function rebuildJobs(){
   S.jobPool.length=0;
   if(S.isNight)return;
   const seenR=new Set();
-  let salvage=0;
   for(const an of influenceAnchors()){
     const R=an.r;
     for(let y=Math.max(0,an.y-R);y<=Math.min(S.H-1,an.y+R);y++)
@@ -1303,12 +1301,6 @@ function rebuildJobs(){
       if(seenR.has(i))continue;seenR.add(i);
       if(!S.explored[i]||S.fear[i])continue;
       if(S.feat[i]===F.RUINS)S.jobPool.push({kind:'ruins',x,y,adj:false});
-      // аварийный сбор дров: дерева нет вовсе и лесопилки мертвы — корчуем
-      // пеньки и разбираем бурелом (фикс дедлока: новая лесопилка стоит дерева)
-      if(salvage<3&&bandIdx('wood')===0&&countActive('lumber')===0&&
-        (S.feat[i]===F.STUMP||S.feat[i]===F.DEADFALL||(S.terr[i]===T.FOREST&&S.terrHp[i]>0))){
-        S.jobPool.push({kind:'salvage',x,y,adj:true});salvage++;
-      }
     }
   }
   for(let pi=0;pi<S.roadPlans.length;pi++){
@@ -1391,7 +1383,6 @@ function jobValid(j){
       return !!(pl&&pl.cells[pl.i]&&pl.cells[pl.i].x===j.x&&pl.cells[pl.i].y===j.y)}
     case 'supply':{const b=S.buildings[j.b];return !!(b&&!b.built&&missingRes(b))}
     case 'ruins':return S.feat[i]===F.RUINS;
-    case 'salvage':return S.feat[i]===F.STUMP||S.feat[i]===F.DEADFALL||(S.terr[i]===T.FOREST&&S.terrHp[i]>0);
     case 'build':{const b=S.buildings[j.b];return !!(b&&!b.built&&!missingRes(b))}
     case 'oper':{const b=S.buildings[j.b];
       if(!b||!b.built||b.ruined||b.workerId!=null)return false;
@@ -1545,22 +1536,6 @@ function completeJob(u){
       if(S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP){S.feat[i]=F.NONE;S.featDirty=true}
       addSkillXp(u,'axe',0.8);roadLay(j.plan);break}
     case 'pave':addSkillXp(u,'craft',0.6);roadLay(j.plan);break;
-    case 'salvage':{
-      // дровяной кризис: ручная валка леса / корчёвка пеньков / разбор бурелома
-      if(S.terr[i]===T.FOREST&&S.terrHp[i]>0){
-        S.terrHp[i]--;
-        if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;
-          S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'})}
-      }else{
-        const wasStump=S.feat[i]===F.STUMP;
-        S.feat[i]=F.NONE;
-        // расчищенная земля зарастает лесом, но медленнее пеньков
-        if(wasStump&&S.terr[i]===T.GRASS)S.regrow.push({i,days:24+((S.rng()*10)|0),kind:'forest'});
-      }
-      S.featDirty=true;
-      S.stock.wood+=2;addResourcePopup('wood',2,j.x,j.y);computeLevels();
-      addSkillXp(u,'axe',0.6);
-      log('🪓 Дровяная нужда: ручная валка дала 2 дерева.');break}
     case 'ruins':addSkillXp(u,'lore',1);S.feat[i]=F.NONE;S.featDirty=true;S.gold+=CFG.RUINS_GOLD;addResourcePopup('gold',CFG.RUINS_GOLD,j.x,j.y);
       log('🏺 В древних руинах найдено '+CFG.RUINS_GOLD+' золотых — в казну.');break;
     case 'build':{const b=S.buildings[j.b];b.work--;addSkillXp(u,'craft',1);
@@ -2421,10 +2396,23 @@ function constructionCap(){
   if(p>=10)return 5;
   return 4;
 }
+// Прогрессивная стоимость лесопилки: если действующих нет — бесплатно
+// (артель валит лес своими топорами), дальше каждая следующая дороже.
+function costOf(type){
+  const base=CFG.COSTS[type]||{};
+  if(type!=='lumber')return base;
+  const n=countActive('lumber');
+  if(n===0)return {};
+  const out={};
+  for(const r in base)out[r]=base[r]*n;
+  return out;
+}
 function canPayWorld(type){
   if(!typeUnlocked(type))return false; // v2.1: строение ещё не открыто в библиотеке
-  const cost=CFG.COSTS[type],gate=CFG.GATE[type];
-  for(const r in gate)if(bandIdx(r)<gate[r])return false;
+  const cost=costOf(type),gate=CFG.GATE[type];
+  // бесплатная нулевая лесопилка не требует и ресурсных ворот
+  if(!(type==='lumber'&&countActive('lumber')===0))
+    for(const r in gate)if(bandIdx(r)<gate[r])return false;
   // При параллельном строительстве нельзя считать одни и те же доски дважды.
   // Поэтому новые площадки смотрят на свободный world-stock после уже обещанных строек.
   for(const r in cost)if(stockWorldAvailable(r)<cost[r])return false;
@@ -3648,9 +3636,9 @@ function onNewDay(){
       b.abandoned=true;S.bldDirty=true;
       log('🕸 Заброшено: '+CFG.BNAME[b.type].toLowerCase()+' — угодья мертвы, люди ушли.');
     }
-    // угодья восстановились (лес вырос, поле заколосилось) — люди возвращаются.
-    // Шахты не оживают: руда выбрана навсегда, это делв-энкаунтер (п.6).
-    if(b.abandoned&&b.built&&!b.ruined&&(b.type==='farm'||b.type==='lumber'||b.type==='fisher')&&
+    // угодья восстановились — люди возвращаются на фермы и причалы.
+    // Лесопилки и шахты НЕ оживают: заброшенное навсегда, со временем — энкаунтер.
+    if(b.abandoned&&b.built&&!b.ruined&&(b.type==='farm'||b.type==='fisher')&&
       resScore(b.type,b.x,b.y)>=2){
       b.abandoned=false;b.starveD=0;b.starve=false;S.bldDirty=true;
       log('↻ Угодья ожили — '+CFG.BNAME[b.type].toLowerCase()+' снова в деле.');

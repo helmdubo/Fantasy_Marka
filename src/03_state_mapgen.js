@@ -329,7 +329,7 @@ function rebuildPass(){
 }
 function placeBuilding(type,x,y,instant){
   const b={type,x,y,built:!!instant,work:instant?0:CFG.BUILD_WORK,cd:0,data:{},buf:{food:0,wood:0,stone:0,gems:0},hold:{food:0,wood:0,stone:0,gems:0},store:{food:0,wood:0,stone:0,gems:0},sailing:false,sailMode:null,importRes:null,importQty:0,starve:false,starveD:0,abandoned:false,workerId:null,tier:1,
-    need:instant?null:Object.assign({},CFG.COSTS[type]||{}),got:instant?null:{}};
+    need:instant?null:Object.assign({},costOf(type)),got:instant?null:{}};
   if(instant)S.road&&(S.road[idx(x,y)]=1);
   if(type==='mine'){
     let vein=false,mtn=0;

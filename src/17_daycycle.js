@@ -81,9 +81,9 @@ function onNewDay(){
       b.abandoned=true;S.bldDirty=true;
       log('🕸 Заброшено: '+CFG.BNAME[b.type].toLowerCase()+' — угодья мертвы, люди ушли.');
     }
-    // угодья восстановились (лес вырос, поле заколосилось) — люди возвращаются.
-    // Шахты не оживают: руда выбрана навсегда, это делв-энкаунтер (п.6).
-    if(b.abandoned&&b.built&&!b.ruined&&(b.type==='farm'||b.type==='lumber'||b.type==='fisher')&&
+    // угодья восстановились — люди возвращаются на фермы и причалы.
+    // Лесопилки и шахты НЕ оживают: заброшенное навсегда, со временем — энкаунтер.
+    if(b.abandoned&&b.built&&!b.ruined&&(b.type==='farm'||b.type==='fisher')&&
       resScore(b.type,b.x,b.y)>=2){
       b.abandoned=false;b.starveD=0;b.starve=false;S.bldDirty=true;
       log('↻ Угодья ожили — '+CFG.BNAME[b.type].toLowerCase()+' снова в деле.');

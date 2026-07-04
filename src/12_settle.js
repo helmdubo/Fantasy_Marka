@@ -157,10 +157,23 @@ function constructionCap(){
   if(p>=10)return 5;
   return 4;
 }
+// Прогрессивная стоимость лесопилки: если действующих нет — бесплатно
+// (артель валит лес своими топорами), дальше каждая следующая дороже.
+function costOf(type){
+  const base=CFG.COSTS[type]||{};
+  if(type!=='lumber')return base;
+  const n=countActive('lumber');
+  if(n===0)return {};
+  const out={};
+  for(const r in base)out[r]=base[r]*n;
+  return out;
+}
 function canPayWorld(type){
   if(!typeUnlocked(type))return false; // v2.1: строение ещё не открыто в библиотеке
-  const cost=CFG.COSTS[type],gate=CFG.GATE[type];
-  for(const r in gate)if(bandIdx(r)<gate[r])return false;
+  const cost=costOf(type),gate=CFG.GATE[type];
+  // бесплатная нулевая лесопилка не требует и ресурсных ворот
+  if(!(type==='lumber'&&countActive('lumber')===0))
+    for(const r in gate)if(bandIdx(r)<gate[r])return false;
   // При параллельном строительстве нельзя считать одни и те же доски дважды.
   // Поэтому новые площадки смотрят на свободный world-stock после уже обещанных строек.
   for(const r in cost)if(stockWorldAvailable(r)<cost[r])return false;
