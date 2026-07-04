@@ -23,7 +23,7 @@ function newGame(seedStr){
     popups:[],portBars:null,
     log:[],uiDirty:true,fogDirty:true,featDirty:true,bldDirty:true,terrDirty:true,
     nextId:1,hungry:false,dbgBuilder:'—',atlasMs:0,hoverLair:-1,revealAll:false};
-  genTerrain();classifyWater();genRivers();classifyWater();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
+  genTerrain();classifyWater();genRivers();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
   S.road=new Uint8Array(N);S.roadConn=new Uint8Array(N);
   placeBuilding('townhall',S.th.x,S.th.y,true);
   recomputeRoadConn();
@@ -55,87 +55,180 @@ function genTerrain(){
     if(t===T.FOREST)S.terrHp[idx(x,y)]=3;
   }
 }
-/* ---------- РЕКИ (п.1) ----------
-   Река — оверлей S.river поверх суши (0 нет / 1 река / 2 исток-водопад).
-   Течёт с гор по градиенту высоты (fbm) с джиттером к морю или озеру,
-   реки сливаются; озеро может дать сток к морю; тупик превращается в пруд.
-   Клетка реки непроходима, пока по ней не проложена дорога (мост). */
+/* ---------- РЕКИ (п.1, v2 — по границам гексов) ----------
+   Река течёт по dual-сетке: входит в треугольник через ребро, проходит через
+   его центр и выходит через другое ребро (референс — реки Оскара Столберга).
+   Каждый переход между треугольниками пересекает сторону (пару центров гексов
+   A–B) и БЛОКИРУЕТ движение между этими гексами. Клетки остаются сушей.
+   Мост = дорога на обоих берегах ребра (см. findPath/riverBlocked).
+   Данные: S.riverEdges (Set ключей рёбер), S.riverTris (тайлы для рендера). */
+function edgeKeyCells(ai,bi){const N=S.W*S.H;return ai<bi?ai*N+bi:bi*N+ai}
+function cellNearRiver(x,y){
+  if(!S.riverEdges||!S.riverEdges.size)return false;
+  const a=idx(x,y);
+  for(const d of hexDirs(x)){
+    const nx=x+d[0],ny=y+d[1];
+    if(!inMap(nx,ny))continue;
+    if(S.riverEdges.has(edgeKeyCells(a,idx(nx,ny))))return true;
+  }
+  return false;
+}
 function genRivers(){
   const W=S.W,H=S.H,N=W*H;
-  S.river=new Uint8Array(N);
-  const elev=(x,y)=>fbm(x/17,y/17,S.seed,4);
-  const flowFrom=(sx,sy,isSource)=>{
-    let x=sx,y=sy,len=0;
-    const own=new Set();
-    while(len++<260){
-      if(!inMap(x,y))break;
-      const i=idx(x,y);
-      if(S.terr[i]===T.WATER&&len>2)break;       // впадение в море/озеро
-      if(S.river[i]&&!own.has(i))break;           // слияние с другой рекой
-      if(!S.river[i])S.river[i]=(len===1&&isSource)?2:1;
-      own.add(i);
-      if(S.terr[i]===T.FOREST){S.terr[i]=T.GRASS;S.terrHp[i]=0} // река прорезает просеку
-      // следующий шаг: минимальная высота среди доступных соседей
-      let nx=x,ny=y,ne=Infinity;
-      for(const d of hexDirs(x)){
-        const tx=x+d[0],ty=y+d[1];
-        if(!inMap(tx,ty))continue;
-        const ti=idx(tx,ty);
-        if(own.has(ti)||S.terr[ti]===T.MTN)continue;
-        let e=elev(tx,ty)+S.rng()*0.055; // джиттер даёт меандры вместо прямой канавы
-        if(S.terr[ti]===T.WATER)e-=1;    // тянемся к воде
-        if(S.river[ti])e-=0.5;           // и к чужим рекам (слияние)
-        if(e<ne){ne=e;nx=tx;ny=ty}
+  S.riverEdges=new Set();
+  S.riverTris=new Map(); // tid -> {x,y,baseCol,or,mask,tint,over:[{kind,wx,wy}]}
+  S.riverStats={springs:0,outflows:0};
+  const EK=(a,b)=>a<b?a*N+b:b*N+a;
+  const elevC=new Float32Array(N);
+  for(let i=0;i<N;i++)elevC[i]=fbm((i%W)/17,((i/W)|0)/17,S.seed,4);
+  // --- граф треугольников dual-сетки ---
+  const tris=new Map();   // tid -> rec
+  const sideMap=new Map();// ключ стороны (пара гексов) -> [tid,tid]
+  for(let x=0;x<W-1;x++)for(let y=0;y<H-1;y++){
+    const two=colTris(x,y);
+    for(let k=0;k<2;k++){
+      const tr=two[k];
+      if(tr.corners.some(c=>!inMap(c[0],c[1])))continue;
+      const ci=tr.corners.map(c=>idx(c[0],c[1]));
+      const tid=(y*W+x)*2+k;
+      const rec={tid,x,y,baseCol:tr.baseCol,or:tr.or,corners:tr.corners,ci,
+        sides:[EK(ci[0],ci[1]),EK(ci[1],ci[2]),EK(ci[2],ci[0])],
+        elev:(elevC[ci[0]]+elevC[ci[1]]+elevC[ci[2]])/3,
+        water:ci.some(i2=>S.terr[i2]===T.WATER),
+        mtn:ci.some(i2=>S.terr[i2]===T.MTN)};
+      tris.set(tid,rec);
+      for(const sk of rec.sides){
+        let arr=sideMap.get(sk);if(!arr){arr=[];sideMap.set(sk,arr)}
+        arr.push(tid);
       }
-      if(nx===x&&ny===y){ // тупик в низине — пруд
-        S.terr[i]=T.WATER;S.terrHp[i]=0;S.river[i]=0;own.delete(i);break;
-      }
-      x=nx;y=ny;
-      if(x<=0||y<=0||x>=W-1||y>=H-1)break;
     }
-    return own.size;
+  }
+  const neighborVia=(rec,si)=>{
+    const arr=sideMap.get(rec.sides[si]);
+    if(!arr)return null;
+    const oid=arr[0]===rec.tid?arr[1]:arr[0];
+    return oid===undefined?null:tris.get(oid);
   };
-  // 1) горные истоки: клетки суши у подножия гор, разнесённые по карте
-  const feet=[];
-  for(let i=0;i<N;i++){
-    if(S.terr[i]!==T.MTN)continue;
-    const x=i%W,y=(i/W)|0;
-    for(const d of hexDirs(x)){
-      const nx=x+d[0],ny=y+d[1];
-      if(!inMap(nx,ny))continue;
-      const t=S.terr[idx(nx,ny)];
-      if(t!==T.MTN&&t!==T.WATER){feet.push({x:nx,y:ny});break}
+  const bankTint=(rec)=>{ // цвет берегов: преобладающий сухой террейн углов
+    const cnt={};
+    for(const i2 of rec.ci){const t=S.terr[i2];if(t!==T.WATER)cnt[t]=(cnt[t]||0)+1}
+    let best=T.GRASS,bv=0;
+    for(const t in cnt)if(cnt[t]>bv){bv=cnt[t];best=+t}
+    return best;
+  };
+  const riverRec=(rec)=>{
+    let r=S.riverTris.get(rec.tid);
+    if(!r){r={x:rec.x,y:rec.y,baseCol:rec.baseCol,or:rec.or,mask:0,tint:bankTint(rec),over:[]};
+      S.riverTris.set(rec.tid,r)}
+    return r;
+  };
+  const cornerW=(c)=>[WXC(c[0]),WYCC(c[0],c[1])];
+  const sideMidW=(rec,si)=>{
+    const a=cornerW(rec.corners[si]),b=cornerW(rec.corners[(si+1)%3]);
+    return [(a[0]+b[0])/2,(a[1]+b[1])/2];
+  };
+  const triCenterW=(rec)=>{
+    const ps=rec.corners.map(cornerW);
+    return [(ps[0][0]+ps[1][0]+ps[2][0])/3,(ps[0][1]+ps[1][1]+ps[2][1])/3];
+  };
+  // сторона треугольника, примыкающая к воде (для устья)
+  const waterSide=(rec,skipSide)=>{
+    for(let si=0;si<3;si++){
+      if(si===skipSide)continue;
+      const a=rec.ci[si],b=rec.ci[(si+1)%3];
+      if(S.terr[a]===T.WATER||S.terr[b]===T.WATER)return si;
     }
-  }
-  const springs=[];
-  const want=Math.max(2,Math.round(W/28)); // ~4-5 на карте 128
-  let guard=0;
-  while(springs.length<want&&guard++<500&&feet.length){
-    const c=feet[(S.rng()*feet.length)|0];
-    if(S.river[idx(c.x,c.y)])continue;
-    let close=false;
-    for(const s of springs)if(cheb(c.x,c.y,s.x,s.y)<Math.round(W/7))close=true;
-    if(close)continue;
-    if(flowFrom(c.x,c.y,true)>=5)springs.push(c);
-  }
-  // 2) стоки из озёр: крупное озеро изливается к морю с самой низкой кромки
-  if(S.waterComps)for(let ci=0;ci<S.waterComps.length;ci++){
-    const comp=S.waterComps[ci];
-    if(comp.sea!==1||comp.size<8)continue;
-    let best=null,be=Infinity;
-    for(let i=0;i<N;i++){
-      if(S.waterComp[i]!==ci)continue;
-      const x=i%W,y=(i/W)|0;
-      for(const d of hexDirs(x)){
-        const nx=x+d[0],ny=y+d[1];
-        if(!inMap(nx,ny))continue;
-        const ti=idx(nx,ny);
-        if(S.terr[ti]===T.WATER||S.terr[ti]===T.MTN||S.river[ti])continue;
-        const e=elev(nx,ny);
-        if(e<be){be=e;best={x:nx,y:ny}}
+    return -1;
+  };
+  const compOf=(rec)=>{ // id водной компоненты, к которой примыкает треугольник
+    for(const i2 of rec.ci)if(S.terr[i2]===T.WATER)return S.waterComp[i2];
+    return -1;
+  };
+  const flow=(startRec,kind,banComp)=>{
+    let cur=startRec,entrySide=-1,len=0,placed=0;
+    if(kind==='falls'){const c=triCenterW(cur);riverRec(cur).over.push({kind:'falls',wx:c[0],wy:c[1]})}
+    if(kind==='out'){ // исток из озера: стартовый рукав от кромки озера
+      for(let si=0;si<3;si++){
+        const nb=neighborVia(cur,si);
+        if(nb&&nb.water&&compOf(nb)===banComp){
+          S.riverEdges.add(cur.sides[si]);
+          riverRec(cur).mask|=(1<<si);
+          const m=sideMidW(cur,si);
+          riverRec(cur).over.push({kind:'mouth',wx:m[0],wy:m[1]});
+          entrySide=si;break;
+        }
       }
     }
-    if(best&&S.rng()<0.75)flowFrom(best.x,best.y,false);
+    while(len++<300){
+      // выбор стороны выхода: сосед пониже, не назад; чужая река — магнит (слияние)
+      let bestSi=-1,bestNb=null,be=Infinity,merge=false;
+      for(let si=0;si<3;si++){
+        if(si===entrySide)continue;
+        const nb=neighborVia(cur,si);
+        if(!nb)continue;
+        if(nb.water&&banComp>=0&&compOf(nb)===banComp)continue; // не назад в своё озеро
+        const already=S.riverEdges.has(cur.sides[si]);
+        let e=nb.elev+S.rng()*0.05;
+        if(nb.water)e-=1;                    // к морю/озеру
+        if(already||S.riverTris.has(nb.tid))e-=0.6; // слияние с чужой рекой
+        if(nb.mtn)e+=0.35;                   // в горы не течём
+        if(e<be){be=e;bestSi=si;bestNb=nb;merge=already||S.riverTris.has(nb.tid)}
+      }
+      if(bestSi<0)break; // тупик
+      // пересекли сторону: блокируем ребро между гексами A-B
+      S.riverEdges.add(cur.sides[bestSi]);
+      riverRec(cur).mask|=(1<<bestSi);
+      const nb=bestNb;
+      const nbSi=nb.sides.indexOf(cur.sides[bestSi]);
+      riverRec(nb).mask|=(1<<nbSi);
+      placed++;
+      if(merge)break; // влились в существующую реку
+      if(nb.water){   // устье: пена у стороны, ведущей в воду
+        const ws=waterSide(nb,-1);
+        if(ws>=0){
+          S.riverEdges.add(nb.sides[ws]);
+          riverRec(nb).mask|=(1<<ws);
+          const m=sideMidW(nb,ws);
+          riverRec(nb).over.push({kind:'mouth',wx:m[0],wy:m[1]});
+        }
+        break;
+      }
+      entrySide=nbSi;cur=nb;
+    }
+    return placed;
+  };
+  // --- 1) горные истоки (водопад у подножия) ---
+  const springCand=[];
+  for(const rec of tris.values())
+    if(rec.mtn&&!rec.water&&!rec.corners.every(c=>S.terr[idx(c[0],c[1])]===T.MTN))springCand.push(rec);
+  const springs=[];
+  const want=Math.max(2,Math.round(W/28));
+  let guard=0;
+  while(springs.length<want&&guard++<600&&springCand.length){
+    const rec=springCand[(S.rng()*springCand.length)|0];
+    if(S.riverTris.has(rec.tid))continue;
+    let close=false;
+    for(const s2 of springs)if(cheb(rec.x,rec.y,s2.x,s2.y)<Math.round(W/7))close=true;
+    if(close)continue;
+    if(flow(rec,'falls')>=5){springs.push(rec);S.riverStats.springs++}
+  }
+  // --- 2) стоки из озёр: у самой низкой сухой кромки крупного озера ---
+  if(S.waterComps)for(let ci2=0;ci2<S.waterComps.length;ci2++){
+    const comp=S.waterComps[ci2];
+    if(comp.sea!==1||comp.size<8||S.rng()>=0.75)continue;
+    let best=null,be=Infinity;
+    for(const rec of tris.values()){
+      if(rec.water||S.riverTris.has(rec.tid))continue;
+      // треугольник, граничащий с этим озером через одну из сторон
+      let touches=false;
+      for(let si=0;si<3;si++){
+        const nb=neighborVia(rec,si);
+        if(nb&&nb.ci.some(i2=>S.terr[i2]===T.WATER&&S.waterComp[i2]===ci2))touches=true;
+      }
+      if(!touches)continue;
+      if(rec.elev<be){be=rec.elev;best=rec}
+    }
+    if(best&&flow(best,'out',ci2)>=3)S.riverStats.outflows++;
   }
 }
 function classifyWater(){
@@ -166,13 +259,10 @@ function classifyWater(){
 function pickStart(){
   const W=S.W,H=S.H;const cand=[];
   for(let y=12;y<H-12;y++)for(let x=12;x<W-12;x++){
-    if(S.terr[idx(x,y)]!==T.GRASS||S.river[idx(x,y)])continue;
-    let open=0,riverNear=false;
-    for(const d of hexDirs(x))if(inMap(x+d[0],y+d[1])&&S.river[idx(x+d[0],y+d[1])])riverNear=true;
-    if(riverNear)continue; // ратуша не прижимается к реке
+    if(S.terr[idx(x,y)]!==T.GRASS||cellNearRiver(x,y))continue; // ратуша не прижимается к реке
+    let open=0;
     for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
-      const i=idx(x+dx,y+dy);
-      const t=S.terr[i];if((t===T.GRASS||t===T.FOREST)&&!S.river[i])open++;
+      const t=S.terr[idx(x+dx,y+dy)];if(t===T.GRASS||t===T.FOREST)open++;
     }
     if(open>=26)cand.push({x,y});
   }
@@ -184,7 +274,6 @@ function genFeatures(){
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const i=idx(x,y),t=S.terr[i];
     if(cheb(x,y,S.th.x,S.th.y)<2)continue;
-    if(S.river[i])continue; // на клетках рек фичи не растут
     const r=S.rng();
     if(t===T.GRASS){
       const wn=vnoise(x/5,y/5,S.seed+777);
@@ -208,7 +297,7 @@ function genLairs(){
         const rmin=def.ring[0]-relax*3, rmax=def.ring[1]+relax*6;
         if(d<rmin||d>rmax)continue;
         const i=idx(x,y);
-        if(S.lairAt[i]>=0||S.feat[i]!==F.NONE||S.river[i])continue;
+        if(S.lairAt[i]>=0||S.feat[i]!==F.NONE)continue;
         const t=S.terr[i];
         if(relax<2&&def.terr.indexOf(t)<0)continue;
         if(relax>=2&&(t===T.WATER||t===T.MTN))continue;
@@ -234,10 +323,8 @@ function computeFear(){
 function rebuildPass(){
   for(let i=0;i<S.W*S.H;i++){
     const t=S.terr[i];
-    let p=(t!==T.WATER&&t!==T.MTN&&S.lairAt[i]<0)?1:0;
-    // п.1: река непроходима; мост (дорога на клетке реки) открывает проход
-    if(p&&S.river&&S.river[i]&&!(S.road&&S.road[i]))p=0;
-    S.pass[i]=p;
+    S.pass[i]=(t!==T.WATER&&t!==T.MTN&&S.lairAt[i]<0)?1:0;
+    // реки (п.1) блокируют РЁБРА между гексами, а не клетки — см. findPath
   }
 }
 function placeBuilding(type,x,y,instant){

@@ -107,54 +107,70 @@ function paintRoadHex(ctx,x,y,mask){
     if(lit[ry*14+rx])ctx.fillRect(x+rx,y+ry,1,1);
   }
 }
-/* ---------- РЕКИ (п.1): русло по маске 6 соседей, исток-водопад, мост ---------- */
-function paintRiverHex(ctx,x,y,mask){
-  // как дорога, но шире и водой: центр + рукава к рёбрам гекса
-  const ends=[[7,0],[7,16],[14,4],[0,4],[14,12],[0,12]];
+/* ---------- РЕКИ (п.1, v2): русло по dual-треугольникам ----------
+   Река входит через ребро треугольника, идёт через центр и выходит через
+   другое ребро (границы гексов). mask — 3 бита сторон (0:c0-c1,1:c1-c2,2:c2-c0).
+   tint — цвет берегов под террейн (луга/лес/скалы/горы). */
+function paintRiverTri(ctx,x0,y0,orr,mask,tint){
+  const P=(orr==='r')?[[0,0],[0,16],[14,8]]:[[14,0],[14,16],[0,8]];
+  const C=[(P[0][0]+P[1][0]+P[2][0])/3,(P[0][1]+P[1][1]+P[2][1])/3];
+  const mids=[0,1,2].map(k=>[(P[k][0]+P[(k+1)%3][0])/2,(P[k][1]+P[(k+1)%3][1])/2]);
+  const ins=(px2,py2)=>{const w=triBary(orr,px2+0.5,py2+0.5);
+    return w[0]>=-0.045&&w[1]>=-0.045&&w[2]>=-0.045};
   const lit=new Uint8Array(14*16);
-  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<14&&py2<16)lit[py2*14+px2]=1};
-  const blob=(cx2,cy2)=>{for(let oy=-2;oy<=2;oy++)for(let ox=-2;ox<=2;ox++){
-    if(Math.abs(ox)+Math.abs(oy)>3)continue;put(cx2+ox,cy2+oy)}};
-  blob(6,7);
-  for(let b=0;b<6;b++)if(mask&(1<<b)){
-    const [ex,ey]=ends[b],steps=14;
+  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<14&&py2<16&&ins(px2,py2))lit[py2*14+px2]=1};
+  const blob=(cx2,cy2)=>{const bx=Math.round(cx2),by=Math.round(cy2);
+    for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++)put(bx+ox,by+oy)};
+  blob(C[0],C[1]);
+  for(let k=0;k<3;k++)if(mask&(1<<k)){
+    const [ex,ey]=mids[k],steps=12;
+    // перпендикулярный изгиб: 0 на концах, чтобы русла соседних тайлов сходились
+    const dx0=ex-C[0],dy0=ey-C[1],dl=Math.hypot(dx0,dy0)||1;
+    const px3=-dy0/dl,py3=dx0/dl;
+    const amp=(hash2(k+1,mask*3+(orr==='r'?1:0),771)*2-1)*2.0;
     for(let i=0;i<=steps;i++){
       const t2=i/steps;
-      blob(Math.round(6+(ex-7)*t2),Math.round(7+(ey-8)*t2));
+      const off=Math.sin(t2*Math.PI)*amp;
+      blob(C[0]+dx0*t2+px3*off,C[1]+dy0*t2+py3*off);
     }
   }
-  // тело воды
-  ctx.fillStyle=PAL.W2;
-  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++)
-    if(lit[py2*14+px2])ctx.fillRect(x+px2,y+py2,1,1);
-  // тёмная кромка берега
-  ctx.fillStyle=PAL.W1;
+  // берега: пиксели рядом с водой, тон под террейн
+  const bankC={};bankC[T.GRASS]=PAL.G1;bankC[T.FOREST]=PAL.F1;bankC[T.ROCK]=PAL.R1;bankC[T.MTN]=PAL.M1;
+  ctx.fillStyle=bankC[tint]||PAL.G1;
+  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
+    if(lit[py2*14+px2]||!ins(px2,py2))continue;
+    let near=false;
+    for(const[ox,oy]of[[1,0],[-1,0],[0,1],[0,-1]]){
+      const qx=px2+ox,qy=py2+oy;
+      if(qx>=0&&qx<14&&qy>=0&&qy<16&&lit[qy*14+qx])near=true;
+    }
+    if(near)ctx.fillRect(x0+px2,y0+py2,1,1);
+  }
+  // вода с бликами
   for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
     if(!lit[py2*14+px2])continue;
-    let edge=false;
-    for(const [ox,oy] of [[1,0],[-1,0],[0,1],[0,-1]]){
-      const qx=px2+ox,qy=py2+oy;
-      if(qx<0||qy<0||qx>=14||qy>=16||!lit[qy*14+qx])edge=true;
-    }
-    if(edge)ctx.fillRect(x+px2,y+py2,1,1);
-  }
-  // блики течения
-  ctx.fillStyle=PAL.W3;
-  for(let i=0;i<8;i++){
-    const rx=hash2(i,mask,131)*14|0,ry=hash2(mask,i,177)*16|0;
-    if(lit[ry*14+rx])ctx.fillRect(x+rx,y+ry,1,1);
+    const h=hash2(px2+mask*7,py2+tint*13,313);
+    ctx.fillStyle=h<0.12?PAL.W3:(h>0.9?PAL.W1:PAL.W2);
+    ctx.fillRect(x0+px2,y0+py2,1,1);
   }
 }
-function paintWaterfall(ctx,x,y){
-  // исток: белопенный сброс с горы, рисуется поверх речной клетки
-  for(let py=1;py<9;py++)for(let px=4;px<10;px++){
+function paintRiverMouth(ctx,x,y){ // устье: пена впадения (8x8, оверлей)
+  for(let py=0;py<8;py++)for(let px=0;px<8;px++){
+    const d=Math.hypot(px-3.5,py-3.5);
+    if(d>3.8)continue;
+    const h=hash2(px,py,881);
+    if(h<0.45){ctx.fillStyle=h<0.2?PAL.SN:PAL.W3;ctx.fillRect(x+px,y+py,1,1)}
+  }
+}
+function paintWaterfall(ctx,x,y){ // исток: белопенный сброс (10x12, оверлей)
+  for(let py=0;py<8;py++)for(let px=2;px<8;px++){
     const h=hash2(px,py,551);
     ctx.fillStyle=h<0.3?PAL.SN:(h<0.65?PAL.W3:PAL.W2);
     ctx.fillRect(x+px,y+py,1,1);
   }
-  for(let px=2;px<12;px++){ // пена у подножия
-    if(hash2(px,9,552)<0.7){ctx.fillStyle=PAL.SN;ctx.fillRect(x+px,y+9,1,1)}
-    if(hash2(px,10,553)<0.45){ctx.fillStyle=PAL.W3;ctx.fillRect(x+px,y+10,1,1)}
+  for(let px=0;px<10;px++){
+    if(hash2(px,9,552)<0.7){ctx.fillStyle=PAL.SN;ctx.fillRect(x+px,y+8,1,1)}
+    if(hash2(px,10,553)<0.45){ctx.fillStyle=PAL.W3;ctx.fillRect(x+px,y+9,1,1)}
   }
 }
 function paintBridge(ctx,x,y){
@@ -481,8 +497,11 @@ function buildAtlas(){
   p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
   p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
   for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
-  for(let m=0;m<64;m++){p=place(14,16);paintRiverHex(ctx,p.x,p.y,m);reg('river_'+m,p.x,p.y,14,16)}
-  p=place(14,16);paintWaterfall(ctx,p.x,p.y);reg('waterfall',p.x,p.y,14,16);
+  for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN])
+    for(const orr of ['l','r'])
+      for(let m=1;m<8;m++){p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,14,16)}
+  p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);
+  p=place(10,12);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,10,12);
   p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16);
   for(const k of ['b_hut','b_house2','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);

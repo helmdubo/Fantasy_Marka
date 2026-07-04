@@ -221,9 +221,13 @@ function roadLay(pi){
   const c=pl.cells[pl.i];
   const ci=idx(c.x,c.y);
   S.road[ci]=1;S.roadDirty=true;
-  if(S.river&&S.river[ci]){ // дорога через реку = мост: клетка стала проходимой
-    rebuildPass();
-    log('🌉 Мост наведён через реку ('+c.x+','+c.y+').');
+  // мост: дорога легла на второй берег речного ребра — переход открыт
+  if(S.riverEdges&&S.riverEdges.size)for(const d of hexDirs(c.x)){
+    const nx=c.x+d[0],ny=c.y+d[1];
+    if(!inMap(nx,ny)||!S.road[idx(nx,ny)])continue;
+    if(S.riverEdges.has(edgeKeyCells(ci,idx(nx,ny)))){
+      log('🌉 Мост наведён через реку ('+c.x+','+c.y+').');break;
+    }
   }
   recomputeRoadConn();
   pl.i++;

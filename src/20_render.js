@@ -18,18 +18,6 @@ function meshFromBatch(b,order){
   return m;
 }
 function cellTerr(x,y){if(x<0||y<0||x>=S.W||y>=S.H)return T.WATER;return S.terr[idx(x,y)]}
-// Полоса между колонками x и x+1, ряды y..y+1: два треугольника ('r' ▶ и 'l' ◀).
-// corners в порядке спрайта ('r': TL,BL,апекс-право; 'l': TR,BR,апекс-лево);
-// wyTop — мировой Y верхней кромки bbox (равен WYCC базовой колонки, ряд y).
-function colTris(x,y){
-  const e=!(x&1);
-  if(e)return [
-    {or:'r',corners:[[x,y],[x,y+1],[x+1,y]],     baseCol:x},
-    {or:'l',corners:[[x+1,y],[x+1,y+1],[x,y+1]], baseCol:x+1}];
-  return [
-    {or:'r',corners:[[x,y],[x,y+1],[x+1,y+1]],   baseCol:x},
-    {or:'l',corners:[[x+1,y],[x+1,y+1],[x,y]],   baseCol:x+1}];
-}
 function buildTerrain(){
   for(const m of R.terrMeshes){R.scene.remove(m);m.geometry.dispose()}
   R.terrMeshes=[];
@@ -63,25 +51,20 @@ function buildTerrain(){
   S.terrDirty=false;
 }
 function buildRivers(){
-  // п.1: русла рек поверх террейна (order 6), дороги и мосты выше (order 7)
+  // п.1 v2: русла по dual-треугольникам (order 6), дороги и мосты выше (order 7)
   if(R.riverMesh){R.scene.remove(R.riverMesh);R.riverMesh.geometry.dispose();R.riverMesh=null}
-  if(!S.river)return;
+  if(!S.riverTris||!S.riverTris.size)return;
   const b=makeBatch();
-  for(let y=0;y<S.H;y++)for(let x=0;x<S.W;x++){
-    const i=idx(x,y);
-    if(!S.river[i])continue;
-    let m=0;
-    const dirs=hexDirs(x);
-    for(let k=0;k<6;k++){
-      const nx=x+dirs[k][0],ny=y+dirs[k][1];
-      if(!inMap(nx,ny))continue;
-      const ni=idx(nx,ny);
-      if(S.river[ni]||S.terr[ni]===T.WATER||(S.river[i]===2&&S.terr[ni]===T.MTN))m|=(1<<k);
-    }
-    const cx=WXC(x),cy=WYCC(x,y);
-    bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['river_'+m]);
-    if(S.river[i]===2)bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['waterfall']);
+  for(const r of S.riverTris.values()){
+    if(!r.mask)continue;
+    const wyTop=WYCC(r.baseCol,r.y);
+    bQuad(b,WXC(r.x),wyTop-1,WXC(r.x)+CW,wyTop,SPR['rt_'+r.tint+'_'+r.or+'_'+r.mask]);
   }
+  for(const r of S.riverTris.values())
+    for(const ov of r.over){
+      if(ov.kind==='mouth')bQuad(b,ov.wx-0.28,ov.wy-0.28,ov.wx+0.28,ov.wy+0.28,SPR['r_mouth']);
+      else if(ov.kind==='falls')bQuad(b,ov.wx-0.34,ov.wy-0.4,ov.wx+0.34,ov.wy+0.4,SPR['r_falls']);
+    }
   R.riverMesh=meshFromBatch(b,6);R.scene.add(R.riverMesh);
 }
 function buildRoads(){
@@ -121,8 +104,18 @@ function buildRoads(){
       }
     }
     const cx=WXC(x),cy=WYCC(x,y);
-    if(S.river&&S.river[idx(x,y)])bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['bridge']); // мост под дорогой
     bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['road_'+m]);
+  }
+  // настилы мостов: речное ребро с дорогой на обоих берегах
+  if(S.riverEdges&&S.riverEdges.size){
+    const N2=S.W*S.H;
+    for(const k of S.riverEdges){
+      const a=Math.floor(k/N2),c2=k%N2;
+      if(!S.road[a]||!S.road[c2])continue;
+      const ax=a%S.W,ay=(a/S.W)|0,bx2=c2%S.W,by2=(c2/S.W)|0;
+      const mx=(WXC(ax)+WXC(bx2))/2,my=(WYCC(ax,ay)+WYCC(bx2,by2))/2;
+      bQuad(b,mx-0.42,my-0.34,mx+0.42,my+0.34,SPR['bridge']);
+    }
   }
   for(const pl of S.roadPlans)
     for(let k=pl.i;k<pl.cells.length;k++){

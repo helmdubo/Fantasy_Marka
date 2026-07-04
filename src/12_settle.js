@@ -179,17 +179,12 @@ function resScore(type,x,y){
   return n;
 }
 const PROD_TYPES={farm:1,fisher:1,lumber:1,mine:1};
-// Временная «мостовая» проходимость: клетки рек считаются проходимыми,
-// как будто мосты уже наведены. Для планирования маршрутов через реку (п.1).
+// Планирование «как с мостами»: рёберные блокировки рек игнорируются,
+// маршрут может пересекать реку — по нему будет размечен мост (п.1).
 function withBridgedPass(fn){
-  const saved=S.pass;
-  const p2=new Uint8Array(saved);
-  for(let i=0;i<p2.length;i++){
-    if(!p2[i]&&S.river&&S.river[i]&&S.terr[i]!==T.WATER&&S.terr[i]!==T.MTN&&S.bld[i]<0&&S.lairAt[i]<0)p2[i]=1;
-  }
-  S.pass=p2;
+  S._riverOpen=true;
   let r;
-  try{r=fn()}finally{S.pass=saved}
+  try{r=fn()}finally{S._riverOpen=false}
   return r;
 }
 function tryPlace(type){
@@ -218,10 +213,15 @@ function tryPlace(type){
   if(!best)return false;
   let p=findPath(S,tx,ty,best.x,best.y,true);
   let bridged=null;
-  if(p===null){
-    // площадка за рекой: планируем маршрут «как с мостами» (п.1)
-    bridged=withBridgedPass(()=>findPath(S,tx,ty,best.x,best.y,true));
-    if(bridged===null)return false;
+  {
+    const pb=withBridgedPass(()=>findPath(S,tx,ty,best.x,best.y,true));
+    if(p===null){
+      // площадка за рекой: пути нет вовсе — только через мост (п.1)
+      if(pb===null)return false;
+      bridged=pb;
+    }else if(pb&&p.length>pb.length*2+6){
+      bridged=pb; // обход реки слишком длинный — мост срезает крюк
+    }
   }
   const b=placeBuilding(type,best.x,best.y,false);
   if(bridged){
@@ -319,7 +319,7 @@ function starterCells(minD,maxD){
   for(let x=Math.max(1,tx-maxD-2);x<=Math.min(S.W-2,tx+maxD+2);x++){
     const d=cheb(x,y,tx,ty),i=idx(x,y);
     if(d<minD||d>maxD)continue;
-    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i]||S.river[i])continue;
+    if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
     arr.push({x,y,d,roll:hash2(x,y,S.seed+4242)});
   }
   arr.sort((a,b)=>(a.d-b.d)||(a.roll-b.roll));
@@ -333,7 +333,7 @@ function clearStarterCell(x,y,t){
 function plantStarterForest(x,y){
   if(!inMap(x,y))return;
   const i=idx(x,y);
-  if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i]||S.river[i])return;
+  if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])return;
   S.terr[i]=T.FOREST;S.terrHp[i]=3;S.feat[i]=F.NONE;S.featHp[i]=0;
 }
 function ensureStarterProductionSites(){

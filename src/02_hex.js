@@ -49,11 +49,33 @@ function losClear(x0,y0,x1,y1,viewH){
   }
   return true;
 }
+// Полоса между колонками x и x+1, ряды y..y+1: два треугольника ('r' ▶ и 'l' ◀).
+// corners в порядке спрайта ('r': TL,BL,апекс-право; 'l': TR,BR,апекс-лево);
+// wyTop — мировой Y верхней кромки bbox (равен WYCC базовой колонки, ряд y).
+function colTris(x,y){
+  const e=!(x&1);
+  if(e)return [
+    {or:'r',corners:[[x,y],[x,y+1],[x+1,y]],     baseCol:x},
+    {or:'l',corners:[[x+1,y],[x+1,y+1],[x,y+1]], baseCol:x+1}];
+  return [
+    {or:'r',corners:[[x,y],[x,y+1],[x+1,y+1]],   baseCol:x},
+    {or:'l',corners:[[x+1,y],[x+1,y+1],[x,y]],   baseCol:x+1}];
+}
 function findPath(S,sx,sy,tx,ty,adjOk,orthOnly){
   // Drop I: A* по 6 hex-соседям; orthOnly сохранён в сигнатуре, но на хексе
   // все соседи равноправны — параметр игнорируется.
   const W=S.W,H=S.H,pass=S.pass;
   const inB=(x,y)=>x>=0&&y>=0&&x<W&&y<H;
+  // п.1: река идёт по ГРАНИЦАМ гексов и блокирует переход между парой клеток.
+  // Мост = дорога на обоих берегах ребра. S._riverOpen — режим планирования
+  // «как с мостами» (автостроитель размечает мостовой маршрут).
+  const RE=S.riverEdges,NN=W*H;
+  const riverBlocked=(ai,bi)=>{
+    if(!RE||!RE.size||S._riverOpen)return false;
+    const k=ai<bi?ai*NN+bi:bi*NN+ai;
+    if(!RE.has(k))return false;
+    return !(S.road&&S.road[ai]&&S.road[bi]);
+  };
   const goal=(x,y)=>{
     if(!adjOk)return x===tx&&y===ty;
     return cheb(x,y,tx,ty)<=1&&!(x===tx&&y===ty);
@@ -84,6 +106,7 @@ function findPath(S,sx,sy,tx,ty,adjOk,orthOnly){
       if(!inB(nx,ny))continue;
       const ni=ny*W+nx;
       if(closed[ni]||!pass[ni])continue;
+      if(riverBlocked(cur,ni))continue;
       const ng=g[cur]+1;
       if(ng<g[ni]){g[ni]=ng;f[ni]=ng+cheb(nx,ny,tx,ty);came[ni]=cur;
         if(open.indexOf(ni)<0)open.push(ni)}
