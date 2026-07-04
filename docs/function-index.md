@@ -20,11 +20,17 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 `CW` · `zig()` · `WXC()` · `WYCC()` · `hexDirs()` · `offToCube()` · `hexDist2()` · `cubeToOff()` · `hexLine()` · `losClear()` · `colTris()` · `findPath()`
 
+## src/02c_worldgen.js
+
+генератор мира: остров, хребты-графы, высота, WFC-заполнение от контуров
+
+`genWorld()` · `wgIsland()` · `wgBfsField()` · `wgLakes()` · `wgRidges()` · `wgElevation()` · `wgFill()` · `wgEntities()` · `wgValidate()`
+
 ## src/03_state_mapgen.js
 
 глобальное состояние S; newGame, генерация мира, spawn поселенцев
 
-`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `genTerrain()` · `edgeKeyCells()` · `cellNearRiver()` · `genRivers()` · `classifyWater()` · `pickStart()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `placeBuilding()` · `spawnSettlers()`
+`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `edgeKeyCells()` · `cellNearRiver()` · `genRivers()` · `classifyWater()` · `pickStart()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `placeBuilding()` · `spawnSettlers()`
 
 ## src/04_econ.js
 

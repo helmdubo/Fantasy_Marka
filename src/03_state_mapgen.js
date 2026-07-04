@@ -23,7 +23,7 @@ function newGame(seedStr){
     popups:[],portBars:null,
     log:[],uiDirty:true,fogDirty:true,featDirty:true,bldDirty:true,terrDirty:true,terrFullDirty:true,
     nextId:1,hungry:false,dbgBuilder:'—',atlasMs:0,hoverLair:-1,revealAll:false};
-  genTerrain();classifyWater();genRivers();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
+  genWorld();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
   S.road=new Uint8Array(N);S.roadConn=new Uint8Array(N);
   placeBuilding('townhall',S.th.x,S.th.y,true);
   recomputeRoadConn();
@@ -41,20 +41,6 @@ function newGame(seedStr){
   return S;
 }
 
-function genTerrain(){
-  const W=S.W,H=S.H,s=S.seed;
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const e=fbm(x/17,y/17,s,4), m=fbm(x/13,y/13,s+9999,3);
-    let t;
-    if(e<0.36)t=T.WATER;
-    else if(e>0.70)t=T.MTN;
-    else if(e>0.64)t=T.ROCK;
-    else if(m>0.56)t=T.FOREST;
-    else t=T.GRASS;
-    S.terr[idx(x,y)]=t;
-    if(t===T.FOREST)S.terrHp[idx(x,y)]=3;
-  }
-}
 /* ---------- РЕКИ (п.1, v2 — по границам гексов) ----------
    Река течёт по dual-сетке: входит в треугольник через ребро, проходит через
    его центр и выходит через другое ребро (референс — реки Оскара Столберга).
@@ -78,9 +64,11 @@ function genRivers(){
   S.riverEdges=new Set();
   S.riverTris=new Map(); // tid -> {x,y,baseCol,or,mask,tint,over:[{kind,wx,wy}]}
   S.riverStats={springs:0,outflows:0};
+  S.riverEdgeOwner=new Map(); // ключ ребра -> id реки (для parent/child)
+  S.confluenceTris=new Set(); // в одну точку может впадать только ОДНА река
   const EK=(a,b)=>a<b?a*N+b:b*N+a;
   const elevC=new Float32Array(N);
-  for(let i=0;i<N;i++)elevC[i]=fbm((i%W)/17,((i/W)|0)/17,S.seed,4);
+  for(let i=0;i<N;i++)elevC[i]=S.elev?S.elev[i]:fbm((i%W)/17,((i/W)|0)/17,S.seed,4);
   // --- граф треугольников dual-сетки ---
   const tris=new Map();   // tid -> rec
   const sideMap=new Map();// ключ стороны (пара гексов) -> [tid,tid]
@@ -145,7 +133,12 @@ function genRivers(){
     return -1;
   };
   const flow=(startRec,kind,banComp)=>{
+    // entity реки: исток (горы/озеро), конец (море/озеро/слияние), parent
+    const rid=(S.world&&S.world.rivers)?S.world.rivers.length:0;
+    const ent={id:rid,kind,parent:null,end:'dead',len:0};
+    if(S.world&&S.world.rivers)S.world.rivers.push(ent);
     let cur=startRec,entrySide=-1,len=0,placed=0;
+    const ownT=new Set([startRec.tid]); // свои треугольники: самослияние запрещено
     if(kind==='falls'){const c=triCenterW(cur);riverRec(cur).over.push({kind:'falls',wx:c[0],wy:c[1]})}
     if(kind==='out'){ // исток из озера: стартовый рукав от кромки озера
       for(let si=0;si<3;si++){
@@ -167,23 +160,47 @@ function genRivers(){
         const nb=neighborVia(cur,si);
         if(!nb)continue;
         if(nb.water&&banComp>=0&&compOf(nb)===banComp)continue; // не назад в своё озеро
-        const already=S.riverEdges.has(cur.sides[si]);
-        let e=nb.elev+S.rng()*0.05;
-        if(nb.water)e-=1;                    // к морю/озеру
-        if(already||S.riverTris.has(nb.tid))e-=0.6; // слияние с чужой рекой
-        if(nb.mtn)e+=0.35;                   // в горы не течём
+        if(ownT.has(nb.tid))continue; // не петляем в собственное русло
+        const already=S.riverEdges.has(cur.sides[si])&&S.riverEdgeOwner.get(cur.sides[si])!==rid;
+        const wouldMerge=already||S.riverTris.has(nb.tid);
+        if(wouldMerge&&S.confluenceTris.has(nb.tid))continue; // точка слияния занята
+        let e=nb.elev*3+S.rng()*0.06;       // градиент высоты доминирует над джиттером
+        if(nb.water)e-=3;                    // к морю/озеру
+        if(wouldMerge)e-=1.2;                // слияние с чужой рекой
+        if(nb.mtn)e+=1.0;                    // в горы не течём
         if(e<be){be=e;bestSi=si;bestNb=nb;merge=already||S.riverTris.has(nb.tid)}
       }
-      if(bestSi<0)break; // тупик
+      if(bestSi<0){ // тупик в низине — бессточный пруд
+        let pc=-1,pe=1e9;
+        for(const i2 of cur.ci)if(S.terr[i2]!==T.MTN&&S.terr[i2]!==T.WATER&&elevC[i2]<pe){pe=elevC[i2];pc=i2}
+        if(pc>=0){
+          S.terr[pc]=T.WATER;S.terrHp[pc]=0;
+          const c2=triCenterW(cur);
+          riverRec(cur).over.push({kind:'mouth',wx:c2[0],wy:c2[1]});
+          ent.end='pond';
+        }
+        break;
+      }
       // пересекли сторону: блокируем ребро между гексами A-B
       S.riverEdges.add(cur.sides[bestSi]);
+      if(!S.riverEdgeOwner.has(cur.sides[bestSi]))S.riverEdgeOwner.set(cur.sides[bestSi],rid);
       riverRec(cur).mask|=(1<<bestSi);
       const nb=bestNb;
       const nbSi=nb.sides.indexOf(cur.sides[bestSi]);
       riverRec(nb).mask|=(1<<nbSi);
-      placed++;
-      if(merge)break; // влились в существующую реку
+      placed++;ent.len=placed;ownT.add(nb.tid);
+      if(merge){ // влились в существующую реку: она — родитель, точка занята
+        let pid=S.riverEdgeOwner.get(cur.sides[bestSi]);
+        if(pid===rid||pid===undefined){
+          for(const sk of nb.sides)if(S.riverEdgeOwner.has(sk)&&S.riverEdgeOwner.get(sk)!==rid){pid=S.riverEdgeOwner.get(sk);break}
+        }
+        ent.parent=(pid!==undefined&&pid!==rid)?pid:null;
+        ent.end='river';
+        S.confluenceTris.add(nb.tid);
+        break;
+      }
       if(nb.water){   // устье: пена у стороны, ведущей в воду
+        ent.end=nb.ci.some(i2=>S.terr[i2]===T.WATER&&S.waterKind[i2]===2)?'sea':'lake';
         const ws=waterSide(nb,-1);
         if(ws>=0){
           S.riverEdges.add(nb.sides[ws]);
@@ -199,16 +216,21 @@ function genRivers(){
   };
   // --- 1) горные истоки (водопад у подножия) ---
   const springCand=[];
-  for(const rec of tris.values())
-    if(rec.mtn&&!rec.water&&!rec.corners.every(c=>S.terr[idx(c[0],c[1])]===T.MTN))springCand.push(rec);
+  for(const rec of tris.values()){
+    if(!rec.mtn||rec.water)continue;
+    const mtnN=rec.ci.filter(i2=>S.terr[i2]===T.MTN).length;
+    if(mtnN===3)continue;
+    if(mtnN===2)springCand.push(rec,rec,rec); // «стык двух горных гексов» — долина, тройной вес
+    else springCand.push(rec);
+  }
   const springs=[];
-  const want=Math.max(2,Math.round(W/28));
+  const want=Math.max(3,Math.round(W/24));
   let guard=0;
   while(springs.length<want&&guard++<600&&springCand.length){
     const rec=springCand[(S.rng()*springCand.length)|0];
     if(S.riverTris.has(rec.tid))continue;
     let close=false;
-    for(const s2 of springs)if(cheb(rec.x,rec.y,s2.x,s2.y)<Math.round(W/7))close=true;
+    for(const s2 of springs)if(cheb(rec.x,rec.y,s2.x,s2.y)<9)close=true;
     if(close)continue;
     if(flow(rec,'falls')>=5){springs.push(rec);S.riverStats.springs++}
   }
