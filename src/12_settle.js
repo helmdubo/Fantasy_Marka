@@ -1,5 +1,10 @@
 /* ================= SETTLE (auto-builder) ================= */
 function countB(type,builtOnly){let n=0;for(const b of S.buildings)if(b.type===type&&(!builtOnly||b.built))n++;return n}
+// «Живые» здания типа: стройка или действующее. Заброшенные и руины НЕ считаются —
+// иначе автостроитель думает, что производство есть, хотя оно мертво (п.7).
+function countLive(type){let n=0;for(const b of S.buildings)if(b.type===type&&!b.abandoned&&!b.ruined)n++;return n}
+// Действующие: построено, не заброшено, не руина.
+function countActive(type){let n=0;for(const b of S.buildings)if(b.type===type&&b.built&&!b.abandoned&&!b.ruined)n++;return n}
 function housingCap(){let c=0;for(const b of S.buildings)if(b.built&&!b.ruined&&connected(b)&&CFG.HOUSE[b.type])c+=CFG.HOUSE[b.type];return c}
 const NEAR_ROAD_TYPES={hut:1,tavern:1,advguild:1,guild:1,crafters:1};
 // v2.1: зона застройки = радиус ратуши (INFLUENCE) + радиусы действующих дозорных
@@ -67,8 +72,8 @@ function engineTarget(){
   const mineSite=anySite('mine');
   // Не резервируем дерево под несуществующую лесопилку: иначе старты с 1-2 лесными клетками
   // застревают в еде/домах и не переходят к шахте, хотя каменный двигатель уже доступен.
-  if(countB('lumber')===0&&lumberSite&&(S.noForestDays||0)<=10)return 'lumber';
-  if(countB('mine')===0&&mineSite)return 'mine';
+  if(countLive('lumber')===0&&lumberSite&&(S.noForestDays||0)<=10)return 'lumber';
+  if(countLive('mine')===0&&mineSite)return 'mine';
   return null;
 }
 /* ---------- RESEARCH (v2.1): открытия строений в библиотеке ---------- */
@@ -189,15 +194,29 @@ function tryPlace(type){
   computeLevels();
   return true;
 }
+function nearestRoadTarget(x,y){
+  // Ближайшая клетка действующей дорожной сети (roadConn). Тянуть каждую дорогу
+  // до самой ратуши нельзя: параллельные нитки дают «паутину» (п.2).
+  let best=null,bd=1e9;
+  for(let cy=0;cy<S.H;cy++)for(let cx=0;cx<S.W;cx++){
+    const i=idx(cx,cy);
+    if(!S.road[i]||!S.roadConn[i])continue;
+    const d=cheb(x,y,cx,cy);
+    if(d<bd){bd=d;best={x:cx,y:cy}}
+  }
+  return best||{x:S.th.x,y:S.th.y};
+}
 function buildRoad(b){
-  let p=findPath(S,b.x,b.y,S.th.x,S.th.y,true,true);
+  const tgt=nearestRoadTarget(b.x,b.y);
+  let p=findPath(S,b.x,b.y,tgt.x,tgt.y,true,true);
+  if(!p)p=findPath(S,b.x,b.y,tgt.x,tgt.y,true);
   if(!p)p=findPath(S,b.x,b.y,S.th.x,S.th.y,true);
   if(!p)return;
   const cells=p.filter(w=>!S.road[idx(w.x,w.y)]&&S.bld[idx(w.x,w.y)]<0);
-  S.road[idx(b.x,b.y)]=1;S.road[idx(S.th.x,S.th.y)]=1;S.roadDirty=true;
+  S.road[idx(b.x,b.y)]=1;S.roadDirty=true;
   if(!cells.length)return;
-  S.roadPlans.push({cells,i:0,name:CFG.BNAME[b.type].toLowerCase()+' — ратуша'});
-  log('🚩 Размечен дорожный фундамент: '+CFG.BNAME[b.type].toLowerCase()+' → ратуша.');
+  S.roadPlans.push({cells,i:0,name:CFG.BNAME[b.type].toLowerCase()+' — тракт'});
+  log('🚩 Размечен дорожный фундамент: '+CFG.BNAME[b.type].toLowerCase()+' → тракт.');
 }
 function finishBuilding(b){
   b.built=true;S.bldDirty=true;
@@ -232,12 +251,6 @@ function forestInInfluence(){
   return n;
 }
 function anySite(type){
-  const R=CFG.INFLUENCE,tx=S.th.x,ty=S.th.y;
-  for(let y=Math.max(0,ty-R);y<=Math.min(S.H-1,ty+R);y++)
-  for(let x=Math.max(0,tx-R);x<=Math.min(S.W-1,tx+R);x++)
-    if(siteOk(type,x,y)&&cheb(x,y,tx,ty)>=2)return true;
-  return false;
-}function anySite(type){
   const R=CFG.INFLUENCE,tx=S.th.x,ty=S.th.y;
   for(let y=Math.max(0,ty-R);y<=Math.min(S.H-1,ty+R);y++)
   for(let x=Math.max(0,tx-R);x<=Math.min(S.W-1,tx+R);x++)
@@ -405,10 +418,10 @@ function settleThink(){
   // 0. CORE PRODUCTION PERMITS — не технология, а одновременная стартовая повестка.
   // Если хватает ресурсов, губернатор сразу выдаёт разрешения на лесопилку, шахту,
   // ферму и рыбацкий причал. Исполняет AI через market/job layer.
-  if(countB('lumber')===0)put('lumber');
-  if(countB('mine')===0)put('mine');
-  if(countB('farm')===0)put('farm');
-  if(countB('fisher')===0)put('fisher');
+  if(countLive('lumber')===0)put('lumber');
+  if(countLive('mine')===0)put('mine');
+  if(countLive('farm')===0)put('farm');
+  if(countLive('fisher')===0)put('fisher');
 
   // Если стартовые четыре стройки заняли весь лимит — это нормальное состояние.
   if(!constructionOpen()){
@@ -416,14 +429,14 @@ function settleThink(){
     return;
   }
 
-  const foodN=countB('farm')+countB('fisher');
+  const foodN=countLive('farm')+countLive('fisher');
   const foodCap=1+Math.ceil(S.settlers.length/5);
-  const prodN=countB('farm',true)+countB('fisher',true)+countB('lumber',true)+countB('mine',true);
+  const prodN=countActive('farm')+countActive('fisher')+countActive('lumber')+countActive('mine');
 
   // 1. FOOD SAFETY — при просадке еды расширяем питание до жилья.
   if(L('food')<=1&&foodN<foodCap){
     if(!anySite('farm')&&!anySite('fisher'))ensureEmergencyFoodSite();
-    const first=(countB('fisher')<=countB('farm'))?'fisher':'farm';
+    const first=(countLive('fisher')<=countLive('farm'))?'fisher':'farm';
     const second=(first==='fisher')?'farm':'fisher';
     if(put(first)||put(second)){S.dbgBuilder='расширение еды';return}
   }
@@ -445,11 +458,23 @@ function settleThink(){
 
   // 4. production growth.
   if(L('wood')>=2){
-    if(fc>=8&&countB('lumber')<Math.min(2,1+Math.floor(fc/32))&&put('lumber'))return;
+    if(fc>=8&&countLive('lumber')<Math.min(2,1+Math.floor(fc/32))&&put('lumber'))return;
     if(L('food')<=2&&foodN<foodCap){
-      const first=(countB('farm')<=countB('fisher'))?'farm':'fisher';
+      const first=(countLive('farm')<=countLive('fisher'))?'farm':'fisher';
       if(put(first))return;
     }
+  }
+  // 4b. восстановление производства после заброса: живых зданий типа нет,
+  // но угодья в зоне есть — закладываем замену (заброшенное ≠ действующее).
+  // Демпфер: только если ресурс типа реально нужен (band<3) и не чаще раза в 4 дня,
+  // иначе на бедных лесом сидах строитель плодит лесопилки бесконечно.
+  const REBUILD_RES={mine:'stone',lumber:'wood',farm:'food',fisher:'food'};
+  S.rebuildCd=S.rebuildCd||{};
+  for(const t of ['mine','lumber','farm','fisher']){
+    if(countLive(t)>0||countB(t)===0)continue;
+    if(bandIdx(REBUILD_RES[t])>=3)continue;
+    if((S.rebuildCd[t]||0)>S.day-4)continue;
+    if(put(t)){S.rebuildCd[t]=S.day;S.dbgBuilder='замена заброшенного: '+t;return}
   }
 
   // 5. watchtower and mid-tier stone sinks. v2.1: вышки — цепочка экспансии,
@@ -471,7 +496,7 @@ function settleThink(){
 function tryUpgrade(){
   let best=null;
   for(const b of S.buildings){
-    if(!b.built)continue;
+    if(!b.built||b.abandoned||b.ruined)continue;
     if(b.type!=='farm'&&b.type!=='fisher'&&b.type!=='lumber'&&b.type!=='mine')continue;
     if((b.tier||1)>=3)continue;
     if(!best||b.tier<best.tier)best=b;

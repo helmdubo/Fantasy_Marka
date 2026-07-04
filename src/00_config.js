@@ -5,7 +5,7 @@ const IS_BROWSER = (typeof window!=='undefined') && (typeof document!=='undefine
 
 /* ================= CONFIG ================= */
 const CFG={
-  MAP_W:64, MAP_H:64, DAY:108, NIGHT:20, STEP:0.1,
+  MAP_W:128, MAP_H:128, DAY:108, NIGHT:20, STEP:0.1,
   START_POP:5, START_GOLD:32,
   START_STOCK:{food:42,wood:42,stone:10,gems:0},
   WAGE:0.15, WALK:2.4, EAT:1,

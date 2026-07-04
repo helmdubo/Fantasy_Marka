@@ -60,7 +60,7 @@ function freeHeroes(){return S.settlers.filter(u=>u.hero&&u.inside!==-2&&u.hero.
 function arriveSettler(){
   const w={human:S.raceW.human,dwarf:S.raceW.dwarf,elf:S.raceW.elf,troll:S.raceW.troll};
   for(const b of S.buildings){
-    if(!b.built)continue;
+    if(!b.built||b.abandoned||b.ruined)continue;
     if(b.type==='mine')w.dwarf+=6;
     else if(b.type==='fisher')w.elf+=4;
     else if(b.type==='lumber'){w.elf+=2;w.troll+=2}

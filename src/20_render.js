@@ -64,13 +64,38 @@ function buildTerrain(){
 function buildRoads(){
   if(R.roadMesh){R.scene.remove(R.roadMesh);R.roadMesh.geometry.dispose();R.roadMesh=null}
   const b=makeBatch();
+  // П.2, «паутина дорог»: у гекса строения рисуется максимум ОДНО дорожное
+  // ответвление («подъезд»). Данные (S.road/roadConn) не меняются — только визуал.
+  const isBldCell=(x,y)=>{const bi=S.bld[idx(x,y)];return bi>=0&&S.buildings[bi].type!=='townhall'};
+  const doorK=(x,y)=>{ // выбранный слот подъезда для гекса строения
+    const dirs=hexDirs(x);let bestK=-1,bd=1e9;
+    for(let k=0;k<6;k++){
+      const nx=x+dirs[k][0],ny=y+dirs[k][1];
+      if(!inMap(nx,ny))continue;
+      const ni=idx(nx,ny);
+      if(!S.road[ni])continue;
+      const d=(S.roadConn[ni]?0:1000)+cheb(nx,ny,S.th.x,S.th.y)+(isBldCell(nx,ny)?100:0);
+      if(d<bd){bd=d;bestK=k}
+    }
+    return bestK;
+  };
   for(let y=0;y<S.H;y++)for(let x=0;x<S.W;x++){
     if(!S.road[idx(x,y)])continue;
     let m=0;
     const dirs=hexDirs(x); // порядок слотов: N,S,NE,NW,SE,SW; hexDirs зависит от колонки x
-    for(let k=0;k<6;k++){
-      const nx=x+dirs[k][0],ny=y+dirs[k][1];
-      if(inMap(nx,ny)&&S.road[idx(nx,ny)])m|=(1<<k);
+    if(isBldCell(x,y)){
+      const k=doorK(x,y);
+      if(k>=0)m=1<<k;
+    }else{
+      for(let k=0;k<6;k++){
+        const nx=x+dirs[k][0],ny=y+dirs[k][1];
+        if(!inMap(nx,ny)||!S.road[idx(nx,ny)])continue;
+        if(isBldCell(nx,ny)){ // отросток к дому рисуем только если его подъезд смотрит на нас
+          const dk=doorK(nx,ny),dd=hexDirs(nx);
+          if(dk<0||nx+dd[dk][0]!==x||ny+dd[dk][1]!==y)continue;
+        }
+        m|=(1<<k);
+      }
     }
     const cx=WXC(x),cy=WYCC(x,y);
     bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['road_'+m]);

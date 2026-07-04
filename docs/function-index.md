@@ -78,7 +78,7 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 автостроитель: siteOk, settleThink, research, стартовые площадки, апгрейды
 
-`countB()` · `housingCap()` · `NEAR_ROAD_TYPES` · `influenceAnchors()` · `inInfluence()` · `siteOk()` · `engineTarget()` · `researchNext()` · `typeUnlocked()` · `researchCycle()` · `tryLibraryTier2()` · `stockWorld()` · `pendingConstructionNeed()` · `stockWorldAvailable()` · `activeConstructionCount()` · `constructionCap()` · `canPayWorld()` · `resScore()` · `PROD_TYPES` · `tryPlace()` · `buildRoad()` · `finishBuilding()` · `forestInInfluence()` · `anySite()` · `bestSiteScore()` · `starterCells()` · `clearStarterCell()` · `plantStarterForest()` · `ensureStarterProductionSites()` · `ensureStarterFisherSite()` · `ensureEmergencyFoodSite()` · `constructionOpen()` · `tryPlaceIfOpen()` · `ensureCoreProductionSites()` · `settleThink()` · `tryUpgrade()`
+`countB()` · `countLive()` · `countActive()` · `housingCap()` · `NEAR_ROAD_TYPES` · `influenceAnchors()` · `inInfluence()` · `siteOk()` · `engineTarget()` · `researchNext()` · `typeUnlocked()` · `researchCycle()` · `tryLibraryTier2()` · `stockWorld()` · `pendingConstructionNeed()` · `stockWorldAvailable()` · `activeConstructionCount()` · `constructionCap()` · `canPayWorld()` · `resScore()` · `PROD_TYPES` · `tryPlace()` · `nearestRoadTarget()` · `buildRoad()` · `finishBuilding()` · `forestInInfluence()` · `anySite()` · `bestSiteScore()` · `starterCells()` · `clearStarterCell()` · `plantStarterForest()` · `ensureStarterProductionSites()` · `ensureStarterFisherSite()` · `ensureEmergencyFoodSite()` · `constructionOpen()` · `tryPlaceIfOpen()` · `ensureCoreProductionSites()` · `settleThink()` · `tryUpgrade()`
 
 ## src/13_heroes_pop.js
 
