@@ -67,7 +67,7 @@ function onNewDay(){
       else if(r.kind==='forest'){ // пенёк прорастает обратно в лес (фикс дедлока дерева)
         if(S.feat[r.i]===F.STUMP&&S.terr[r.i]===T.GRASS&&S.bld[r.i]<0&&!S.road[r.i]){
           S.terr[r.i]=T.FOREST;S.terrHp[r.i]=3;S.feat[r.i]=F.NONE;
-          S.terrDirty=true;S.featDirty=true;
+          S.terrDirty=true;S.featDirty=true;rebuildPass();
         }
       }
       else S.featHp[r.i]=3;

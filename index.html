@@ -1030,11 +1030,12 @@ function pickStart(){
   const W=S.W,H=S.H;const cand=[];
   for(let y=12;y<H-12;y++)for(let x=12;x<W-12;x++){
     if(S.terr[idx(x,y)]!==T.GRASS||cellNearRiver(x,y))continue; // ратуша не прижимается к реке
-    let open=0;
+    let open=0,forest=0;
     for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
-      const t=S.terr[idx(x+dx,y+dy)];if(t===T.GRASS||t===T.FOREST)open++;
+      const t=S.terr[idx(x+dx,y+dy)];
+      if(t===T.GRASS)open++;else if(t===T.FOREST)forest++;
     }
-    if(open>=26)cand.push({x,y});
+    if(open>=24&&forest>=2)cand.push({x,y}); // простор лугов + лес поблизости
   }
   const p=cand.length?cand[(S.rng()*cand.length)|0]:{x:(W/2)|0,y:(H/2)|0};
   S.th.x=p.x;S.th.y=p.y;
@@ -1091,11 +1092,25 @@ function computeFear(){
   }
 }
 function rebuildPass(){
+  // Два слоя проходимости: жители НЕ ходят сквозь стоящий лес (пеньки после
+  // вырубки проходимы) — лесопилки буквально прорубают дорогу. Герои, партии
+  // и рейдеры продираются через чащу (S.passHero).
+  if(!S.passHero||S.passHero.length!==S.pass.length)S.passHero=new Uint8Array(S.pass.length);
   for(let i=0;i<S.W*S.H;i++){
     const t=S.terr[i];
-    S.pass[i]=(t!==T.WATER&&t!==T.MTN&&S.lairAt[i]<0)?1:0;
+    const base=(t!==T.WATER&&t!==T.MTN&&S.lairAt[i]<0)?1:0;
+    S.passHero[i]=base;
+    S.pass[i]=(base&&!(t===T.FOREST&&S.terrHp[i]>0))?1:0;
     // реки (п.1) блокируют РЁБРА между гексами, а не клетки — см. findPath
   }
+}
+// Пути героев/рейдеров: лес проходим
+function withHeroPass(fn){
+  const saved=S.pass;
+  S.pass=S.passHero;
+  let r;
+  try{r=fn()}finally{S.pass=saved}
+  return r;
 }
 function placeBuilding(type,x,y,instant){
   const b={type,x,y,built:!!instant,work:instant?0:CFG.BUILD_WORK,cd:0,data:{},buf:{food:0,wood:0,stone:0,gems:0},hold:{food:0,wood:0,stone:0,gems:0},store:{food:0,wood:0,stone:0,gems:0},sailing:false,sailMode:null,importRes:null,importQty:0,starve:false,starveD:0,abandoned:false,workerId:null,tier:1,
@@ -1794,7 +1809,7 @@ function harvestCycle(u,b){
       if(S.terr[i]!==T.FOREST||S.terrHp[i]<=0)return false;
       S.terrHp[i]--;b.buf.wood+=1+b.tier;addResourcePopup('wood',1+b.tier,b.x,b.y);
       if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true;
-        S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'})}
+        S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'});rebuildPass()}
       return true;
     });
   }else if(b.type==='farm'){
@@ -1890,7 +1905,7 @@ function completeJob(u){
   let carry=null;
   switch(j.kind){
     case 'clear':{
-      if(S.terr[i]===T.FOREST){S.terrHp[i]=0;S.terr[i]=T.GRASS;S.terrDirty=true;
+      if(S.terr[i]===T.FOREST){S.terrHp[i]=0;S.terr[i]=T.GRASS;S.terrDirty=true;rebuildPass();
         S.stock.wood+=2;addResourcePopup('wood',2,j.x,j.y);computeLevels()}
       if(S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP){S.feat[i]=F.NONE;S.featDirty=true}
       addSkillXp(u,'axe',0.8);roadLay(j.plan);break}
@@ -2055,7 +2070,7 @@ function fieldTarget(b){
     const x=b.x+dx,y=b.y+dy;if(!inMap(x,y))continue;
     const i=idx(x,y);
     let ok=false,adj=false;
-    if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){ok=true;adj=false}
+    if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){ok=true;adj=true} // рубим с опушки
     if(b.type==='farm'&&S.feat[i]===F.WHEAT&&S.featHp[i]>0){ok=true;adj=false}
     if(!ok)continue;
     const d=Math.abs(dx)+Math.abs(dy);
@@ -2071,7 +2086,7 @@ function fieldHarvest(u){
   if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){
     S.terrHp[i]--;got={wood:1+b.tier};addSkillXp(u,'axe',1);
     if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true;
-      S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'})}
+      S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'});rebuildPass()}
   }else if(b.type==='farm'&&S.feat[i]===F.WHEAT&&S.featHp[i]>0){
     S.featHp[i]--;got={food:1+b.tier};addSkillXp(u,'herb',1);
     if(S.featHp[i]<=0){S.feat[i]=F.NONE;S.featDirty=true;S.regrow.push({i,days:5,kind:'wheat'})}
@@ -3501,7 +3516,7 @@ function findRaidPath(x,y){
   // raiders ignore fear; temporary pass without fear is same grid
   const savedLair=S.lairAt[idx(x,y)];
   S.lairAt[idx(x,y)]=-1;rebuildPass();
-  const p=findPath(S,x,y,S.th.x,S.th.y,true);
+  const p=withHeroPass(()=>findPath(S,x,y,S.th.x,S.th.y,true));
   S.lairAt[idx(x,y)]=savedLair;rebuildPass();
   return p;
 }
@@ -3569,7 +3584,7 @@ function doLoot(w){
   computeLevels();
   // path back
   const back=findRaidPath(w.x|0===L.x?L.x:L.x,L.y); // recompute from town to lair
-  const p=findPath(S,w.x|0,w.y|0,L.x,L.y,true);
+  const p=withHeroPass(()=>findPath(S,w.x|0,w.y|0,L.x,L.y,true));
   w.loot=loot;w.phase='back';
   if(p){w.path=p;w.pathI=0}
   else{w.done=true;S.lairs[w.li].hoard+=loot;
@@ -3615,7 +3630,7 @@ function sendDelve(bi){
   if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Глубже этажей нет.');return false}
   const prov=CFG.HERO.provisions+b.tier*2;
   if(S.stock.food<prov){log('🥖 Для спуска нужно '+prov+' еды.');return false}
-  const p=findPath(S,S.th.x,S.th.y,b.x,b.y,true);
+  const p=withHeroPass(()=>findPath(S,S.th.x,S.th.y,b.x,b.y,true));
   if(!p){log('⛏ К шахте нет тропы.');return false}
   S.stock.food-=prov;computeLevels();
   const hs=sl.heroes.map(id=>S.settlers.find(u=>u.id===id));
@@ -3773,7 +3788,7 @@ function goBack(gain){
     log('☠ Из похода не вернулся никто.');
     S.party=null;S.uiDirty=true;return;
   }
-  const p=findPath(S,P.x|0,P.y|0,S.th.x,S.th.y,true);
+  const p=withHeroPass(()=>findPath(S,P.x|0,P.y|0,S.th.x,S.th.y,true));
   P.phase='back';P.gain=gain;
   if(p){P.path=p;P.pathI=0}
   else{P.path=[];P.pathI=0}
@@ -3981,7 +3996,7 @@ function onNewDay(){
       else if(r.kind==='forest'){ // пенёк прорастает обратно в лес (фикс дедлока дерева)
         if(S.feat[r.i]===F.STUMP&&S.terr[r.i]===T.GRASS&&S.bld[r.i]<0&&!S.road[r.i]){
           S.terr[r.i]=T.FOREST;S.terrHp[r.i]=3;S.feat[r.i]=F.NONE;
-          S.terrDirty=true;S.featDirty=true;
+          S.terrDirty=true;S.featDirty=true;rebuildPass();
         }
       }
       else S.featHp[r.i]=3;

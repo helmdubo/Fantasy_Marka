@@ -30,7 +30,7 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 глобальное состояние S; newGame, генерация мира, spawn поселенцев
 
-`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `edgeKeyCells()` · `cellNearRiver()` · `genRivers()` · `classifyWater()` · `pickStart()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `placeBuilding()` · `spawnSettlers()`
+`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `edgeKeyCells()` · `cellNearRiver()` · `genRivers()` · `classifyWater()` · `pickStart()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `withHeroPass()` · `placeBuilding()` · `spawnSettlers()`
 
 ## src/04_econ.js
 

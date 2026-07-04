@@ -38,7 +38,7 @@ function sendDelve(bi){
   if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Глубже этажей нет.');return false}
   const prov=CFG.HERO.provisions+b.tier*2;
   if(S.stock.food<prov){log('🥖 Для спуска нужно '+prov+' еды.');return false}
-  const p=findPath(S,S.th.x,S.th.y,b.x,b.y,true);
+  const p=withHeroPass(()=>findPath(S,S.th.x,S.th.y,b.x,b.y,true));
   if(!p){log('⛏ К шахте нет тропы.');return false}
   S.stock.food-=prov;computeLevels();
   const hs=sl.heroes.map(id=>S.settlers.find(u=>u.id===id));
@@ -196,7 +196,7 @@ function goBack(gain){
     log('☠ Из похода не вернулся никто.');
     S.party=null;S.uiDirty=true;return;
   }
-  const p=findPath(S,P.x|0,P.y|0,S.th.x,S.th.y,true);
+  const p=withHeroPass(()=>findPath(S,P.x|0,P.y|0,S.th.x,S.th.y,true));
   P.phase='back';P.gain=gain;
   if(p){P.path=p;P.pathI=0}
   else{P.path=[];P.pathI=0}

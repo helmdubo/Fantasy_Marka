@@ -70,7 +70,7 @@ function fieldTarget(b){
     const x=b.x+dx,y=b.y+dy;if(!inMap(x,y))continue;
     const i=idx(x,y);
     let ok=false,adj=false;
-    if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){ok=true;adj=false}
+    if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){ok=true;adj=true} // рубим с опушки
     if(b.type==='farm'&&S.feat[i]===F.WHEAT&&S.featHp[i]>0){ok=true;adj=false}
     if(!ok)continue;
     const d=Math.abs(dx)+Math.abs(dy);
@@ -86,7 +86,7 @@ function fieldHarvest(u){
   if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){
     S.terrHp[i]--;got={wood:1+b.tier};addSkillXp(u,'axe',1);
     if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true;
-      S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'})}
+      S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'});rebuildPass()}
   }else if(b.type==='farm'&&S.feat[i]===F.WHEAT&&S.featHp[i]>0){
     S.featHp[i]--;got={food:1+b.tier};addSkillXp(u,'herb',1);
     if(S.featHp[i]<=0){S.feat[i]=F.NONE;S.featDirty=true;S.regrow.push({i,days:5,kind:'wheat'})}

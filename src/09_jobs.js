@@ -145,7 +145,7 @@ function harvestCycle(u,b){
       if(S.terr[i]!==T.FOREST||S.terrHp[i]<=0)return false;
       S.terrHp[i]--;b.buf.wood+=1+b.tier;addResourcePopup('wood',1+b.tier,b.x,b.y);
       if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true;
-        S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'})}
+        S.regrow.push({i,days:15+((S.rng()*8)|0),kind:'forest'});rebuildPass()}
       return true;
     });
   }else if(b.type==='farm'){
@@ -241,7 +241,7 @@ function completeJob(u){
   let carry=null;
   switch(j.kind){
     case 'clear':{
-      if(S.terr[i]===T.FOREST){S.terrHp[i]=0;S.terr[i]=T.GRASS;S.terrDirty=true;
+      if(S.terr[i]===T.FOREST){S.terrHp[i]=0;S.terr[i]=T.GRASS;S.terrDirty=true;rebuildPass();
         S.stock.wood+=2;addResourcePopup('wood',2,j.x,j.y);computeLevels()}
       if(S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP){S.feat[i]=F.NONE;S.featDirty=true}
       addSkillXp(u,'axe',0.8);roadLay(j.plan);break}

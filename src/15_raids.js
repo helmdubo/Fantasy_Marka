@@ -30,7 +30,7 @@ function findRaidPath(x,y){
   // raiders ignore fear; temporary pass without fear is same grid
   const savedLair=S.lairAt[idx(x,y)];
   S.lairAt[idx(x,y)]=-1;rebuildPass();
-  const p=findPath(S,x,y,S.th.x,S.th.y,true);
+  const p=withHeroPass(()=>findPath(S,x,y,S.th.x,S.th.y,true));
   S.lairAt[idx(x,y)]=savedLair;rebuildPass();
   return p;
 }
@@ -98,7 +98,7 @@ function doLoot(w){
   computeLevels();
   // path back
   const back=findRaidPath(w.x|0===L.x?L.x:L.x,L.y); // recompute from town to lair
-  const p=findPath(S,w.x|0,w.y|0,L.x,L.y,true);
+  const p=withHeroPass(()=>findPath(S,w.x|0,w.y|0,L.x,L.y,true));
   w.loot=loot;w.phase='back';
   if(p){w.path=p;w.pathI=0}
   else{w.done=true;S.lairs[w.li].hoard+=loot;

@@ -282,11 +282,12 @@ function pickStart(){
   const W=S.W,H=S.H;const cand=[];
   for(let y=12;y<H-12;y++)for(let x=12;x<W-12;x++){
     if(S.terr[idx(x,y)]!==T.GRASS||cellNearRiver(x,y))continue; // ратуша не прижимается к реке
-    let open=0;
+    let open=0,forest=0;
     for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
-      const t=S.terr[idx(x+dx,y+dy)];if(t===T.GRASS||t===T.FOREST)open++;
+      const t=S.terr[idx(x+dx,y+dy)];
+      if(t===T.GRASS)open++;else if(t===T.FOREST)forest++;
     }
-    if(open>=26)cand.push({x,y});
+    if(open>=24&&forest>=2)cand.push({x,y}); // простор лугов + лес поблизости
   }
   const p=cand.length?cand[(S.rng()*cand.length)|0]:{x:(W/2)|0,y:(H/2)|0};
   S.th.x=p.x;S.th.y=p.y;
@@ -343,11 +344,25 @@ function computeFear(){
   }
 }
 function rebuildPass(){
+  // Два слоя проходимости: жители НЕ ходят сквозь стоящий лес (пеньки после
+  // вырубки проходимы) — лесопилки буквально прорубают дорогу. Герои, партии
+  // и рейдеры продираются через чащу (S.passHero).
+  if(!S.passHero||S.passHero.length!==S.pass.length)S.passHero=new Uint8Array(S.pass.length);
   for(let i=0;i<S.W*S.H;i++){
     const t=S.terr[i];
-    S.pass[i]=(t!==T.WATER&&t!==T.MTN&&S.lairAt[i]<0)?1:0;
+    const base=(t!==T.WATER&&t!==T.MTN&&S.lairAt[i]<0)?1:0;
+    S.passHero[i]=base;
+    S.pass[i]=(base&&!(t===T.FOREST&&S.terrHp[i]>0))?1:0;
     // реки (п.1) блокируют РЁБРА между гексами, а не клетки — см. findPath
   }
+}
+// Пути героев/рейдеров: лес проходим
+function withHeroPass(fn){
+  const saved=S.pass;
+  S.pass=S.passHero;
+  let r;
+  try{r=fn()}finally{S.pass=saved}
+  return r;
 }
 function placeBuilding(type,x,y,instant){
   const b={type,x,y,built:!!instant,work:instant?0:CFG.BUILD_WORK,cd:0,data:{},buf:{food:0,wood:0,stone:0,gems:0},hold:{food:0,wood:0,stone:0,gems:0},store:{food:0,wood:0,stone:0,gems:0},sailing:false,sailMode:null,importRes:null,importQty:0,starve:false,starveD:0,abandoned:false,workerId:null,tier:1,
