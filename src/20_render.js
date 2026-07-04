@@ -19,35 +19,60 @@ function meshFromBatch(b,order){
 }
 function cellTerr(x,y){if(x<0||y<0||x>=S.W||y>=S.H)return T.WATER;return S.terr[idx(x,y)]}
 function buildTerrain(){
-  for(const m of R.terrMeshes){R.scene.remove(m);m.geometry.dispose()}
-  R.terrMeshes=[];
-  const base=makeBatch();
-  for(let x=-1;x<=S.W;x++)for(let y=-2;y<=S.H+1;y++){
-    for(const tr of colTris(x,y)){
-      const wyTop=WYCC(tr.baseCol,y);
-      const spr=SPR['tri0_'+tr.or+'_full'+(hash2(x*2+(tr.or==='r'?1:0),y,5)<0.5?0:1)];
-      bQuad(base,WXC(x),wyTop-1,WXC(x)+CW,wyTop,spr);
-    }
-  }
-  let m=meshFromBatch(base,1);R.scene.add(m);R.terrMeshes.push(m);
-  let order=2;
-  for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN]){
-    const b=makeBatch();
+  // Перф: в рантайме террейн меняется только вырубкой леса (FOREST->GRASS),
+  // что затрагивает ОДИН слой (FOREST): базовый, GRASS, ROCK, MTN и реки
+  // статичны и строятся один раз (или по S.terrFullDirty после редких
+  // губернаторских правок ландшафта).
+  // Кэш плоского списка треугольников: colTris аллоцирует ~34k объектов на
+  // проход — при частой перестройке слоя леса это давало GC-фризы.
+  if(!R.triList){
+    const arr=[];
     for(let x=-1;x<=S.W;x++)for(let y=-2;y<=S.H+1;y++){
       for(const tr of colTris(x,y)){
-        const c0=cellTerr(tr.corners[0][0],tr.corners[0][1])>=t?1:0;
-        const c1=cellTerr(tr.corners[1][0],tr.corners[1][1])>=t?1:0;
-        const c2=cellTerr(tr.corners[2][0],tr.corners[2][1])>=t?1:0;
-        const bits=c0|(c1<<1)|(c2<<2);
-        if(bits===0)continue;
-        const wyTop=WYCC(tr.baseCol,y);
-        const spr=(bits===7)?SPR['tri'+t+'_'+tr.or+'_full'+(hash2(x*2,y,t)<0.5?0:1)]:SPR['tri'+t+'_'+tr.or+'_'+bits];
-        bQuad(b,WXC(x),wyTop-1,WXC(x)+CW,wyTop,spr);
+        const ci=tr.corners.map(c=>inMap(c[0],c[1])?idx(c[0],c[1]):-1);
+        arr.push(x,y,tr.baseCol,tr.or==='r'?1:0,ci[0],ci[1],ci[2]);
       }
     }
-    m=meshFromBatch(b,order++);R.scene.add(m);R.terrMeshes.push(m);
+    R.triList=new Int32Array(arr);
   }
-  buildRivers();
+  const TL=R.triList;
+  const layerBatch=(t)=>{
+    const b=makeBatch();
+    for(let k=0;k<TL.length;k+=7){
+      const i0=TL[k+4],i1=TL[k+5],i2=TL[k+6];
+      const c0=(i0<0?T.WATER:S.terr[i0])>=t?1:0;
+      const c1=(i1<0?T.WATER:S.terr[i1])>=t?1:0;
+      const c2=(i2<0?T.WATER:S.terr[i2])>=t?1:0;
+      const bits=c0|(c1<<1)|(c2<<2);
+      if(bits===0)continue;
+      const x=TL[k],y=TL[k+1],orr=TL[k+3]?'r':'l';
+      const wyTop=WYCC(TL[k+2],y);
+      const spr=(bits===7)?SPR['tri'+t+'_'+orr+'_full'+(hash2(x*2,y,t)<0.5?0:1)]:SPR['tri'+t+'_'+orr+'_'+bits];
+      bQuad(b,WXC(x),wyTop-1,WXC(x)+CW,wyTop,spr);
+    }
+    return b;
+  };
+  const full=S.terrFullDirty||!R.terrStaticMeshes||!R.terrStaticMeshes.length;
+  if(full){
+    if(R.terrStaticMeshes)for(const m of R.terrStaticMeshes){R.scene.remove(m);m.geometry.dispose()}
+    R.terrStaticMeshes=[];
+    const base=makeBatch();
+    for(let k=0;k<TL.length;k+=7){
+      const x=TL[k],y=TL[k+1],orf=TL[k+3];
+      const wyTop=WYCC(TL[k+2],y);
+      const spr=SPR['tri0_'+(orf?'r':'l')+'_full'+(hash2(x*2+orf,y,5)<0.5?0:1)];
+      bQuad(base,WXC(x),wyTop-1,WXC(x)+CW,wyTop,spr);
+    }
+    let m=meshFromBatch(base,1);R.scene.add(m);R.terrStaticMeshes.push(m);
+    for(const [t,ord] of [[T.GRASS,2],[T.ROCK,4],[T.MTN,5]]){
+      m=meshFromBatch(layerBatch(t),ord);R.scene.add(m);R.terrStaticMeshes.push(m);
+    }
+    buildRivers();
+    S.terrFullDirty=false;
+  }
+  if(R.terrForestMesh){R.scene.remove(R.terrForestMesh);R.terrForestMesh.geometry.dispose()}
+  R.terrForestMesh=meshFromBatch(layerBatch(T.FOREST),3);
+  R.scene.add(R.terrForestMesh);
   S.terrDirty=false;
 }
 function buildRivers(){

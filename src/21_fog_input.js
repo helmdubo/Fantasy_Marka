@@ -32,18 +32,80 @@ function fogAlphaAt(wx,wy,px,py){
 }
 const FOG_WX0=-CW,FOG_WTOP=null; // левый край канвы тумана в мировых X; верх = S.H+1
 function ppt(){return 16*(R&&R.ZOOMS?R.ZOOMS[R.zoomIdx]:3)} // Drop I fix: pixels per 1 world unit; CW уже учтён в WXC/WYCC
-function paintFog(){
+function ensureFogLut(){
+  // Пиксель->клетка (pickHex) считается ОДИН раз: геометрия канвы тумана
+  // статична. Раньше pickHex звался на каждый пиксель каждой перерисовки.
   const sc=FOG_SCALE||1;
-  const c=R.fogCv.getContext('2d');
-  const topY=S.H+1;
   const W=Math.ceil((S.W+2)*CW*sc),H=(S.H+2)*sc;
-  if(R.fogCv.width!==W||R.fogCv.height!==H){R.fogCv.width=W;R.fogCv.height=H}
-  c.clearRect(0,0,W,H);
+  if(R.fogLut&&R.fogLutW===W&&R.fogLutH===H)return;
+  R.fogLutW=W;R.fogLutH=H;
+  const lut=R.fogLut=new Int32Array(W*H);
+  const topY=S.H+1;
   for(let py=0;py<H;py++)for(let px=0;px<W;px++){
     const wx=FOG_WX0+(px+0.5)/sc,wy=topY-(py+0.5)/sc;
-    const a=fogAlphaAt(wx,wy,px,py);
-    if(a>0.015){c.fillStyle='rgba(9,7,14,'+a.toFixed(3)+')';c.fillRect(px,py,1,1)}
+    const c=pickHex(wx,wy);
+    lut[py*W+px]=inMap(c.x,c.y)?idx(c.x,c.y):-1;
   }
+}
+function paintFog(){
+  // Оптимизация: ImageData вместо 200k fillRect; евклидово смягчение кромки
+  // считается только в клетках на расстоянии <=3 гексов от видимых (BFS).
+  const sc=FOG_SCALE||1;
+  ensureFogLut();
+  const W=R.fogLutW,H=R.fogLutH;
+  if(R.fogCv.width!==W||R.fogCv.height!==H){R.fogCv.width=W;R.fogCv.height=H}
+  const c=R.fogCv.getContext('2d');
+  const NC=S.W*S.H;
+  if(!R.fogBaseA||R.fogBaseA.length!==NC){R.fogBaseA=new Float32Array(NC);R.fogEdge=new Uint8Array(NC)}
+  const baseA=R.fogBaseA,edge=R.fogEdge;
+  for(let i=0;i<NC;i++)
+    baseA[i]=S.revealAll?(S.visible[i]?0:0.22):(S.visible[i]?0:(S.explored[i]?0.62:1));
+  // кромка видимости: multi-source BFS глубиной 3 гекса
+  edge.fill(0);
+  const q=[];
+  for(let i=0;i<NC;i++)if(S.visible[i]){edge[i]=1;q.push(i)}
+  for(let head=0;head<q.length;head++){
+    const cur=q[head],dcur=edge[cur];
+    if(dcur>=4)continue;
+    const cx2=cur%S.W,cy2=(cur/S.W)|0;
+    for(const d of hexDirs(cx2)){
+      const nx=cx2+d[0],ny=cy2+d[1];
+      if(!inMap(nx,ny))continue;
+      const ni=ny*S.W+nx;
+      if(!edge[ni]){edge[ni]=dcur+1;q.push(ni)}
+    }
+  }
+  if(!R.fogImg||R.fogImg.width!==W||R.fogImg.height!==H)R.fogImg=c.createImageData(W,H);
+  const data=R.fogImg.data;
+  const topY=S.H+1,lut=R.fogLut;
+  let p=0;
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++,p+=4){
+    const ci=lut[py*W+px];
+    let a=ci<0?1:baseA[ci];
+    if(a>0){
+      if(ci>=0&&edge[ci]>1){ // рядом с видимой зоной — точное смягчение
+        const wx=FOG_WX0+(px+0.5)/sc,wy=topY-(py+0.5)/sc;
+        const cx2=ci%S.W,cy2=(ci/S.W)|0;
+        let n2=9801;
+        for(let yy=cy2-3;yy<=cy2+3;yy++)for(let xx=cx2-3;xx<=cx2+3;xx++){
+          if(xx<0||yy<0||xx>=S.W||yy>=S.H)continue;
+          if(!S.visible[yy*S.W+xx])continue;
+          const dx=wx-WXC(xx),dy=wy-WYCC(xx,yy);
+          const d2=dx*dx+dy*dy;
+          if(d2<n2)n2=d2;
+        }
+        const nearest=Math.sqrt(n2);
+        if(nearest<2.05){
+          const t=clamp((nearest-0.45)/1.60,0,1);
+          a*=t*t*(3-2*t);
+        }
+      }
+      a=clamp(a+(bayer4(px,py)-0.5)*0.10,0,1);
+    }
+    data[p]=9;data[p+1]=7;data[p+2]=14;
+    data[p+3]=a>0.015?(a*255)|0:0;
+  }
+  c.putImageData(R.fogImg,0,0);
   if(S.hoverLair>=0){
     const L=S.lairs[S.hoverLair];
     c.fillStyle='rgba(210,60,50,0.26)';
@@ -302,7 +364,7 @@ function keysPan(dt){
 function initRender(){
   const canvas=document.getElementById('gl');
   R={canvas,zoomIdx:1,ZOOMS:[2,3,4],cam:{x:(S.th.x+0.5)*CW,y:(S.H-1-S.th.y)+0.5-zig(S.th.x)},
-     terrMeshes:[],featMesh:null,bldMesh:null,roadMesh:null,drag:null};
+     terrStaticMeshes:[],terrForestMesh:null,featMesh:null,bldMesh:null,roadMesh:null,drag:null};
   R.renderer=new THREE.WebGLRenderer({canvas,antialias:false});
   R.renderer.setPixelRatio(1);
   R.scene=new THREE.Scene();

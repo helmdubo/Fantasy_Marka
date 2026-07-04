@@ -397,7 +397,7 @@ function ensureStarterProductionSites(){
       changed=true;
     }
   }
-  if(changed){S.terrDirty=true;S.featDirty=true;rebuildPass();}
+  if(changed){S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();}
 }
 
 
@@ -416,7 +416,7 @@ function ensureStarterFisherSite(){
     if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
     S.terr[i]=T.WATER;S.waterKind[i]=1;S.feat[i]=F.FISH;S.featHp[i]=5;S.terrHp[i]=0;
   }
-  S.terrDirty=true;S.featDirty=true;rebuildPass();classifyWater();
+  S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();classifyWater();
   log('🐟 Губернаторский указ: размечен стартовый рыбный затон.');
   return true;
 }
@@ -437,7 +437,7 @@ function ensureEmergencyFoodSite(){
     if(S.bld[i]>=0||S.lairAt[i]>=0||S.road[i]||S.fear[i])continue;
     S.terr[i]=T.GRASS;S.terrHp[i]=0;S.feat[i]=F.WHEAT;S.featHp[i]=5;
   }
-  S.terrDirty=true;S.featDirty=true;rebuildPass();
+  S.terrDirty=true;S.terrFullDirty=true;S.featDirty=true;rebuildPass();
   log('🌾 Губернаторский указ: из-за угрозы голода размечено аварийное поле.');
   return true;
 }

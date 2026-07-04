@@ -144,7 +144,7 @@ three.js: батчи, меши террейна/дорог/зданий/юнит
 
 канва тумана, камера, тултип, инспектор-пик, ввод (мышь/тач/клавиатура)
 
-`bayer4()` · `fogBaseAlphaAtCell()` · `fogAlphaAt()` · `FOG_WX0` · `ppt()` · `paintFog()` · `updateCam()` · `resize()` · `screenToCell()` · `WORK_LABEL` · `updateTip()` · `KEYS` · `canvasXY()` · `hexCellOutline()` · `updatePinOutline()` · `pickPin()` · `bindInput()` · `keysPan()` · `initRender()`
+`bayer4()` · `fogBaseAlphaAtCell()` · `fogAlphaAt()` · `FOG_WX0` · `ppt()` · `ensureFogLut()` · `paintFog()` · `updateCam()` · `resize()` · `screenToCell()` · `WORK_LABEL` · `updateTip()` · `KEYS` · `canvasXY()` · `hexCellOutline()` · `updatePinOutline()` · `pickPin()` · `bindInput()` · `keysPan()` · `initRender()`
 
 ## src/22_ui.js
 
