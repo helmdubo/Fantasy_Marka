@@ -171,7 +171,8 @@ function buildBuildings(){
   if(R.bldMesh){R.scene.remove(R.bldMesh);R.bldMesh.geometry.dispose()}
   const b=makeBatch();
   for(const bd of S.buildings){
-    const spr=bd.built?((bd.type==='library'&&(bd.tier||1)>=2)?SPR['b_knowledge']:SPR['b_'+bd.type]):SPR['b_site'];
+    const spr=bd.built?((bd.type==='library'&&(bd.tier||1)>=2)?SPR['b_knowledge']:
+      ((bd.type==='hut'&&(bd.tier||1)>=2)?SPR['b_house2']:SPR['b_'+bd.type])):SPR['b_site'];
     const h=spr.h/16;
     const cx=WXC(bd.x),yb=WYCC(bd.x,bd.y)-0.5;
     bQuad(b,cx-0.5,yb,cx+0.5,yb+h,spr);

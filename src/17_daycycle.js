@@ -1,3 +1,24 @@
+function brewDaily(){
+  // п.5: таверна варит эль из зерна, принесённого разносчиком в её локальный
+  // запас (CFG.STORE.tavern). Зерно есть, только пока действует хоть одна ферма.
+  const hasFarm=countActive('farm')>0;
+  for(const b of S.buildings){
+    if(b.type!=='tavern'||!b.built||b.ruined||!connected(b))continue;
+    b.ale=b.ale||0;
+    if(!hasFarm){
+      if((b.store.food||0)>0&&!b.brewWarn){b.brewWarn=true;
+        log('🍺 Таверна: без действующей фермы зерна не будет — эль на исходе.')}
+      continue;
+    }
+    b.brewWarn=false;
+    const grain=Math.min(CFG.ALE.brewFood,Math.floor(b.store.food||0),
+      Math.max(0,Math.ceil((CFG.ALE.cap-b.ale)/CFG.ALE.perFood)));
+    if(grain<=0)continue;
+    b.store.food-=grain;
+    b.ale=Math.min(CFG.ALE.cap,b.ale+grain*CFG.ALE.perFood);
+    addInfoPopup('🍺 +'+grain*CFG.ALE.perFood,b.x,b.y,'info');
+  }
+}
 function tributeDaily(){
   const T=CFG.TRIBUTE;
   const due=T.every-((S.day-1)%T.every);
@@ -65,6 +86,7 @@ function onNewDay(){
     if(b.type==='tower')consumeBuildingUpkeep(b,CFG.UPKEEP.towerDaily,'дозорный пост');
     else if(b.type==='library')consumeBuildingUpkeep(b,CFG.UPKEEP.libraryDaily,'паёк книжников');
   }
+  brewDaily();
   tradeDaily();
   craftDaily();
   S.hungryDays=S.hungry?S.hungryDays+1:0;

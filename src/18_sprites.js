@@ -98,6 +98,24 @@ const G_HUT=[
 "................",
 "................",
 "................"];
+const G_HOUSE2=[ // дом переселенцев (лачуга тир 2, п.10): каменный низ, деревянный верх
+"................",
+"......oooo......",
+"....oorrrroo....",
+"...orrrrrrrro...",
+"..orrrrrrrrrro..",
+"..oRRRRRRRRRRo..",
+"..owwwwwwwwwwo..",
+"..owgowwwwogwo..",
+"..owwwwwwwwwwo..",
+"..oWWWWWWWWWWo..",
+"..osssssssssso..",
+"..osgossssogso..",
+"..ossssDDsssso..",
+"..ossssDDsssso..",
+"..oSSSSSSSSSSo..",
+"..oooooooooooo.."];
+const HOUSE2_MAP={o:PAL.o,r:PAL.r,R:PAL.R,w:PAL.w,W:PAL.Wd,s:PAL.R2,S:PAL.R1,D:PAL.D,g:PAL.y};
 const G_TOWNHALL=[
 "........y.......",
 "........yy......",
@@ -200,7 +218,7 @@ const TOWER_MAP={s:PAL.R2,S:PAL.R1,k:PAL.k};
 const NECRO_MAP={n:PAL.M1,N:PAL.o,k:PAL.NEC,v:PAL.NEC};
 
 function validateSprites(){
-  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_TOWNHALL,G_TOWER,G_NECRO};
+  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO};
   const errs=[];
   for(const n in all){
     const g=all[n];

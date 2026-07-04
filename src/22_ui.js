@@ -215,7 +215,11 @@ function updateUI(fps){
   }
   updateDebug(fps);
 }
-function dispName(b){return (b&&b.type==='library'&&(b.tier||1)>=2)?'Башня знаний':CFG.BNAME[b?b.type:'hut']}
+function dispName(b){
+  if(b&&b.type==='library'&&(b.tier||1)>=2)return 'Башня знаний';
+  if(b&&b.type==='hut'&&(b.tier||1)>=2)return 'Дом переселенцев';
+  return CFG.BNAME[b?b.type:'hut'];
+}
 function updateInspector(){
   const box=el('inspector');
   if(!S.pin){box.style.display='none';return}
@@ -269,6 +273,11 @@ function updateInspector(){
       extra+='<div class="row">трюм: '+bar+' '+ht+'/'+CFG.PORT_HOLD+'</div>'+
         (b.sailing?'<div class="row">⛵ '+sailLabel+': <b>'+sailP+'%</b><div class="stambar"><div style="width:'+sailP+'%"></div></div></div>':'')+
         '<div class="row" style="font-size:10px;color:var(--dim)">складской несёт сюда ресурсы с политикой «Экспорт»</div>';
+    }
+    if(b.built&&b.type==='tavern'){
+      const ale=b.ale||0;
+      extra+='<div class="row">🍺 эль: <b>'+ale+'/'+CFG.ALE.cap+'</b> · зерно: '+Math.floor(b.store.food||0)+'</div>'+
+        '<div class="row" style="font-size:10px;color:var(--dim)">эль варится из зерна, которое разносчик носит с действующих ферм</div>';
     }
     if(b.built&&b.type==='crafters'){
       extra+='<div class="row">витрина: '+(S.showcase.map(i=>i.name.split(' ')[0]+' '+i.price+'з').join(', ')||'пусто')+'</div>'+

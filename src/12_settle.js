@@ -5,7 +5,23 @@ function countB(type,builtOnly){let n=0;for(const b of S.buildings)if(b.type===t
 function countLive(type){let n=0;for(const b of S.buildings)if(b.type===type&&!b.abandoned&&!b.ruined)n++;return n}
 // Действующие: построено, не заброшено, не руина.
 function countActive(type){let n=0;for(const b of S.buildings)if(b.type===type&&b.built&&!b.abandoned&&!b.ruined)n++;return n}
-function housingCap(){let c=0;for(const b of S.buildings)if(b.built&&!b.ruined&&connected(b)&&CFG.HOUSE[b.type])c+=CFG.HOUSE[b.type];return c}
+function houseCapOf(b){
+  if(b.type==='hut')return (b.tier||1)>=2?CFG.HOUSE2_CAP:CFG.HOUSE.hut;
+  return CFG.HOUSE[b.type]||0;
+}
+function housingCap(){let c=0;for(const b of S.buildings)if(b.built&&!b.ruined&&connected(b))c+=houseCapOf(b);return c}
+function tryUpgradeHut(){
+  // п.10: лачуга -> дом (тир 2): +1 место, дерево+камень
+  const b=S.buildings.find(b=>b.built&&!b.ruined&&b.type==='hut'&&(b.tier||1)<2&&connected(b));
+  if(!b)return false;
+  const cost=CFG.HUT2_COST;
+  for(const r in cost)if(S.stock[r]<cost[r])return false;
+  for(const r in cost){S.stock[r]-=cost[r];addResourcePopup(r,-cost[r],b.x,b.y)}
+  b.tier=2;S.bldDirty=true;computeLevels();
+  log('🏡 Лачуга перестроена в дом — теперь под крышей помещаются трое.');
+  S.dbgBuilder='дом (тир 2)';
+  return true;
+}
 const NEAR_ROAD_TYPES={hut:1,tavern:1,advguild:1,guild:1,crafters:1};
 // v2.1: зона застройки = радиус ратуши (INFLUENCE) + радиусы действующих дозорных
 // вышек (TOWER_INFLUENCE, на 40% меньше). Экспансия — цепочкой вышек к фронтиру.
@@ -454,7 +470,12 @@ function settleThink(){
   }
 
   // 3. housing, but only after production and food are not in crisis.
-  if(housingCap()-S.settlers.length<2&&L('food')>=2){if(put('hut'))return}
+  // Сначала пробуем достроить лачугу до дома (п.10) — дешевле по месту, дороже по камню.
+  if(housingCap()-S.settlers.length<2&&L('food')>=2){
+    if(L('stone')>=2&&tryUpgradeHut())return;
+    if(put('hut'))return;
+    if(tryUpgradeHut())return;
+  }
 
   // 4. production growth.
   if(L('wood')>=2){

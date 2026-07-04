@@ -10,7 +10,7 @@ const CFG={
   START_STOCK:{food:42,wood:42,stone:10,gems:0},
   WAGE:0.15, WALK:2.4, EAT:1,
   STAM_MAX:100, STAM_WORK:1.0, STAM_CARRY:0.3, STAM_LOW:20,
-  REST_NIGHT:4.5, REST_TAVERN:9.0, DRINK_PRICE:0.3, TAVERN_FOOD:1,
+  REST_NIGHT:4.5, REST_TAVERN:9.0, DRINK_PRICE:0.3,
   RACE:{
     human:{move:1.00,work:1.00,build:1.00,scout:1.00,carry:1.0,sight:3},
     dwarf:{move:0.85,work:1.25,build:1.15,scout:0.80,carry:1.1,sight:2},
@@ -19,6 +19,8 @@ const CFG={
   },
   BUF_CAP:9, HARVEST_R:3, OPER_T:6, HAUL_TAKE:4,
   TIER_COST:{2:{wood:18,stone:22},3:{wood:28,stone:48,gems:3}},
+  HUT2_COST:{wood:8,stone:6}, HOUSE2_CAP:3, // апгрейд лачуги в дом (п.10)
+  ALE:{perFood:2,cap:12,brewFood:2},        // варка эля в таверне из зерна ферм (п.5)
   PORT_HOLD:8, SAIL_DAYS:2, SEA_MARKUP:1.45,
   ITEMS:[
     {id:'blade',name:'Клинок самоцветной заточки',atk:2,hp:0,gems:2,price:14},
@@ -54,7 +56,7 @@ const CFG={
   UPKEEP:{mine:{wood:0.2}, portSail:{wood:1}, portTradeWoodPerBatch:0.25, towerDaily:{food:1,wood:0.25}, libraryDaily:{food:1}},
   // v2.1: локальные припасы зданий. Расход идёт из b.store; пополняет складской
   // разносчик, когда запас опускается ниже половины вместимости.
-  STORE:{mine:{wood:3}, tower:{food:3,wood:2}, port:{wood:3}, library:{food:3}},
+  STORE:{mine:{wood:3}, tower:{food:3,wood:2}, port:{wood:3}, library:{food:3}, tavern:{food:5}},
   // v2.1: открытия в библиотеке. Порядок фиксирован; tier2 — открытия, требующие Башни знаний.
   RESEARCH:{order:['tavern','port','guild','advguild','crafters'],
     cost:{tavern:6,port:10,guild:10,advguild:14,crafters:16},

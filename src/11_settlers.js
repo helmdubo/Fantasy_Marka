@@ -46,15 +46,16 @@ function findRestPlace(u){
     const b=S.buildings[bi];
     if(b.built&&!b.ruined&&connected(b)&&b.type==='tavern'){tav=bi;break}
   }
-  if(tav>=0&&S.stock.food>=CFG.TAVERN_FOOD&&u.wallet>=CFG.DRINK_PRICE&&!u.drankToday)return tav;
-  // своя лачуга: ближайший hut со свободным местом
+  // п.5: в таверне пьют ЭЛЬ (сварен из зерна ферм), а не еду со склада
+  if(tav>=0&&(S.buildings[tav].ale||0)>=1&&u.wallet>=CFG.DRINK_PRICE&&!u.drankToday)return tav;
+  // своя лачуга: ближайший hut со свободным местом (дом тир-2 вмещает троих, п.10)
   const occ={};
   for(const o of S.settlers)if(o.inside>=0)occ[o.inside]=(occ[o.inside]||0)+1;
   let best=-1,bd=1e9;
   for(let bi=0;bi<S.buildings.length;bi++){
     const b=S.buildings[bi];
     if(!b.built||b.ruined||b.type!=='hut'||!connected(b))continue;
-    if((occ[bi]||0)>=2)continue;
+    if((occ[bi]||0)>=houseCapOf(b))continue;
     const d=cheb(u.x|0,u.y|0,b.x,b.y);
     if(d<bd){bd=d;best=bi}
   }
@@ -74,10 +75,11 @@ function enterRest(u){
   const b=S.buildings[u.restB];
   u.inside=u.restB;u.act='rest';
   if(b.type==='tavern'&&!u.drankToday){
-    if(S.stock.food>=CFG.TAVERN_FOOD&&u.wallet>=CFG.DRINK_PRICE){
-      S.stock.food-=CFG.TAVERN_FOOD;
+    if((b.ale||0)>=1&&u.wallet>=CFG.DRINK_PRICE){
+      b.ale--;S.aleDrunk=(S.aleDrunk||0)+1;
       u.wallet-=CFG.DRINK_PRICE;S.gold+=CFG.DRINK_PRICE;
       S.tavernIncome+=CFG.DRINK_PRICE;u.drankToday=true;u.tipsy=true;
+      addInfoPopup('🍺',b.x,b.y,'info');
     }
   }
 }

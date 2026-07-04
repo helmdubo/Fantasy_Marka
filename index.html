@@ -168,7 +168,7 @@ const CFG={
   START_STOCK:{food:42,wood:42,stone:10,gems:0},
   WAGE:0.15, WALK:2.4, EAT:1,
   STAM_MAX:100, STAM_WORK:1.0, STAM_CARRY:0.3, STAM_LOW:20,
-  REST_NIGHT:4.5, REST_TAVERN:9.0, DRINK_PRICE:0.3, TAVERN_FOOD:1,
+  REST_NIGHT:4.5, REST_TAVERN:9.0, DRINK_PRICE:0.3,
   RACE:{
     human:{move:1.00,work:1.00,build:1.00,scout:1.00,carry:1.0,sight:3},
     dwarf:{move:0.85,work:1.25,build:1.15,scout:0.80,carry:1.1,sight:2},
@@ -177,6 +177,8 @@ const CFG={
   },
   BUF_CAP:9, HARVEST_R:3, OPER_T:6, HAUL_TAKE:4,
   TIER_COST:{2:{wood:18,stone:22},3:{wood:28,stone:48,gems:3}},
+  HUT2_COST:{wood:8,stone:6}, HOUSE2_CAP:3, // апгрейд лачуги в дом (п.10)
+  ALE:{perFood:2,cap:12,brewFood:2},        // варка эля в таверне из зерна ферм (п.5)
   PORT_HOLD:8, SAIL_DAYS:2, SEA_MARKUP:1.45,
   ITEMS:[
     {id:'blade',name:'Клинок самоцветной заточки',atk:2,hp:0,gems:2,price:14},
@@ -212,7 +214,7 @@ const CFG={
   UPKEEP:{mine:{wood:0.2}, portSail:{wood:1}, portTradeWoodPerBatch:0.25, towerDaily:{food:1,wood:0.25}, libraryDaily:{food:1}},
   // v2.1: локальные припасы зданий. Расход идёт из b.store; пополняет складской
   // разносчик, когда запас опускается ниже половины вместимости.
-  STORE:{mine:{wood:3}, tower:{food:3,wood:2}, port:{wood:3}, library:{food:3}},
+  STORE:{mine:{wood:3}, tower:{food:3,wood:2}, port:{wood:3}, library:{food:3}, tavern:{food:5}},
   // v2.1: открытия в библиотеке. Порядок фиксирован; tier2 — открытия, требующие Башни знаний.
   RESEARCH:{order:['tavern','port','guild','advguild','crafters'],
     cost:{tavern:6,port:10,guild:10,advguild:14,crafters:16},
@@ -1715,15 +1717,16 @@ function findRestPlace(u){
     const b=S.buildings[bi];
     if(b.built&&!b.ruined&&connected(b)&&b.type==='tavern'){tav=bi;break}
   }
-  if(tav>=0&&S.stock.food>=CFG.TAVERN_FOOD&&u.wallet>=CFG.DRINK_PRICE&&!u.drankToday)return tav;
-  // своя лачуга: ближайший hut со свободным местом
+  // п.5: в таверне пьют ЭЛЬ (сварен из зерна ферм), а не еду со склада
+  if(tav>=0&&(S.buildings[tav].ale||0)>=1&&u.wallet>=CFG.DRINK_PRICE&&!u.drankToday)return tav;
+  // своя лачуга: ближайший hut со свободным местом (дом тир-2 вмещает троих, п.10)
   const occ={};
   for(const o of S.settlers)if(o.inside>=0)occ[o.inside]=(occ[o.inside]||0)+1;
   let best=-1,bd=1e9;
   for(let bi=0;bi<S.buildings.length;bi++){
     const b=S.buildings[bi];
     if(!b.built||b.ruined||b.type!=='hut'||!connected(b))continue;
-    if((occ[bi]||0)>=2)continue;
+    if((occ[bi]||0)>=houseCapOf(b))continue;
     const d=cheb(u.x|0,u.y|0,b.x,b.y);
     if(d<bd){bd=d;best=bi}
   }
@@ -1743,10 +1746,11 @@ function enterRest(u){
   const b=S.buildings[u.restB];
   u.inside=u.restB;u.act='rest';
   if(b.type==='tavern'&&!u.drankToday){
-    if(S.stock.food>=CFG.TAVERN_FOOD&&u.wallet>=CFG.DRINK_PRICE){
-      S.stock.food-=CFG.TAVERN_FOOD;
+    if((b.ale||0)>=1&&u.wallet>=CFG.DRINK_PRICE){
+      b.ale--;S.aleDrunk=(S.aleDrunk||0)+1;
       u.wallet-=CFG.DRINK_PRICE;S.gold+=CFG.DRINK_PRICE;
       S.tavernIncome+=CFG.DRINK_PRICE;u.drankToday=true;u.tipsy=true;
+      addInfoPopup('🍺',b.x,b.y,'info');
     }
   }
 }
@@ -1932,7 +1936,23 @@ function countB(type,builtOnly){let n=0;for(const b of S.buildings)if(b.type===t
 function countLive(type){let n=0;for(const b of S.buildings)if(b.type===type&&!b.abandoned&&!b.ruined)n++;return n}
 // Действующие: построено, не заброшено, не руина.
 function countActive(type){let n=0;for(const b of S.buildings)if(b.type===type&&b.built&&!b.abandoned&&!b.ruined)n++;return n}
-function housingCap(){let c=0;for(const b of S.buildings)if(b.built&&!b.ruined&&connected(b)&&CFG.HOUSE[b.type])c+=CFG.HOUSE[b.type];return c}
+function houseCapOf(b){
+  if(b.type==='hut')return (b.tier||1)>=2?CFG.HOUSE2_CAP:CFG.HOUSE.hut;
+  return CFG.HOUSE[b.type]||0;
+}
+function housingCap(){let c=0;for(const b of S.buildings)if(b.built&&!b.ruined&&connected(b))c+=houseCapOf(b);return c}
+function tryUpgradeHut(){
+  // п.10: лачуга -> дом (тир 2): +1 место, дерево+камень
+  const b=S.buildings.find(b=>b.built&&!b.ruined&&b.type==='hut'&&(b.tier||1)<2&&connected(b));
+  if(!b)return false;
+  const cost=CFG.HUT2_COST;
+  for(const r in cost)if(S.stock[r]<cost[r])return false;
+  for(const r in cost){S.stock[r]-=cost[r];addResourcePopup(r,-cost[r],b.x,b.y)}
+  b.tier=2;S.bldDirty=true;computeLevels();
+  log('🏡 Лачуга перестроена в дом — теперь под крышей помещаются трое.');
+  S.dbgBuilder='дом (тир 2)';
+  return true;
+}
 const NEAR_ROAD_TYPES={hut:1,tavern:1,advguild:1,guild:1,crafters:1};
 // v2.1: зона застройки = радиус ратуши (INFLUENCE) + радиусы действующих дозорных
 // вышек (TOWER_INFLUENCE, на 40% меньше). Экспансия — цепочкой вышек к фронтиру.
@@ -2381,7 +2401,12 @@ function settleThink(){
   }
 
   // 3. housing, but only after production and food are not in crisis.
-  if(housingCap()-S.settlers.length<2&&L('food')>=2){if(put('hut'))return}
+  // Сначала пробуем достроить лачугу до дома (п.10) — дешевле по месту, дороже по камню.
+  if(housingCap()-S.settlers.length<2&&L('food')>=2){
+    if(L('stone')>=2&&tryUpgradeHut())return;
+    if(put('hut'))return;
+    if(tryUpgradeHut())return;
+  }
 
   // 4. production growth.
   if(L('wood')>=2){
@@ -3058,6 +3083,27 @@ function goBack(gain){
   else{P.path=[];P.pathI=0}
   S.uiDirty=true;
 }
+function brewDaily(){
+  // п.5: таверна варит эль из зерна, принесённого разносчиком в её локальный
+  // запас (CFG.STORE.tavern). Зерно есть, только пока действует хоть одна ферма.
+  const hasFarm=countActive('farm')>0;
+  for(const b of S.buildings){
+    if(b.type!=='tavern'||!b.built||b.ruined||!connected(b))continue;
+    b.ale=b.ale||0;
+    if(!hasFarm){
+      if((b.store.food||0)>0&&!b.brewWarn){b.brewWarn=true;
+        log('🍺 Таверна: без действующей фермы зерна не будет — эль на исходе.')}
+      continue;
+    }
+    b.brewWarn=false;
+    const grain=Math.min(CFG.ALE.brewFood,Math.floor(b.store.food||0),
+      Math.max(0,Math.ceil((CFG.ALE.cap-b.ale)/CFG.ALE.perFood)));
+    if(grain<=0)continue;
+    b.store.food-=grain;
+    b.ale=Math.min(CFG.ALE.cap,b.ale+grain*CFG.ALE.perFood);
+    addInfoPopup('🍺 +'+grain*CFG.ALE.perFood,b.x,b.y,'info');
+  }
+}
 function tributeDaily(){
   const T=CFG.TRIBUTE;
   const due=T.every-((S.day-1)%T.every);
@@ -3125,6 +3171,7 @@ function onNewDay(){
     if(b.type==='tower')consumeBuildingUpkeep(b,CFG.UPKEEP.towerDaily,'дозорный пост');
     else if(b.type==='library')consumeBuildingUpkeep(b,CFG.UPKEEP.libraryDaily,'паёк книжников');
   }
+  brewDaily();
   tradeDaily();
   craftDaily();
   S.hungryDays=S.hungry?S.hungryDays+1:0;
@@ -3287,6 +3334,24 @@ const G_HUT=[
 "................",
 "................",
 "................"];
+const G_HOUSE2=[ // дом переселенцев (лачуга тир 2, п.10): каменный низ, деревянный верх
+"................",
+"......oooo......",
+"....oorrrroo....",
+"...orrrrrrrro...",
+"..orrrrrrrrrro..",
+"..oRRRRRRRRRRo..",
+"..owwwwwwwwwwo..",
+"..owgowwwwogwo..",
+"..owwwwwwwwwwo..",
+"..oWWWWWWWWWWo..",
+"..osssssssssso..",
+"..osgossssogso..",
+"..ossssDDsssso..",
+"..ossssDDsssso..",
+"..oSSSSSSSSSSo..",
+"..oooooooooooo.."];
+const HOUSE2_MAP={o:PAL.o,r:PAL.r,R:PAL.R,w:PAL.w,W:PAL.Wd,s:PAL.R2,S:PAL.R1,D:PAL.D,g:PAL.y};
 const G_TOWNHALL=[
 "........y.......",
 "........yy......",
@@ -3389,7 +3454,7 @@ const TOWER_MAP={s:PAL.R2,S:PAL.R1,k:PAL.k};
 const NECRO_MAP={n:PAL.M1,N:PAL.o,k:PAL.NEC,v:PAL.NEC};
 
 function validateSprites(){
-  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_TOWNHALL,G_TOWER,G_NECRO};
+  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO};
   const errs=[];
   for(const n in all){
     const g=all[n];
@@ -3782,6 +3847,7 @@ function buildAtlas(){
    reg('shadow',ps.x,ps.y,16,16)}
   // buildings: distinct silhouettes
   let p=place(16,16);drawGrid(ctx,p.x,p.y,G_HUT,HUT_MAPS.hut);reg('b_hut',p.x,p.y,16,16);
+  p=place(16,16);drawGrid(ctx,p.x,p.y,G_HOUSE2,HOUSE2_MAP);reg('b_house2',p.x,p.y,16,16);
   p=place(16,16);paintFisher(ctx,p.x,p.y);reg('b_fisher',p.x,p.y,16,16);
   p=place(16,16);paintLumber(ctx,p.x,p.y);reg('b_lumber',p.x,p.y,16,16);
   p=place(16,16);drawGrid(ctx,p.x,p.y,G_TAVERN,TAVERN_MAP);
@@ -3830,7 +3896,7 @@ function buildAtlas(){
   p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
   p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
   for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
-  for(const k of ['b_hut','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
+  for(const k of ['b_hut','b_house2','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),
@@ -4011,7 +4077,8 @@ function buildBuildings(){
   if(R.bldMesh){R.scene.remove(R.bldMesh);R.bldMesh.geometry.dispose()}
   const b=makeBatch();
   for(const bd of S.buildings){
-    const spr=bd.built?((bd.type==='library'&&(bd.tier||1)>=2)?SPR['b_knowledge']:SPR['b_'+bd.type]):SPR['b_site'];
+    const spr=bd.built?((bd.type==='library'&&(bd.tier||1)>=2)?SPR['b_knowledge']:
+      ((bd.type==='hut'&&(bd.tier||1)>=2)?SPR['b_house2']:SPR['b_'+bd.type])):SPR['b_site'];
     const h=spr.h/16;
     const cx=WXC(bd.x),yb=WYCC(bd.x,bd.y)-0.5;
     bQuad(b,cx-0.5,yb,cx+0.5,yb+h,spr);
@@ -4822,7 +4889,11 @@ function updateUI(fps){
   }
   updateDebug(fps);
 }
-function dispName(b){return (b&&b.type==='library'&&(b.tier||1)>=2)?'Башня знаний':CFG.BNAME[b?b.type:'hut']}
+function dispName(b){
+  if(b&&b.type==='library'&&(b.tier||1)>=2)return 'Башня знаний';
+  if(b&&b.type==='hut'&&(b.tier||1)>=2)return 'Дом переселенцев';
+  return CFG.BNAME[b?b.type:'hut'];
+}
 function updateInspector(){
   const box=el('inspector');
   if(!S.pin){box.style.display='none';return}
@@ -4876,6 +4947,11 @@ function updateInspector(){
       extra+='<div class="row">трюм: '+bar+' '+ht+'/'+CFG.PORT_HOLD+'</div>'+
         (b.sailing?'<div class="row">⛵ '+sailLabel+': <b>'+sailP+'%</b><div class="stambar"><div style="width:'+sailP+'%"></div></div></div>':'')+
         '<div class="row" style="font-size:10px;color:var(--dim)">складской несёт сюда ресурсы с политикой «Экспорт»</div>';
+    }
+    if(b.built&&b.type==='tavern'){
+      const ale=b.ale||0;
+      extra+='<div class="row">🍺 эль: <b>'+ale+'/'+CFG.ALE.cap+'</b> · зерно: '+Math.floor(b.store.food||0)+'</div>'+
+        '<div class="row" style="font-size:10px;color:var(--dim)">эль варится из зерна, которое разносчик носит с действующих ферм</div>';
     }
     if(b.built&&b.type==='crafters'){
       extra+='<div class="row">витрина: '+(S.showcase.map(i=>i.name.split(' ')[0]+' '+i.price+'з').join(', ')||'пусто')+'</div>'+
