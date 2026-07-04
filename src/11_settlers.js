@@ -196,7 +196,7 @@ function settlerTick(u,dt){
 }
 function workMul(u,kind){
   const RC=CFG.RACE[u.race];
-  if(kind==='build'||kind==='repair')return RC.build;
+  if(kind==='build'||kind==='repair')return RC.build*(1+0.04*skillLvl(u,'craft'));
   if(kind==='clear'&&u.race==='troll')return 1.3;
   if(kind==='oper'||kind==='ruins')return RC.work;
   return 1;
@@ -230,6 +230,7 @@ function arrive(u){
   else if(after==='rstDst'){rstDrop(u)}
   else if(after==='wtScout'){
     // v2.1: дозорный раскрыл клетку фронтира и возвращается на вышку
+    addSkillXp(u,'vigil',0.7);
     exploreRing(u.x|0,u.y|0);
     if(u.race==='elf')for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
       const x=(u.x|0)+dx,y=(u.y|0)+dy;
@@ -241,6 +242,7 @@ function arrive(u){
     else{if(b&&b.workerId===u.id)b.workerId=null;releaseJob(u);u.act='idle';u.wanderT=1}
   }
   else if(after==='scout'){
+    addSkillXp(u,'vigil',0.5);
     exploreRing(u.x|0,u.y|0);
     if(u.race==='elf')for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
       const x=(u.x|0)+dx,y=(u.y|0)+dy;

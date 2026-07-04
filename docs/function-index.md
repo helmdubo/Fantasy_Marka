@@ -68,6 +68,12 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 `startSupply()` · `supplyPick()` · `supplyDrop()` · `fieldTarget()` · `fieldHarvest()` · `fieldReturn()` · `fieldAbort()` · `deposit()` · `exportTask()` · `haulThink()` · `expPick()` · `expDrop()` · `rstPick()` · `rstDrop()` · `doPickup()` · `isHauler()` · `desiredHaulerCount()` · `assignHauler()`
 
+## src/10b_skills.js
+
+навыки жителей (п.9): прокачка работой, эффекты в бою героев
+
+`SKILLS` · `SKILL_LVLS` · `skillLvl()` · `addSkillXp()` · `skillAtkBonus()` · `partyVigil()` · `partyHerbHeal()` · `topSkills()`
+
 ## src/11_settlers.js
 
 поведение поселенца: settlerTick, разведка фронтира, отдых, arrive

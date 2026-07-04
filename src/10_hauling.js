@@ -84,10 +84,10 @@ function fieldHarvest(u){
   const c=u.fieldCell,i=idx(c.x,c.y);
   let got=null;
   if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){
-    S.terrHp[i]--;got={wood:1+b.tier};
+    S.terrHp[i]--;got={wood:1+b.tier};addSkillXp(u,'axe',1);
     if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true}
   }else if(b.type==='farm'&&S.feat[i]===F.WHEAT&&S.featHp[i]>0){
-    S.featHp[i]--;got={food:1+b.tier};
+    S.featHp[i]--;got={food:1+b.tier};addSkillXp(u,'herb',1);
     if(S.featHp[i]<=0){S.feat[i]=F.NONE;S.featDirty=true;S.regrow.push({i,days:5,kind:'wheat'})}
   }
   if(!got){fieldAbort(u);return}
@@ -149,6 +149,7 @@ function deposit(u){
     const th=CFG.THRIFT[u.race];
     S.gold-=CFG.WAGE;u.wallet+=CFG.WAGE*th;S.gold+=CFG.WAGE*(1-th);
   }
+  addSkillXp(u,'haul',0.5);
   u.selfHaul=false;u.haulReserveAmt=0;marketClearRefs(u,'haulMarketRefs',false);u.worksToday++;u.act='idle';u.wanderT=0.3;S.uiDirty=true;
 }
 function exportTask(){
@@ -221,7 +222,7 @@ function expDrop(u){
       S.stock[u.expRes]=(S.stock[u.expRes]||0)+(u.expAmt||0);addResourcePopup(u.expRes,u.expAmt||0,S.th.x,S.th.y);
     }
   }
-  u.expPort=undefined;u.expReserveAmt=0;u.worksToday++;
+  u.expPort=undefined;u.expReserveAmt=0;u.worksToday++;addSkillXp(u,'haul',0.5);
   marketClearRefs(u,'haulMarketRefs',false);
   u.act='idle';u.wanderT=0.3;S.uiDirty=true;
 }

@@ -243,6 +243,7 @@ function updateInspector(){
       '<div class="row">кошель: <b>'+u.wallet.toFixed(1)+' з</b> · простой: '+u.idleDays+'д</div>'+
       '<div class="row">выносливость <b>'+(u.stam|0)+'</b><div class="stambar"><div style="width:'+(u.stam|0)+'%;background:'+(u.stam<CFG.STAM_LOW?'#d05a4e':'#8fbf5a')+'"></div></div></div>'+
       '<div class="row">ход '+RC.move+' · работа '+RC.work+' · стройка '+RC.build+' · разведка '+RC.scout+'</div>'+
+      (topSkills(u,3).length?'<div class="row">⭐ навыки: <b>'+topSkills(u,3).join(' · ')+'</b></div>':'')+
       (u.hero?('<div class="row">'+CFG.HERO.CLS[u.hero.cls].nm+(u.hero.thief?' · черта «Вор»':'')+' · HP <b>'+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+'</b></div>'):'');
   }else if(S.pin.kind==='bld'){
     const b=S.buildings[S.pin.id];

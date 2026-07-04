@@ -109,7 +109,8 @@ function researchCycle(u,b){
       log('📚 Библиотека: открытие «'+CFG.BNAME[nxt]+'» требует Башни знаний (тир 2, самоцветы).')}
     return;
   }
-  S.research.pts+=0.35*(u.race==='elf'?1.3:1)*(b.tier||1); // ~6 pts/день на тире 1
+  S.research.pts+=0.35*(u.race==='elf'?1.3:1)*(b.tier||1)*(1+0.06*skillLvl(u,'lore')); // ~6 pts/день на тире 1
+  addSkillXp(u,'lore',1);
   addInfoPopup('📜',b.x,b.y,'info');
   const cost=CFG.RESEARCH.cost[nxt];
   if(S.research.pts>=cost){

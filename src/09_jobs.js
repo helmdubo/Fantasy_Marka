@@ -239,11 +239,11 @@ function completeJob(u){
       if(S.terr[i]===T.FOREST){S.terrHp[i]=0;S.terr[i]=T.GRASS;S.terrDirty=true;
         S.stock.wood+=2;addResourcePopup('wood',2,j.x,j.y);computeLevels()}
       if(S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP){S.feat[i]=F.NONE;S.featDirty=true}
-      roadLay(j.plan);break}
-    case 'pave':roadLay(j.plan);break;
-    case 'ruins':S.feat[i]=F.NONE;S.featDirty=true;S.gold+=CFG.RUINS_GOLD;addResourcePopup('gold',CFG.RUINS_GOLD,j.x,j.y);
+      addSkillXp(u,'axe',0.8);roadLay(j.plan);break}
+    case 'pave':addSkillXp(u,'craft',0.6);roadLay(j.plan);break;
+    case 'ruins':addSkillXp(u,'lore',1);S.feat[i]=F.NONE;S.featDirty=true;S.gold+=CFG.RUINS_GOLD;addResourcePopup('gold',CFG.RUINS_GOLD,j.x,j.y);
       log('🏺 В древних руинах найдено '+CFG.RUINS_GOLD+' золотых — в казну.');break;
-    case 'build':{const b=S.buildings[j.b];b.work--;
+    case 'build':{const b=S.buildings[j.b];b.work--;addSkillXp(u,'craft',1);
       if(b.work<=0)finishBuilding(b);break}
     case 'watch':{
       // v2.1: днём дозорный выходит разведывать закрытую территорию вокруг вышки.
@@ -256,9 +256,9 @@ function completeJob(u){
           if(p){u.inside=-1;u.path=p;u.pathI=0;u.act='goto';u.after='wtScout';u.wtB=j.b;return}
         }
       }
-      u.workT=CFG.WORK.patrol;return}
+      addSkillXp(u,'vigil',0.3);u.workT=CFG.WORK.patrol;return}
     case 'repair':{const b=S.buildings[j.b];
-      b.repWork=(b.repWork||2)-1;
+      b.repWork=(b.repWork||2)-1;addSkillXp(u,'craft',1);
       if(b.repWork<=0){b.ruined=false;b.repWork=undefined;S.bldDirty=true;
         log('🔨 Восстановлено: '+CFG.BNAME[b.type].toLowerCase()+'.')}
       break}
@@ -297,6 +297,7 @@ function completeJob(u){
       }
       if(b.type==='mine'||b.type==='fisher'){
         const ok=harvestCycle(u,b);
+        if(ok)addSkillXp(u,b.type==='mine'?'grit':'herb',1);
         if(ok&&bufTotal(b)<capOf(b)){u.workT=CFG.OPER_T/workMul(u,'oper');return}
         if(bufTotal(b)>0&&(S.haulerId<0||bufTotal(b)>=capOf(b))){
           carry={_src:b.type};

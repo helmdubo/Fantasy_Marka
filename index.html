@@ -1387,11 +1387,11 @@ function completeJob(u){
       if(S.terr[i]===T.FOREST){S.terrHp[i]=0;S.terr[i]=T.GRASS;S.terrDirty=true;
         S.stock.wood+=2;addResourcePopup('wood',2,j.x,j.y);computeLevels()}
       if(S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP){S.feat[i]=F.NONE;S.featDirty=true}
-      roadLay(j.plan);break}
-    case 'pave':roadLay(j.plan);break;
-    case 'ruins':S.feat[i]=F.NONE;S.featDirty=true;S.gold+=CFG.RUINS_GOLD;addResourcePopup('gold',CFG.RUINS_GOLD,j.x,j.y);
+      addSkillXp(u,'axe',0.8);roadLay(j.plan);break}
+    case 'pave':addSkillXp(u,'craft',0.6);roadLay(j.plan);break;
+    case 'ruins':addSkillXp(u,'lore',1);S.feat[i]=F.NONE;S.featDirty=true;S.gold+=CFG.RUINS_GOLD;addResourcePopup('gold',CFG.RUINS_GOLD,j.x,j.y);
       log('🏺 В древних руинах найдено '+CFG.RUINS_GOLD+' золотых — в казну.');break;
-    case 'build':{const b=S.buildings[j.b];b.work--;
+    case 'build':{const b=S.buildings[j.b];b.work--;addSkillXp(u,'craft',1);
       if(b.work<=0)finishBuilding(b);break}
     case 'watch':{
       // v2.1: днём дозорный выходит разведывать закрытую территорию вокруг вышки.
@@ -1404,9 +1404,9 @@ function completeJob(u){
           if(p){u.inside=-1;u.path=p;u.pathI=0;u.act='goto';u.after='wtScout';u.wtB=j.b;return}
         }
       }
-      u.workT=CFG.WORK.patrol;return}
+      addSkillXp(u,'vigil',0.3);u.workT=CFG.WORK.patrol;return}
     case 'repair':{const b=S.buildings[j.b];
-      b.repWork=(b.repWork||2)-1;
+      b.repWork=(b.repWork||2)-1;addSkillXp(u,'craft',1);
       if(b.repWork<=0){b.ruined=false;b.repWork=undefined;S.bldDirty=true;
         log('🔨 Восстановлено: '+CFG.BNAME[b.type].toLowerCase()+'.')}
       break}
@@ -1445,6 +1445,7 @@ function completeJob(u){
       }
       if(b.type==='mine'||b.type==='fisher'){
         const ok=harvestCycle(u,b);
+        if(ok)addSkillXp(u,b.type==='mine'?'grit':'herb',1);
         if(ok&&bufTotal(b)<capOf(b)){u.workT=CFG.OPER_T/workMul(u,'oper');return}
         if(bufTotal(b)>0&&(S.haulerId<0||bufTotal(b)>=capOf(b))){
           carry={_src:b.type};
@@ -1562,10 +1563,10 @@ function fieldHarvest(u){
   const c=u.fieldCell,i=idx(c.x,c.y);
   let got=null;
   if(b.type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0){
-    S.terrHp[i]--;got={wood:1+b.tier};
+    S.terrHp[i]--;got={wood:1+b.tier};addSkillXp(u,'axe',1);
     if(S.terrHp[i]<=0){S.terr[i]=T.GRASS;S.feat[i]=F.STUMP;S.terrDirty=true;S.featDirty=true}
   }else if(b.type==='farm'&&S.feat[i]===F.WHEAT&&S.featHp[i]>0){
-    S.featHp[i]--;got={food:1+b.tier};
+    S.featHp[i]--;got={food:1+b.tier};addSkillXp(u,'herb',1);
     if(S.featHp[i]<=0){S.feat[i]=F.NONE;S.featDirty=true;S.regrow.push({i,days:5,kind:'wheat'})}
   }
   if(!got){fieldAbort(u);return}
@@ -1627,6 +1628,7 @@ function deposit(u){
     const th=CFG.THRIFT[u.race];
     S.gold-=CFG.WAGE;u.wallet+=CFG.WAGE*th;S.gold+=CFG.WAGE*(1-th);
   }
+  addSkillXp(u,'haul',0.5);
   u.selfHaul=false;u.haulReserveAmt=0;marketClearRefs(u,'haulMarketRefs',false);u.worksToday++;u.act='idle';u.wanderT=0.3;S.uiDirty=true;
 }
 function exportTask(){
@@ -1699,7 +1701,7 @@ function expDrop(u){
       S.stock[u.expRes]=(S.stock[u.expRes]||0)+(u.expAmt||0);addResourcePopup(u.expRes,u.expAmt||0,S.th.x,S.th.y);
     }
   }
-  u.expPort=undefined;u.expReserveAmt=0;u.worksToday++;
+  u.expPort=undefined;u.expReserveAmt=0;u.worksToday++;addSkillXp(u,'haul',0.5);
   marketClearRefs(u,'haulMarketRefs',false);
   u.act='idle';u.wanderT=0.3;S.uiDirty=true;
 }
@@ -1775,6 +1777,62 @@ function assignHauler(){
     log('📦 '+RNAME[cand.race]+' №'+cand.id+' назначен складским рабочим ратуши ('+S.haulerIds.length+'/'+desired+').');
   }
   S.haulerId=S.haulerIds[0]||-1;
+}
+/* ---------- НАВЫКИ ЖИТЕЛЕЙ (п.9) ----------
+   Работа прокачивает навыки. Навыки почти не ускоряют добычу — их главная
+   ценность раскрывается в бою, когда житель становится героем. */
+const SKILLS={
+  axe:  {nm:'Секира'},      // лесоповал/расчистка -> атака бойцов ближнего боя
+  grit: {nm:'Крепь'},       // шахта -> живучесть (+HP героя за уровень)
+  craft:{nm:'Инженерия'},   // стройка/ремонт/мощение -> урон по укреплениям, +скорость стройки
+  haul: {nm:'Жилы'},        // переноска/снабжение -> стойкость к засадам, +HP
+  herb: {nm:'Знахарство'},  // ферма/рыбалка -> лечение отряда после боя
+  vigil:{nm:'Дозор'},       // вахта/разведка -> упреждение засад
+  lore: {nm:'Тайноведение'} // библиотека/руины -> урон мага, +скорость исследований
+};
+const SKILL_LVLS=[30,90,200,360,600]; // пороги xp уровней 1..5 (~12 xp/день работы)
+function skillLvl(u,k){return (u.skills&&u.skills[k]&&u.skills[k].lvl)||0}
+function addSkillXp(u,k,xp){
+  if(!u||!SKILLS[k]||u.id===undefined)return;
+  u.skills=u.skills||{};
+  const s=u.skills[k]=u.skills[k]||{xp:0,lvl:0};
+  if(s.lvl>=SKILL_LVLS.length)return;
+  s.xp+=xp;
+  while(s.lvl<SKILL_LVLS.length&&s.xp>=SKILL_LVLS[s.lvl]){
+    s.lvl++;
+    if(u.hero){ // навыки живучести сразу отражаются на герое
+      if(k==='grit'){u.hero.maxHp+=3;u.hero.hp+=3}
+      if(k==='haul'){u.hero.maxHp+=1;u.hero.hp+=1}
+    }
+    if(s.lvl>=2)log('⭐ '+RNAME[u.race]+' №'+u.id+' оттачивает навык «'+SKILLS[k].nm+'»: уровень '+s.lvl+'.');
+  }
+}
+function skillAtkBonus(u,stageIdx){ // прибавка к атаке героя в бою
+  if(!u.hero)return 0;
+  const cls=u.hero.cls;
+  let a=0;
+  if(cls==='tank'||cls==='bruiser')a+=skillLvl(u,'axe')*0.8;
+  if(cls==='mage')a+=skillLvl(u,'lore')*0.9;
+  if(cls==='support')a+=skillLvl(u,'herb')*0.4;
+  if(stageIdx===0)a*=(1+0.10*skillLvl(u,'craft')); // первый этап логова — укрепления
+  return a;
+}
+function partyVigil(hs){let v=0;for(const u of hs)v=Math.max(v,skillLvl(u,'vigil'));return v}
+function partyHerbHeal(hs){ // знахарь подлатывает выживших после боя
+  let herb=0;for(const u of hs)herb+=skillLvl(u,'herb');
+  if(herb<=0)return 0;
+  let healed=0;
+  for(const u of hs)if(u.hero&&u.hero.hp>0&&u.hero.hp<u.hero.maxHp){
+    const h=Math.min(u.hero.maxHp-u.hero.hp,herb*1.5);
+    u.hero.hp+=h;healed+=h;
+  }
+  return healed;
+}
+function topSkills(u,n){
+  if(!u.skills)return [];
+  return Object.entries(u.skills).filter(([k,s])=>s.lvl>0)
+    .sort((a,b)=>b[1].lvl-a[1].lvl).slice(0,n||3)
+    .map(([k,s])=>SKILLS[k].nm+' '+s.lvl);
 }
 function scoutAnchors(){
   const a=[{x:S.th.x,y:S.th.y}];
@@ -1974,7 +2032,7 @@ function settlerTick(u,dt){
 }
 function workMul(u,kind){
   const RC=CFG.RACE[u.race];
-  if(kind==='build'||kind==='repair')return RC.build;
+  if(kind==='build'||kind==='repair')return RC.build*(1+0.04*skillLvl(u,'craft'));
   if(kind==='clear'&&u.race==='troll')return 1.3;
   if(kind==='oper'||kind==='ruins')return RC.work;
   return 1;
@@ -2008,6 +2066,7 @@ function arrive(u){
   else if(after==='rstDst'){rstDrop(u)}
   else if(after==='wtScout'){
     // v2.1: дозорный раскрыл клетку фронтира и возвращается на вышку
+    addSkillXp(u,'vigil',0.7);
     exploreRing(u.x|0,u.y|0);
     if(u.race==='elf')for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
       const x=(u.x|0)+dx,y=(u.y|0)+dy;
@@ -2019,6 +2078,7 @@ function arrive(u){
     else{if(b&&b.workerId===u.id)b.workerId=null;releaseJob(u);u.act='idle';u.wanderT=1}
   }
   else if(after==='scout'){
+    addSkillXp(u,'vigil',0.5);
     exploreRing(u.x|0,u.y|0);
     if(u.race==='elf')for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
       const x=(u.x|0)+dx,y=(u.y|0)+dy;
@@ -2140,7 +2200,8 @@ function researchCycle(u,b){
       log('📚 Библиотека: открытие «'+CFG.BNAME[nxt]+'» требует Башни знаний (тир 2, самоцветы).')}
     return;
   }
-  S.research.pts+=0.35*(u.race==='elf'?1.3:1)*(b.tier||1); // ~6 pts/день на тире 1
+  S.research.pts+=0.35*(u.race==='elf'?1.3:1)*(b.tier||1)*(1+0.06*skillLvl(u,'lore')); // ~6 pts/день на тире 1
+  addSkillXp(u,'lore',1);
   addInfoPopup('📜',b.x,b.y,'info');
   const cost=CFG.RESEARCH.cost[nxt];
   if(S.research.pts>=cost){
@@ -3152,18 +3213,25 @@ function resolveBattle(ambushed,stageMul,stageIdx){
   let ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
   const thief=hs.some(u=>u.hero.thief);
   let rounds=0,retreat=false;
-  if(ambushed){distributeDamage(hs,eatk*1.5)}
+  if(ambushed){ // «Дозор» (п.9) упреждает засаду — урон внезапности гасится
+    const vig=partyVigil(hs);
+    distributeDamage(hs,eatk*1.5*Math.max(0.4,1-0.12*vig));
+  }
   while(rounds++<14){
     // party strike (thief grants opening tempo on round 1)
     let dmg=0;
     for(const u of hs){if(u.hero.hp<=0)continue;
-      dmg+=(u.hero.atk+itemAtk(u))*(u.hero.cls==='mage'?1.3:1)*(rounds===1&&thief?1.5:1)}
+      dmg+=(u.hero.atk+itemAtk(u)+skillAtkBonus(u,stageIdx))*(u.hero.cls==='mage'?1.3:1)*(rounds===1&&thief?1.5:1)}
     ehp-=dmg;
     if(ehp<=0)break;
     distributeDamage(hs,eatk);
     const alive=hs.filter(u=>u.hero.hp>0);
     const hpFrac=alive.reduce((a,u)=>a+u.hero.hp,0)/hs.reduce((a,u)=>a+u.hero.maxHp,0);
     if(!alive.length||hpFrac<0.3){retreat=true;break}
+  }
+  if(ehp<=0){ // «Знахарство» (п.9): после победы знахарь латает раны
+    const healed=partyHerbHeal(hs);
+    if(healed>=3)log('🌿 Знахарь отряда перевязывает раны (+'+healed.toFixed(0)+' HP).');
   }
   // deaths
   const dead=hs.filter(u=>u.hero.hp<=0);
@@ -5157,6 +5225,7 @@ function updateInspector(){
       '<div class="row">кошель: <b>'+u.wallet.toFixed(1)+' з</b> · простой: '+u.idleDays+'д</div>'+
       '<div class="row">выносливость <b>'+(u.stam|0)+'</b><div class="stambar"><div style="width:'+(u.stam|0)+'%;background:'+(u.stam<CFG.STAM_LOW?'#d05a4e':'#8fbf5a')+'"></div></div></div>'+
       '<div class="row">ход '+RC.move+' · работа '+RC.work+' · стройка '+RC.build+' · разведка '+RC.scout+'</div>'+
+      (topSkills(u,3).length?'<div class="row">⭐ навыки: <b>'+topSkills(u,3).join(' · ')+'</b></div>':'')+
       (u.hero?('<div class="row">'+CFG.HERO.CLS[u.hero.cls].nm+(u.hero.thief?' · черта «Вор»':'')+' · HP <b>'+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+'</b></div>'):'');
   }else if(S.pin.kind==='bld'){
     const b=S.buildings[S.pin.id];

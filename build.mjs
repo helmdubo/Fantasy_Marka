@@ -29,6 +29,7 @@ export const MANIFEST = [
   '08_market.js',       // публикация офферов (труд/ресурсы/квесты) и выбор задач юнитом
   '09_jobs.js',         // job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, completeJob
   '10_hauling.js',      // логистика: supply/haul/export/deposit, назначение носильщиков
+  '10b_skills.js',      // навыки жителей (п.9): прокачка работой, эффекты в бою героев
   '11_settlers.js',     // поведение поселенца: settlerTick, разведка фронтира, отдых, arrive
   '12_settle.js',       // автостроитель: siteOk, settleThink, research, стартовые площадки, апгрейды
   '13_heroes_pop.js',   // герои (makeHero, слоты пати), иммиграция/отток, крафт и покупка снаряжения

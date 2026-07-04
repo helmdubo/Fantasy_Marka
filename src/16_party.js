@@ -156,18 +156,25 @@ function resolveBattle(ambushed,stageMul,stageIdx){
   let ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
   const thief=hs.some(u=>u.hero.thief);
   let rounds=0,retreat=false;
-  if(ambushed){distributeDamage(hs,eatk*1.5)}
+  if(ambushed){ // «Дозор» (п.9) упреждает засаду — урон внезапности гасится
+    const vig=partyVigil(hs);
+    distributeDamage(hs,eatk*1.5*Math.max(0.4,1-0.12*vig));
+  }
   while(rounds++<14){
     // party strike (thief grants opening tempo on round 1)
     let dmg=0;
     for(const u of hs){if(u.hero.hp<=0)continue;
-      dmg+=(u.hero.atk+itemAtk(u))*(u.hero.cls==='mage'?1.3:1)*(rounds===1&&thief?1.5:1)}
+      dmg+=(u.hero.atk+itemAtk(u)+skillAtkBonus(u,stageIdx))*(u.hero.cls==='mage'?1.3:1)*(rounds===1&&thief?1.5:1)}
     ehp-=dmg;
     if(ehp<=0)break;
     distributeDamage(hs,eatk);
     const alive=hs.filter(u=>u.hero.hp>0);
     const hpFrac=alive.reduce((a,u)=>a+u.hero.hp,0)/hs.reduce((a,u)=>a+u.hero.maxHp,0);
     if(!alive.length||hpFrac<0.3){retreat=true;break}
+  }
+  if(ehp<=0){ // «Знахарство» (п.9): после победы знахарь латает раны
+    const healed=partyHerbHeal(hs);
+    if(healed>=3)log('🌿 Знахарь отряда перевязывает раны (+'+healed.toFixed(0)+' HP).');
   }
   // deaths
   const dead=hs.filter(u=>u.hero.hp<=0);
