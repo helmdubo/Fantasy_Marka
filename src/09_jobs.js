@@ -162,9 +162,14 @@ function harvestCycle(u,b){
     let mtn=false;
     tryCells((x,y,i)=>{if(S.terr[i]===T.MTN){mtn=true;return true}return false});
     if(mtn){
+      if((b.data.oreLeft||0)<=0){ // рудное тело выбрано (п.6)
+        b.abandoned=true;S.bldDirty=true;
+        log('⛏ Шахта выработана до дна — штольни брошены. Теперь это дело для героев.');
+        return true;
+      }
       if(!consumeBuildingUpkeep(b,CFG.UPKEEP.mine,'крепь шахты'))return false;
-      b.buf.stone+=1;addResourcePopup('stone',1,b.x,b.y);ok=true;
-      tryCells((x,y,i)=>{
+      b.buf.stone+=1;b.data.oreLeft--;addResourcePopup('stone',1,b.x,b.y);ok=true;
+      if((b.tier||1)>=CFG.MINE.gemTier)tryCells((x,y,i)=>{ // самоцветы — тир 2+ (п.6)
         if(S.feat[i]!==F.VEIN)return false;
         const ch=(u.race==='dwarf')?0.5:0.2;
         if(S.rng()<ch){b.buf.gems+=1;addResourcePopup('gems',1,b.x,b.y);S.featHp[i]--;
@@ -172,6 +177,10 @@ function harvestCycle(u,b){
             log('⛏ Жила у шахты выработана — гора опустела.')}}
         return true;
       });
+      if(b.data.oreLeft<=0){
+        b.abandoned=true;S.bldDirty=true;
+        log('⛏ Шахта выработана до дна — штольни брошены. Теперь это дело для героев.');
+      }
     }
   }
   if(!ok){

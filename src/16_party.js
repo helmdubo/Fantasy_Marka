@@ -30,10 +30,12 @@ function partyHeroes(){return S.party.heroes.map(id=>S.settlers.find(u=>u.id===i
 function sendDelve(bi){
   if(S.party){log('⚔ Партия уже в походе.');return false}
   const b=S.buildings[bi];
-  if(!b||!b.built||b.type!=='mine'||b.ruined||b.abandoned)return false;
+  if(!b||!b.built||b.type!=='mine'||b.ruined)return false;
+  // п.6: спуск только в ЗАБРОШЕННУЮ шахту — в работающей штольни заняты артелью
+  if(!b.abandoned){log('⛏ Шахта работает — герои не полезут под кирки артели. Ждите, пока она опустеет.');return false}
   const sl=activeSlot();
   if(!sl){log('🛡 Нет готовой пати — сформируй её в окне отрядов (🗡).');return false}
-  if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Улучшите её для новых глубин.');return false}
+  if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Глубже этажей нет.');return false}
   const prov=CFG.HERO.provisions+b.tier*2;
   if(S.stock.food<prov){log('🥖 Для спуска нужно '+prov+' еды.');return false}
   const p=findPath(S,S.th.x,S.th.y,b.x,b.y,true);

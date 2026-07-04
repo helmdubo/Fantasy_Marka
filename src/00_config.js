@@ -24,6 +24,8 @@ const CFG={
   SAIL_DAYS:2, SEA_MARKUP:1.45,
   // п.3: корабль — отдельная стройка порта. Дорогой, но трюм существенный.
   SHIP:{cost:{wood:28},work:5,hold:24,importQty:{food:16,wood:16,stone:12,gems:4}},
+  // п.6: шахта конечна; самоцветы — только тир 2+; апгрейд тира вскрывает новую руду
+  MINE:{oreBase:40,orePerMtn:5,orePerTier:35,gemTier:2},
   ITEMS:[
     {id:'blade',name:'Клинок самоцветной заточки',atk:2,hp:0,gems:2,price:14},
     {id:'ward',name:'Оберег горного сердца',atk:0,hp:6,gems:2,price:14},

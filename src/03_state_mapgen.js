@@ -179,10 +179,15 @@ function placeBuilding(type,x,y,instant){
     need:instant?null:Object.assign({},CFG.COSTS[type]||{}),got:instant?null:{}};
   if(instant)S.road&&(S.road[idx(x,y)]=1);
   if(type==='mine'){
-    let vein=false;
+    let vein=false,mtn=0;
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
-      if(inMap(x+dx,y+dy)&&S.feat[idx(x+dx,y+dy)]===F.VEIN)vein=true}
+      if(!inMap(x+dx,y+dy))continue;
+      if(S.feat[idx(x+dx,y+dy)]===F.VEIN)vein=true;
+      if(S.terr[idx(x+dx,y+dy)]===T.MTN)mtn++;
+    }
     b.data.vein=vein;
+    // п.6: рудное тело конечно — зависит от размера примыкающей горы
+    b.data.oreLeft=CFG.MINE.oreBase+mtn*CFG.MINE.orePerMtn;
   }
   S.buildings.push(b);
   S.bld[idx(x,y)]=S.buildings.length-1;

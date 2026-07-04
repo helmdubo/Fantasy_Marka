@@ -531,6 +531,7 @@ function tryUpgrade(){
   for(const r in cost)if(S.stock[r]<cost[r])return false;
   for(const r in cost)S.stock[r]-=cost[r];
   best.tier++;
+  if(best.type==='mine')best.data.oreLeft=(best.data.oreLeft||0)+CFG.MINE.orePerTier; // новые горизонты
   S.bldDirty=true;computeLevels();
   log('⭐ '+CFG.BNAME[best.type]+' расширена до тира '+best.tier+'.');
   S.dbgBuilder='апгрейд '+best.type+'→'+best.tier;

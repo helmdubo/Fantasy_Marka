@@ -150,7 +150,10 @@ function questScenario(){
     console.log('rob2 done:',tickUntilPartyDone(600),'hoard:',S.lairs[li3].hoard.toFixed(0));
   }
   for(const u of S.settlers)if(u.hero){u.hero.hp=u.hero.maxHp}
-  const mi=S.buildings.findIndex(b=>b.built&&b.type==='mine'&&!b.ruined&&!b.abandoned);
+  // п.6: спуск возможен только в заброшенную шахту — принудительно бросаем её
+  let mi=S.buildings.findIndex(b=>b.built&&b.type==='mine'&&!b.ruined&&b.abandoned);
+  if(mi<0){mi=S.buildings.findIndex(b=>b.built&&b.type==='mine'&&!b.ruined);
+    if(mi>=0){S.buildings[mi].abandoned=true;console.log('mine force-abandoned for delve test')}}
   if(mi>=0&&activeSlot()){
     S.stock.food=Math.max(S.stock.food,30);
     console.log('send delve:',sendDelve(mi));

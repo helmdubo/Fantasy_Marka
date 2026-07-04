@@ -259,11 +259,16 @@ function updateInspector(){
       else stLine='стройка: осталось '+b.work+' смен';
     }
     let extra='';
-    if(b.built&&b.type==='mine'&&!b.abandoned&&!b.ruined){
+    if(b.built&&b.type==='mine'&&!b.ruined){
       const dm=b.delveMax||0;
-      extra+='<div class="row">⛏ глубины: пройдено '+dm+'/'+b.tier+
-        (b.delve?' · <b>пати внутри</b>':'')+'</div>'+
-        '<div class="row"><button class="qbtn" data-delve="'+S.pin.id+'"'+((activeSlot()&&!S.party&&dm<b.tier)?'':' disabled')+'>Спуск в шахту</button></div>';
+      if(!b.abandoned){
+        extra+='<div class="row">⛏ руда: <b>'+Math.max(0,b.data.oreLeft||0)+'</b>'+
+          ((b.tier||1)<CFG.MINE.gemTier?' · самоцветы с тира 2':' · жила доступна')+'</div>';
+      }else{
+        extra+='<div class="row">⛏ штольни заброшены · глубины: '+dm+'/'+b.tier+
+          (b.delve?' · <b>пати внутри</b>':'')+'</div>'+
+          '<div class="row"><button class="qbtn" data-delve="'+S.pin.id+'"'+((activeSlot()&&!S.party&&dm<b.tier)?'':' disabled')+'>Спуск в шахту</button></div>';
+      }
     }
     if(b.built&&b.type==='port'){
       const ht=holdTotal(b);

@@ -182,6 +182,8 @@ const CFG={
   SAIL_DAYS:2, SEA_MARKUP:1.45,
   // п.3: корабль — отдельная стройка порта. Дорогой, но трюм существенный.
   SHIP:{cost:{wood:28},work:5,hold:24,importQty:{food:16,wood:16,stone:12,gems:4}},
+  // п.6: шахта конечна; самоцветы — только тир 2+; апгрейд тира вскрывает новую руду
+  MINE:{oreBase:40,orePerMtn:5,orePerTier:35,gemTier:2},
   ITEMS:[
     {id:'blade',name:'Клинок самоцветной заточки',atk:2,hp:0,gems:2,price:14},
     {id:'ward',name:'Оберег горного сердца',atk:0,hp:6,gems:2,price:14},
@@ -533,10 +535,15 @@ function placeBuilding(type,x,y,instant){
     need:instant?null:Object.assign({},CFG.COSTS[type]||{}),got:instant?null:{}};
   if(instant)S.road&&(S.road[idx(x,y)]=1);
   if(type==='mine'){
-    let vein=false;
+    let vein=false,mtn=0;
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
-      if(inMap(x+dx,y+dy)&&S.feat[idx(x+dx,y+dy)]===F.VEIN)vein=true}
+      if(!inMap(x+dx,y+dy))continue;
+      if(S.feat[idx(x+dx,y+dy)]===F.VEIN)vein=true;
+      if(S.terr[idx(x+dx,y+dy)]===T.MTN)mtn++;
+    }
     b.data.vein=vein;
+    // п.6: рудное тело конечно — зависит от размера примыкающей горы
+    b.data.oreLeft=CFG.MINE.oreBase+mtn*CFG.MINE.orePerMtn;
   }
   S.buildings.push(b);
   S.bld[idx(x,y)]=S.buildings.length-1;
@@ -1236,9 +1243,14 @@ function harvestCycle(u,b){
     let mtn=false;
     tryCells((x,y,i)=>{if(S.terr[i]===T.MTN){mtn=true;return true}return false});
     if(mtn){
+      if((b.data.oreLeft||0)<=0){ // рудное тело выбрано (п.6)
+        b.abandoned=true;S.bldDirty=true;
+        log('⛏ Шахта выработана до дна — штольни брошены. Теперь это дело для героев.');
+        return true;
+      }
       if(!consumeBuildingUpkeep(b,CFG.UPKEEP.mine,'крепь шахты'))return false;
-      b.buf.stone+=1;addResourcePopup('stone',1,b.x,b.y);ok=true;
-      tryCells((x,y,i)=>{
+      b.buf.stone+=1;b.data.oreLeft--;addResourcePopup('stone',1,b.x,b.y);ok=true;
+      if((b.tier||1)>=CFG.MINE.gemTier)tryCells((x,y,i)=>{ // самоцветы — тир 2+ (п.6)
         if(S.feat[i]!==F.VEIN)return false;
         const ch=(u.race==='dwarf')?0.5:0.2;
         if(S.rng()<ch){b.buf.gems+=1;addResourcePopup('gems',1,b.x,b.y);S.featHp[i]--;
@@ -1246,6 +1258,10 @@ function harvestCycle(u,b){
             log('⛏ Жила у шахты выработана — гора опустела.')}}
         return true;
       });
+      if(b.data.oreLeft<=0){
+        b.abandoned=true;S.bldDirty=true;
+        log('⛏ Шахта выработана до дна — штольни брошены. Теперь это дело для героев.');
+      }
     }
   }
   if(!ok){
@@ -2468,6 +2484,7 @@ function tryUpgrade(){
   for(const r in cost)if(S.stock[r]<cost[r])return false;
   for(const r in cost)S.stock[r]-=cost[r];
   best.tier++;
+  if(best.type==='mine')best.data.oreLeft=(best.data.oreLeft||0)+CFG.MINE.orePerTier; // новые горизонты
   S.bldDirty=true;computeLevels();
   log('⭐ '+CFG.BNAME[best.type]+' расширена до тира '+best.tier+'.');
   S.dbgBuilder='апгрейд '+best.type+'→'+best.tier;
@@ -2901,10 +2918,12 @@ function partyHeroes(){return S.party.heroes.map(id=>S.settlers.find(u=>u.id===i
 function sendDelve(bi){
   if(S.party){log('⚔ Партия уже в походе.');return false}
   const b=S.buildings[bi];
-  if(!b||!b.built||b.type!=='mine'||b.ruined||b.abandoned)return false;
+  if(!b||!b.built||b.type!=='mine'||b.ruined)return false;
+  // п.6: спуск только в ЗАБРОШЕННУЮ шахту — в работающей штольни заняты артелью
+  if(!b.abandoned){log('⛏ Шахта работает — герои не полезут под кирки артели. Ждите, пока она опустеет.');return false}
   const sl=activeSlot();
   if(!sl){log('🛡 Нет готовой пати — сформируй её в окне отрядов (🗡).');return false}
-  if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Улучшите её для новых глубин.');return false}
+  if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Глубже этажей нет.');return false}
   const prov=CFG.HERO.provisions+b.tier*2;
   if(S.stock.food<prov){log('🥖 Для спуска нужно '+prov+' еды.');return false}
   const p=findPath(S,S.th.x,S.th.y,b.x,b.y,true);
@@ -4958,11 +4977,16 @@ function updateInspector(){
       else stLine='стройка: осталось '+b.work+' смен';
     }
     let extra='';
-    if(b.built&&b.type==='mine'&&!b.abandoned&&!b.ruined){
+    if(b.built&&b.type==='mine'&&!b.ruined){
       const dm=b.delveMax||0;
-      extra+='<div class="row">⛏ глубины: пройдено '+dm+'/'+b.tier+
-        (b.delve?' · <b>пати внутри</b>':'')+'</div>'+
-        '<div class="row"><button class="qbtn" data-delve="'+S.pin.id+'"'+((activeSlot()&&!S.party&&dm<b.tier)?'':' disabled')+'>Спуск в шахту</button></div>';
+      if(!b.abandoned){
+        extra+='<div class="row">⛏ руда: <b>'+Math.max(0,b.data.oreLeft||0)+'</b>'+
+          ((b.tier||1)<CFG.MINE.gemTier?' · самоцветы с тира 2':' · жила доступна')+'</div>';
+      }else{
+        extra+='<div class="row">⛏ штольни заброшены · глубины: '+dm+'/'+b.tier+
+          (b.delve?' · <b>пати внутри</b>':'')+'</div>'+
+          '<div class="row"><button class="qbtn" data-delve="'+S.pin.id+'"'+((activeSlot()&&!S.party&&dm<b.tier)?'':' disabled')+'>Спуск в шахту</button></div>';
+      }
     }
     if(b.built&&b.type==='port'){
       const ht=holdTotal(b);
@@ -5264,7 +5288,10 @@ function questScenario(){
     console.log('rob2 done:',tickUntilPartyDone(600),'hoard:',S.lairs[li3].hoard.toFixed(0));
   }
   for(const u of S.settlers)if(u.hero){u.hero.hp=u.hero.maxHp}
-  const mi=S.buildings.findIndex(b=>b.built&&b.type==='mine'&&!b.ruined&&!b.abandoned);
+  // п.6: спуск возможен только в заброшенную шахту — принудительно бросаем её
+  let mi=S.buildings.findIndex(b=>b.built&&b.type==='mine'&&!b.ruined&&b.abandoned);
+  if(mi<0){mi=S.buildings.findIndex(b=>b.built&&b.type==='mine'&&!b.ruined);
+    if(mi>=0){S.buildings[mi].abandoned=true;console.log('mine force-abandoned for delve test')}}
   if(mi>=0&&activeSlot()){
     S.stock.food=Math.max(S.stock.food,30);
     console.log('send delve:',sendDelve(mi));
