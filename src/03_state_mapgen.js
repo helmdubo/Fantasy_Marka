@@ -23,7 +23,7 @@ function newGame(seedStr){
     popups:[],portBars:null,
     log:[],uiDirty:true,fogDirty:true,featDirty:true,bldDirty:true,terrDirty:true,
     nextId:1,hungry:false,dbgBuilder:'—',atlasMs:0,hoverLair:-1,revealAll:false};
-  genTerrain();genRiver();classifyWater();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
+  genTerrain();classifyWater();genRivers();classifyWater();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
   S.road=new Uint8Array(N);S.roadConn=new Uint8Array(N);
   placeBuilding('townhall',S.th.x,S.th.y,true);
   recomputeRoadConn();
@@ -55,28 +55,87 @@ function genTerrain(){
     if(t===T.FOREST)S.terrHp[idx(x,y)]=3;
   }
 }
-function genRiver(){
-  const W=S.W,H=S.H;
-  // start from a high cell, descend by noise elevation with jitter
-  let bx=0,by=0,be=-1;
-  for(let i=0;i<200;i++){const x=(S.rng()*W)|0,y=(S.rng()*H)|0;
-    const e=fbm(x/17,y/17,S.seed,4);if(e>be){be=e;bx=x;by=y}}
-  let x=bx,y=by;
-  for(let step=0;step<220;step++){
-    if(!inMap(x,y))break;
-    const i=idx(x,y);
-    if(S.terr[i]===T.WATER&&step>6)break;
-    if(S.terr[i]!==T.MTN)S.terr[i]=T.WATER;
-    if(S.rng()<0.3){const sx=x+((S.rng()*3)|0)-1,sy=y+((S.rng()*3)|0)-1;
-      if(inMap(sx,sy)&&S.terr[idx(sx,sy)]!==T.MTN)S.terr[idx(sx,sy)]=T.WATER}
-    // pick lowest neighbor with jitter
-    let nx=x,ny=y,ne=Infinity;
-    for(const d of hexDirs(x)){const tx2=x+d[0],ty2=y+d[1];if(!inMap(tx2,ty2))continue;
-      const e=fbm(tx2/17,ty2/17,S.seed,4)+S.rng()*0.045;
-      if(e<ne){ne=e;nx=tx2;ny=ty2}}
-    if(nx===x&&ny===y)break;
-    x=nx;y=ny;
-    if(x<=0||y<=0||x>=S.W-1||y>=S.H-1)break;
+/* ---------- РЕКИ (п.1) ----------
+   Река — оверлей S.river поверх суши (0 нет / 1 река / 2 исток-водопад).
+   Течёт с гор по градиенту высоты (fbm) с джиттером к морю или озеру,
+   реки сливаются; озеро может дать сток к морю; тупик превращается в пруд.
+   Клетка реки непроходима, пока по ней не проложена дорога (мост). */
+function genRivers(){
+  const W=S.W,H=S.H,N=W*H;
+  S.river=new Uint8Array(N);
+  const elev=(x,y)=>fbm(x/17,y/17,S.seed,4);
+  const flowFrom=(sx,sy,isSource)=>{
+    let x=sx,y=sy,len=0;
+    const own=new Set();
+    while(len++<260){
+      if(!inMap(x,y))break;
+      const i=idx(x,y);
+      if(S.terr[i]===T.WATER&&len>2)break;       // впадение в море/озеро
+      if(S.river[i]&&!own.has(i))break;           // слияние с другой рекой
+      if(!S.river[i])S.river[i]=(len===1&&isSource)?2:1;
+      own.add(i);
+      if(S.terr[i]===T.FOREST){S.terr[i]=T.GRASS;S.terrHp[i]=0} // река прорезает просеку
+      // следующий шаг: минимальная высота среди доступных соседей
+      let nx=x,ny=y,ne=Infinity;
+      for(const d of hexDirs(x)){
+        const tx=x+d[0],ty=y+d[1];
+        if(!inMap(tx,ty))continue;
+        const ti=idx(tx,ty);
+        if(own.has(ti)||S.terr[ti]===T.MTN)continue;
+        let e=elev(tx,ty)+S.rng()*0.055; // джиттер даёт меандры вместо прямой канавы
+        if(S.terr[ti]===T.WATER)e-=1;    // тянемся к воде
+        if(S.river[ti])e-=0.5;           // и к чужим рекам (слияние)
+        if(e<ne){ne=e;nx=tx;ny=ty}
+      }
+      if(nx===x&&ny===y){ // тупик в низине — пруд
+        S.terr[i]=T.WATER;S.terrHp[i]=0;S.river[i]=0;own.delete(i);break;
+      }
+      x=nx;y=ny;
+      if(x<=0||y<=0||x>=W-1||y>=H-1)break;
+    }
+    return own.size;
+  };
+  // 1) горные истоки: клетки суши у подножия гор, разнесённые по карте
+  const feet=[];
+  for(let i=0;i<N;i++){
+    if(S.terr[i]!==T.MTN)continue;
+    const x=i%W,y=(i/W)|0;
+    for(const d of hexDirs(x)){
+      const nx=x+d[0],ny=y+d[1];
+      if(!inMap(nx,ny))continue;
+      const t=S.terr[idx(nx,ny)];
+      if(t!==T.MTN&&t!==T.WATER){feet.push({x:nx,y:ny});break}
+    }
+  }
+  const springs=[];
+  const want=Math.max(2,Math.round(W/28)); // ~4-5 на карте 128
+  let guard=0;
+  while(springs.length<want&&guard++<500&&feet.length){
+    const c=feet[(S.rng()*feet.length)|0];
+    if(S.river[idx(c.x,c.y)])continue;
+    let close=false;
+    for(const s of springs)if(cheb(c.x,c.y,s.x,s.y)<Math.round(W/7))close=true;
+    if(close)continue;
+    if(flowFrom(c.x,c.y,true)>=5)springs.push(c);
+  }
+  // 2) стоки из озёр: крупное озеро изливается к морю с самой низкой кромки
+  if(S.waterComps)for(let ci=0;ci<S.waterComps.length;ci++){
+    const comp=S.waterComps[ci];
+    if(comp.sea!==1||comp.size<8)continue;
+    let best=null,be=Infinity;
+    for(let i=0;i<N;i++){
+      if(S.waterComp[i]!==ci)continue;
+      const x=i%W,y=(i/W)|0;
+      for(const d of hexDirs(x)){
+        const nx=x+d[0],ny=y+d[1];
+        if(!inMap(nx,ny))continue;
+        const ti=idx(nx,ny);
+        if(S.terr[ti]===T.WATER||S.terr[ti]===T.MTN||S.river[ti])continue;
+        const e=elev(nx,ny);
+        if(e<be){be=e;best={x:nx,y:ny}}
+      }
+    }
+    if(best&&S.rng()<0.75)flowFrom(best.x,best.y,false);
   }
 }
 function classifyWater(){
@@ -107,10 +166,13 @@ function classifyWater(){
 function pickStart(){
   const W=S.W,H=S.H;const cand=[];
   for(let y=12;y<H-12;y++)for(let x=12;x<W-12;x++){
-    if(S.terr[idx(x,y)]!==T.GRASS)continue;
-    let open=0;
+    if(S.terr[idx(x,y)]!==T.GRASS||S.river[idx(x,y)])continue;
+    let open=0,riverNear=false;
+    for(const d of hexDirs(x))if(inMap(x+d[0],y+d[1])&&S.river[idx(x+d[0],y+d[1])])riverNear=true;
+    if(riverNear)continue; // ратуша не прижимается к реке
     for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
-      const t=S.terr[idx(x+dx,y+dy)];if(t===T.GRASS||t===T.FOREST)open++;
+      const i=idx(x+dx,y+dy);
+      const t=S.terr[i];if((t===T.GRASS||t===T.FOREST)&&!S.river[i])open++;
     }
     if(open>=26)cand.push({x,y});
   }
@@ -122,6 +184,7 @@ function genFeatures(){
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const i=idx(x,y),t=S.terr[i];
     if(cheb(x,y,S.th.x,S.th.y)<2)continue;
+    if(S.river[i])continue; // на клетках рек фичи не растут
     const r=S.rng();
     if(t===T.GRASS){
       const wn=vnoise(x/5,y/5,S.seed+777);
@@ -145,7 +208,7 @@ function genLairs(){
         const rmin=def.ring[0]-relax*3, rmax=def.ring[1]+relax*6;
         if(d<rmin||d>rmax)continue;
         const i=idx(x,y);
-        if(S.lairAt[i]>=0||S.feat[i]!==F.NONE)continue;
+        if(S.lairAt[i]>=0||S.feat[i]!==F.NONE||S.river[i])continue;
         const t=S.terr[i];
         if(relax<2&&def.terr.indexOf(t)<0)continue;
         if(relax>=2&&(t===T.WATER||t===T.MTN))continue;
@@ -171,7 +234,10 @@ function computeFear(){
 function rebuildPass(){
   for(let i=0;i<S.W*S.H;i++){
     const t=S.terr[i];
-    S.pass[i]=(t!==T.WATER&&t!==T.MTN&&S.lairAt[i]<0)?1:0;
+    let p=(t!==T.WATER&&t!==T.MTN&&S.lairAt[i]<0)?1:0;
+    // п.1: река непроходима; мост (дорога на клетке реки) открывает проход
+    if(p&&S.river&&S.river[i]&&!(S.road&&S.road[i]))p=0;
+    S.pass[i]=p;
   }
 }
 function placeBuilding(type,x,y,instant){

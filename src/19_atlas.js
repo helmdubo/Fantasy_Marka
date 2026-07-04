@@ -107,6 +107,65 @@ function paintRoadHex(ctx,x,y,mask){
     if(lit[ry*14+rx])ctx.fillRect(x+rx,y+ry,1,1);
   }
 }
+/* ---------- РЕКИ (п.1): русло по маске 6 соседей, исток-водопад, мост ---------- */
+function paintRiverHex(ctx,x,y,mask){
+  // как дорога, но шире и водой: центр + рукава к рёбрам гекса
+  const ends=[[7,0],[7,16],[14,4],[0,4],[14,12],[0,12]];
+  const lit=new Uint8Array(14*16);
+  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<14&&py2<16)lit[py2*14+px2]=1};
+  const blob=(cx2,cy2)=>{for(let oy=-2;oy<=2;oy++)for(let ox=-2;ox<=2;ox++){
+    if(Math.abs(ox)+Math.abs(oy)>3)continue;put(cx2+ox,cy2+oy)}};
+  blob(6,7);
+  for(let b=0;b<6;b++)if(mask&(1<<b)){
+    const [ex,ey]=ends[b],steps=14;
+    for(let i=0;i<=steps;i++){
+      const t2=i/steps;
+      blob(Math.round(6+(ex-7)*t2),Math.round(7+(ey-8)*t2));
+    }
+  }
+  // тело воды
+  ctx.fillStyle=PAL.W2;
+  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++)
+    if(lit[py2*14+px2])ctx.fillRect(x+px2,y+py2,1,1);
+  // тёмная кромка берега
+  ctx.fillStyle=PAL.W1;
+  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
+    if(!lit[py2*14+px2])continue;
+    let edge=false;
+    for(const [ox,oy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const qx=px2+ox,qy=py2+oy;
+      if(qx<0||qy<0||qx>=14||qy>=16||!lit[qy*14+qx])edge=true;
+    }
+    if(edge)ctx.fillRect(x+px2,y+py2,1,1);
+  }
+  // блики течения
+  ctx.fillStyle=PAL.W3;
+  for(let i=0;i<8;i++){
+    const rx=hash2(i,mask,131)*14|0,ry=hash2(mask,i,177)*16|0;
+    if(lit[ry*14+rx])ctx.fillRect(x+rx,y+ry,1,1);
+  }
+}
+function paintWaterfall(ctx,x,y){
+  // исток: белопенный сброс с горы, рисуется поверх речной клетки
+  for(let py=1;py<9;py++)for(let px=4;px<10;px++){
+    const h=hash2(px,py,551);
+    ctx.fillStyle=h<0.3?PAL.SN:(h<0.65?PAL.W3:PAL.W2);
+    ctx.fillRect(x+px,y+py,1,1);
+  }
+  for(let px=2;px<12;px++){ // пена у подножия
+    if(hash2(px,9,552)<0.7){ctx.fillStyle=PAL.SN;ctx.fillRect(x+px,y+9,1,1)}
+    if(hash2(px,10,553)<0.45){ctx.fillStyle=PAL.W3;ctx.fillRect(x+px,y+10,1,1)}
+  }
+}
+function paintBridge(ctx,x,y){
+  // деревянный настил через русло; дорога рисуется поверх
+  for(let py=5;py<11;py++)for(let px=0;px<14;px++){
+    ctx.fillStyle=((px+ (py&1)*2)%4===0)?PAL.D:PAL.Wd;
+    ctx.fillRect(x+px,y+py,1,1);
+  }
+  ctx.fillStyle=PAL.o;
+  for(let px=0;px<14;px++){ctx.fillRect(x+px,y+4,1,1);ctx.fillRect(x+px,y+11,1,1)}
+}
 function paintFull(ctx,x0,y0,t,variant){
   for(let y=0;y<16;y++)for(let x=0;x<16;x++){
     ctx.fillStyle=terrPix(t,x+variant*97,y+variant*53,S?S.seed:7);
@@ -319,7 +378,7 @@ function paintIcon(name){
 }
 function buildAtlas(){
   const t0=performance.now();
-  ATLAS={W:256,H:512,cur:{x:0,y:0,rowH:0}};
+  ATLAS={W:256,H:1024,cur:{x:0,y:0,rowH:0}};
   const cv=document.createElement('canvas');cv.width=ATLAS.W;cv.height=ATLAS.H;
   const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
   ATLAS.cv=cv;ATLAS.ctx=ctx;SPR={};
@@ -414,6 +473,9 @@ function buildAtlas(){
   p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
   p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
   for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
+  for(let m=0;m<64;m++){p=place(14,16);paintRiverHex(ctx,p.x,p.y,m);reg('river_'+m,p.x,p.y,14,16)}
+  p=place(14,16);paintWaterfall(ctx,p.x,p.y);reg('waterfall',p.x,p.y,14,16);
+  p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16);
   for(const k of ['b_hut','b_house2','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }

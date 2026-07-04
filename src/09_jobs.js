@@ -19,11 +19,16 @@ function rebuildJobs(){
     if(!c)continue;
     const i=idx(c.x,c.y);
     const blocked=(S.terr[i]===T.FOREST&&S.terrHp[i]>0)||S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP;
-    S.jobPool.push({kind:blocked?'clear':'pave',x:c.x,y:c.y,adj:true,plan:pi});
+    S.jobPool.push({kind:blocked?'clear':'pave',x:c.x,y:c.y,adj:true,plan:pi,bridge:!!pl.bridge});
   }
   for(let bi=0;bi<S.buildings.length;bi++){
     const b=S.buildings[bi];
     if(!b.built){
+      // п.1: фундамент за рекой ждёт моста — сначала мостовой план, потом снабжение
+      if(b.waitBridge){
+        if(S.roadPlans.some(pl=>pl.id===b.waitBridge))continue;
+        b.waitBridge=null;
+      }
       const miss=missingRes(b);
       if(miss)S.jobPool.push({kind:'supply',x:b.x,y:b.y,adj:true,b:bi,res:miss});
       else S.jobPool.push({kind:'build',x:b.x,y:b.y,adj:true,b:bi});
@@ -54,8 +59,9 @@ function pickJob(u){
   // fallback на старый jobPool, если рынок ещё не собран
   let best=null,bu=-1;
   for(const j of S.jobPool){
-    const base=UTIL[j.kind];
+    let base=UTIL[j.kind];
     if(!base)continue;
+    if(j.bridge)base+=1.4; // мост важнее прочей дорожной рутины (п.1)
     const key=claimKey(j);
     if(S.claims.has(key))continue;
     const bad=S.badCells.get(key);
@@ -213,7 +219,12 @@ function connected(b){return b.type==='townhall'||!!S.roadConn[idx(b.x,b.y)]}
 function roadLay(pi){
   const pl=S.roadPlans[pi];if(!pl)return;
   const c=pl.cells[pl.i];
-  S.road[idx(c.x,c.y)]=1;S.roadDirty=true;
+  const ci=idx(c.x,c.y);
+  S.road[ci]=1;S.roadDirty=true;
+  if(S.river&&S.river[ci]){ // дорога через реку = мост: клетка стала проходимой
+    rebuildPass();
+    log('🌉 Мост наведён через реку ('+c.x+','+c.y+').');
+  }
   recomputeRoadConn();
   pl.i++;
   if(pl.i>=pl.cells.length){S.roadPlans.splice(pi,1);

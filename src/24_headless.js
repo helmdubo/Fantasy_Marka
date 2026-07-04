@@ -52,6 +52,8 @@ function runHeadless(){
   console.log('hexgrid:',hexErrs.length?('ISSUES '+JSON.stringify(hexErrs.slice(0,5))):'ok');
   const cnt=[0,0,0,0,0];for(const t of S.terr)cnt[t]++;
   console.log('terrain:',cnt.map((n,i)=>TNAME[i]+' '+(100*n/S.terr.length).toFixed(0)+'%').join(' | '));
+  {let rc=0,rs=0,br=0;for(let i2=0;i2<S.river.length;i2++){if(S.river[i2])rc++;if(S.river[i2]===2)rs++;if(S.river[i2]&&S.road[i2])br++}
+   console.log('rivers: cells='+rc+' sources='+rs+' bridges='+br)}
   console.log('start:',S.th.x+','+S.th.y,'| lairs:',S.lairs.map(l=>l.id+'@'+l.x+','+l.y+' d='+cheb(l.x,l.y,S.th.x,S.th.y)).join('  '));
   console.log('settlers:',S.settlers.map(u=>u.race).join(', '));
   S.policy.wood='export';S.policy.food='export';

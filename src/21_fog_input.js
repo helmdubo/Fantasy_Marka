@@ -92,7 +92,9 @@ function updateTip(mx,my,clx,cly){
   }else{
     let tn0=TNAME[S.terr[i]];
     if(S.terr[i]===T.WATER)tn0=(S.waterKind[i]===2)?'Море':'Озеро';
+    if(S.river&&S.river[i])tn0=S.road[i]?'Мост через реку':(S.river[i]===2?'Исток реки (водопад)':'Река');
     html='<div class="t1">'+tn0+'</div>';
+    if(S.river&&S.river[i]&&!S.road[i])html+='<div class="t2">не перейти — нужен мост (дорога через реку)</div>';
     if(S.terr[i]===T.FOREST&&S.terrHp[i]>0)html+='<div class="t2">древесины на '+S.terrHp[i]+' ходки</div>';
     if(S.feat[i]){html+='<div>'+FNAME[S.feat[i]]+'</div>';
       if(S.feat[i]===F.VEIN)html+='<div class="t2">добудут только гномы</div>';}

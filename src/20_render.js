@@ -59,7 +59,30 @@ function buildTerrain(){
     }
     m=meshFromBatch(b,order++);R.scene.add(m);R.terrMeshes.push(m);
   }
+  buildRivers();
   S.terrDirty=false;
+}
+function buildRivers(){
+  // п.1: русла рек поверх террейна (order 6), дороги и мосты выше (order 7)
+  if(R.riverMesh){R.scene.remove(R.riverMesh);R.riverMesh.geometry.dispose();R.riverMesh=null}
+  if(!S.river)return;
+  const b=makeBatch();
+  for(let y=0;y<S.H;y++)for(let x=0;x<S.W;x++){
+    const i=idx(x,y);
+    if(!S.river[i])continue;
+    let m=0;
+    const dirs=hexDirs(x);
+    for(let k=0;k<6;k++){
+      const nx=x+dirs[k][0],ny=y+dirs[k][1];
+      if(!inMap(nx,ny))continue;
+      const ni=idx(nx,ny);
+      if(S.river[ni]||S.terr[ni]===T.WATER||(S.river[i]===2&&S.terr[ni]===T.MTN))m|=(1<<k);
+    }
+    const cx=WXC(x),cy=WYCC(x,y);
+    bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['river_'+m]);
+    if(S.river[i]===2)bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['waterfall']);
+  }
+  R.riverMesh=meshFromBatch(b,6);R.scene.add(R.riverMesh);
 }
 function buildRoads(){
   if(R.roadMesh){R.scene.remove(R.roadMesh);R.roadMesh.geometry.dispose();R.roadMesh=null}
@@ -98,6 +121,7 @@ function buildRoads(){
       }
     }
     const cx=WXC(x),cy=WYCC(x,y);
+    if(S.river&&S.river[idx(x,y)])bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['bridge']); // мост под дорогой
     bQuad(b,cx-CW*0.5,cy-0.5,cx+CW*0.5,cy+0.5,SPR['road_'+m]);
   }
   for(const pl of S.roadPlans)
@@ -106,7 +130,7 @@ function buildRoads(){
       const cx=WXC(c.x),cy=WYCC(c.x,c.y);
       bQuad(b,cx-0.5,cy-0.5,cx+0.5,cy+0.5,SPR['stake']);
     }
-  R.roadMesh=meshFromBatch(b,6);R.scene.add(R.roadMesh);
+  R.roadMesh=meshFromBatch(b,7);R.scene.add(R.roadMesh);
   S.roadDirty=false;
 }
 // Drop I: debug-оверлей сеток — как «Main grid & dual grid» у Оскара.

@@ -45,6 +45,7 @@ function marketLaborPriority(j){
     }
   }
   if(j.kind==='pave'||j.kind==='clear')p+=1.5;
+  if(j.bridge)p+=6; // мост через реку — приоритет над фундаментами (п.1)
   return p;
 }
 function marketPublishLaborJobs(){

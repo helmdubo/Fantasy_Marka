@@ -24,7 +24,7 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 глобальное состояние S; newGame, генерация мира, spawn поселенцев
 
-`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `genTerrain()` · `genRiver()` · `classifyWater()` · `pickStart()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `placeBuilding()` · `spawnSettlers()`
+`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `genTerrain()` · `genRivers()` · `classifyWater()` · `pickStart()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `placeBuilding()` · `spawnSettlers()`
 
 ## src/04_econ.js
 
@@ -78,7 +78,7 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 автостроитель: siteOk, settleThink, research, стартовые площадки, апгрейды
 
-`countB()` · `countLive()` · `countActive()` · `houseCapOf()` · `housingCap()` · `tryUpgradeHut()` · `NEAR_ROAD_TYPES` · `influenceAnchors()` · `inInfluence()` · `siteOk()` · `engineTarget()` · `researchNext()` · `typeUnlocked()` · `researchCycle()` · `tryLibraryTier2()` · `stockWorld()` · `pendingConstructionNeed()` · `stockWorldAvailable()` · `activeConstructionCount()` · `constructionCap()` · `canPayWorld()` · `resScore()` · `PROD_TYPES` · `tryPlace()` · `nearestRoadTarget()` · `buildRoad()` · `finishBuilding()` · `forestInInfluence()` · `anySite()` · `bestSiteScore()` · `starterCells()` · `clearStarterCell()` · `plantStarterForest()` · `ensureStarterProductionSites()` · `ensureStarterFisherSite()` · `ensureEmergencyFoodSite()` · `constructionOpen()` · `tryPlaceIfOpen()` · `ensureCoreProductionSites()` · `settleThink()` · `tryUpgrade()`
+`countB()` · `countLive()` · `countActive()` · `houseCapOf()` · `housingCap()` · `tryUpgradeHut()` · `NEAR_ROAD_TYPES` · `influenceAnchors()` · `inInfluence()` · `siteOk()` · `engineTarget()` · `researchNext()` · `typeUnlocked()` · `researchCycle()` · `tryLibraryTier2()` · `stockWorld()` · `pendingConstructionNeed()` · `stockWorldAvailable()` · `activeConstructionCount()` · `constructionCap()` · `canPayWorld()` · `resScore()` · `PROD_TYPES` · `withBridgedPass()` · `tryPlace()` · `nearestRoadTarget()` · `buildRoad()` · `finishBuilding()` · `forestInInfluence()` · `anySite()` · `bestSiteScore()` · `starterCells()` · `clearStarterCell()` · `plantStarterForest()` · `ensureStarterProductionSites()` · `ensureStarterFisherSite()` · `ensureEmergencyFoodSite()` · `constructionOpen()` · `tryPlaceIfOpen()` · `ensureCoreProductionSites()` · `settleThink()` · `tryUpgrade()`
 
 ## src/13_heroes_pop.js
 
@@ -120,13 +120,13 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 canvas-атлас: отрисовка тайлов/зданий/иконок, buildAtlas (browser only)
 
-`ATLAS` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triBary()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintFull()` · `px()` · `rect()` · `paintBerry()` · `paintDeadfall()` · `paintRubble()` · `paintVein()` · `paintFish()` · `paintRuins()` · `paintSite()` · `paintFarm()` · `paintMine()` · `paintCamp()` · `paintCliff()` · `paintGraves()` · `paintFisher()` · `paintLumber()` · `paintPort()` · `paintGuild()` · `paintAdvGuild()` · `paintShip()` · `paintCrafters()` · `paintStake()` · `paintPennant()` · `paintHammer()` · `paintSmoke()` · `paintWheat()` · `paintStump()` · `paintWatchtower()` · `paintLibrary()` · `paintKnowledge()` · `paintIcon()` · `buildAtlas()`
+`ATLAS` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triBary()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverHex()` · `paintWaterfall()` · `paintBridge()` · `paintFull()` · `px()` · `rect()` · `paintBerry()` · `paintDeadfall()` · `paintRubble()` · `paintVein()` · `paintFish()` · `paintRuins()` · `paintSite()` · `paintFarm()` · `paintMine()` · `paintCamp()` · `paintCliff()` · `paintGraves()` · `paintFisher()` · `paintLumber()` · `paintPort()` · `paintGuild()` · `paintAdvGuild()` · `paintShip()` · `paintCrafters()` · `paintStake()` · `paintPennant()` · `paintHammer()` · `paintSmoke()` · `paintWheat()` · `paintStump()` · `paintWatchtower()` · `paintLibrary()` · `paintKnowledge()` · `paintIcon()` · `buildAtlas()`
 
 ## src/20_render.js
 
 three.js: батчи, меши террейна/дорог/зданий/юнитов, glow, fx (browser only)
 
-`R` · `makeBatch()` · `bQuad()` · `meshFromBatch()` · `cellTerr()` · `colTris()` · `buildTerrain()` · `buildRoads()` · `buildGridOverlay()` · `toggleGrid()` · `buildStatics()` · `buildBuildings()` · `makeGlowMesh()` · `buildingOccupancy()` · `fillGlow()` · `makeFxMesh()` · `fillFx()` · `makeUnitMesh()` · `fillUnits()`
+`R` · `makeBatch()` · `bQuad()` · `meshFromBatch()` · `cellTerr()` · `colTris()` · `buildTerrain()` · `buildRivers()` · `buildRoads()` · `buildGridOverlay()` · `toggleGrid()` · `buildStatics()` · `buildBuildings()` · `makeGlowMesh()` · `buildingOccupancy()` · `fillGlow()` · `makeFxMesh()` · `fillFx()` · `makeUnitMesh()` · `fillUnits()`
 
 ## src/21_fog_input.js
 
