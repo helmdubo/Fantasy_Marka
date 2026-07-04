@@ -247,17 +247,6 @@ function vnoise(x,y,s){const ix=Math.floor(x),iy=Math.floor(y),fx=x-ix,fy=y-iy;
 function fbm(x,y,s,oct){let v=0,a=0.5,f=1,sum=0;for(let i=0;i<oct;i++){v+=a*vnoise(x*f,y*f,s+i*57);sum+=a;a*=0.5;f*=2}return v/sum}
 function cheb(ax,ay,bx,by){return hexDist2(ax|0,ay|0,bx|0,by|0)} // hex-метрика; имя сохранено ради call sites
 function heightOf(t){return t===T.MTN?2:(t===T.ROCK?1:0)}
-function losClear(x0,y0,x1,y1,viewH){
-  const line=hexLine(x0,y0,x1,y1);
-  for(let k=1;k<line.length-1;k++){ // промежуточные хексы; конечный виден (его грань)
-    const c=line[k];
-    if(!inMap(c.x,c.y))continue;
-    const t=S.terr[idx(c.x,c.y)];
-    if(heightOf(t)>viewH)return false; // пик выше наблюдателя
-    if(t===T.FOREST)return false; // сквозь лес не видно
-  }
-  return true;
-}
 function terrainSpeed(u,cx,cy){
   const t=S.terr[idx(cx,cy)];
   if(t===T.ROCK)return (u.race==='dwarf'||u.race==='troll')?1:0.7;

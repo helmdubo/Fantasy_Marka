@@ -12,7 +12,7 @@ CFG: все игровые константы; таблицы T/F/RACES/LAIR_DEF
 
 RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по террейну
 
-`mulberry32()` · `hashStr()` · `hash2()` · `lerp()` · `clamp()` · `vnoise()` · `fbm()` · `cheb()` · `heightOf()` · `losClear()` · `terrainSpeed()`
+`mulberry32()` · `hashStr()` · `hash2()` · `lerp()` · `clamp()` · `vnoise()` · `fbm()` · `cheb()` · `heightOf()` · `terrainSpeed()`
 
 ## src/02_hex.js
 
