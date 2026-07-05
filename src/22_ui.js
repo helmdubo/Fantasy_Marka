@@ -25,6 +25,7 @@ function buildDebug(){
     '<button id="dbg_stone">+10 камня</button>'+
     '<button id="dbg_wfc">Генерация (реплей)</button>'+
     '<button id="dbg_tpl">Шаблон тайлсета</button>'+
+    '<button id="dbg_slice">Нарезать лист</button>'+
     '<button id="dbg_ts">Тайлсет-превью</button>'+
     '</div>';
   el('dbg_reveal').onclick=()=>{S.revealAll=!S.revealAll;S.fogDirty=true};
@@ -36,6 +37,7 @@ function buildDebug(){
   el('dbg_stone').onclick=()=>{S.stock.stone+=10;computeLevels()};
   el('dbg_wfc').onclick=()=>genViewer();
   el('dbg_tpl').onclick=()=>exportTilesetTemplate();
+  el('dbg_slice').onclick=()=>importSheetDialog();
   el('dbg_ts').onclick=()=>tilesetPreview();
 }
 /* ---------- просмотрщик генерации (главный экран режима «генератор») ----------

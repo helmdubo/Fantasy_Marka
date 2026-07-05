@@ -14,7 +14,9 @@ function loadTileset(cb){
     const cv=document.createElement('canvas');cv.width=im.width;cv.height=im.height;
     const ctx=cv.getContext('2d');ctx.drawImage(im,0,0);
     TS=cv;TS_IDX={};
-    for(const sl of TILESET_MAP.slots){
+    // v1: слоты в корне; v2 (контекстный шаблон): раскладка готового листа в out
+    const slots=TILESET_MAP.slots||(TILESET_MAP.out&&TILESET_MAP.out.slots)||[];
+    for(const sl of slots){
       // слот «занят», если в нём есть непрозрачные пиксели
       const d=ctx.getImageData(sl.x,sl.y,sl.w,sl.h).data;
       let used=false;
@@ -573,63 +575,226 @@ function buildAtlas(){
 }
 
 
-/* ---------- экспорт шаблона PNG-тайлсета (docs/tileset-pipeline.md) ----------
-   Три файла: tileset_template.png (плейсхолдеры = текущие спрайты ×TS_SCALE,
-   на прозрачном фоне — вход для нейрогенерации/художника),
-   tileset_markup.png (те же слоты: рамки, подписи, ориентиры — слой-оверлей),
-   tileset_map.json (разметка слотов — по ней работает импорт в buildAtlas).
-   Скоуп: террейн + реки (остальное пока процедурное). */
+/* ---------- КОНТЕКСТНЫЙ шаблон PNG-тайлсета (docs/tileset-pipeline.md) ----------
+   Принцип Tilesetter: не изолированные слоты, а НЕПРЕРЫВНОЕ ПОЛОТНО.
+   Для каждой пары «верхний материал на канонической подложке» рисуется
+   демо-остров из смежных треугольников dual-сетки (та же геометрия, что
+   в игре): плоская масочная разметка цветами материалов, все варианты
+   стыков присутствуют в контексте соседей, стыки сходятся по построению.
+   Художник/нейронка перерисовывает полотно ЦЕЛИКОМ (это одно изображение),
+   затем «Нарезать лист» вырезает канонические треугольники по маскам и
+   собирает готовый assets/tileset.png (раскладку слотов держит tilesetSlots).
+   Формат tileset.png/импорт НЕ менялись — контекст только на входе. */
 const TS_SCALE=4; // целевое разрешение: треугольник 14x16 -> 56x64
+const TS_TW=TRIW*TS_SCALE,TS_TH=TRIH*TS_SCALE;
+// пары «верх на подложке» в порядке пирога (вода -> горы)
+const TS_PAIRS=[
+  {u:T.SAND,l:T.WATER},{u:T.GRASS,l:T.WATER},{u:T.SWAMP,l:T.GRASS},
+  {u:T.SCRUB,l:T.GRASS},{u:T.FOREST,l:T.SCRUB},{u:T.ROCK,l:T.GRASS},{u:T.MTN,l:T.ROCK}
+];
+// плоские цвета разметки материалов (никакого заранее нарисованного арта)
+const TS_FLAT={};
+function tsFlatInit(){
+  TS_FLAT[T.WATER]=PAL.W2;TS_FLAT[T.SAND]=PAL.SA2;TS_FLAT[T.SWAMP]=PAL.SW2;
+  TS_FLAT[T.GRASS]=PAL.G2;TS_FLAT[T.SCRUB]=PAL.SC2;TS_FLAT[T.FOREST]=PAL.F2;
+  TS_FLAT[T.ROCK]=PAL.R2;TS_FLAT[T.MTN]=PAL.M2;
+}
+/* раскладка ВЫХОДНОГО tileset.png (её ест импортёр buildAtlas) */
 function tilesetSlots(){
-  // раскладка листа: ряд на террейн (l: full0,full1,маски1..6, r: то же), ряд рек
-  const SHEET_W=1056,MX=8,MY=22; // MY: место под подпись в markup
+  const SHEET_W=1056,MX=8,MY=22;
   const slots=[];let x=MX,y=MY,rowH=0;
-  const put=(name,w,h,src)=>{
+  const put=(name,w,h)=>{
     if(x+w+MX>SHEET_W){x=MX;y+=rowH+MY;rowH=0}
-    slots.push({name,x,y,w,h,src});
+    slots.push({name,x,y,w,h});
     x+=w+MX;if(h>rowH)rowH=h;
   };
   const nl=()=>{if(x>MX){x=MX;y+=rowH+MY;rowH=0}};
-  const TW=TRIW*TS_SCALE,TH=TRIH*TS_SCALE;
   for(const t of [T.WATER,T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN]){
     for(const orr of ['l','r']){
-      for(let v=0;v<2;v++)put('tri'+t+'_'+orr+'_full'+v,TW,TH,'tri'+t+'_'+orr+'_full'+v);
-      if(t!==T.WATER)for(let b=1;b<7;b++)put('tri'+t+'_'+orr+'_'+b,TW,TH,'tri'+t+'_'+orr+'_'+b);
+      for(let v=0;v<2;v++)put('tri'+t+'_'+orr+'_full'+v,TS_TW,TS_TH);
+      if(t!==T.WATER)for(let b=1;b<7;b++)put('tri'+t+'_'+orr+'_'+b,TS_TW,TS_TH);
     }
     nl();
   }
   for(const orr of ['l','r'])
-    for(let m=1;m<8;m++)put('rt_'+orr+'_'+m,TW,TH,'rt_'+T.GRASS+'_'+orr+'_'+m);
-  put('r_mouth',8*TS_SCALE,8*TS_SCALE,'r_mouth');
-  put('r_falls',10*TS_SCALE,12*TS_SCALE,'r_falls');
-  put('bridge',TW,TH,'bridge');
+    for(let m=1;m<8;m++)put('rt_'+orr+'_'+m,TS_TW,TS_TH);
+  put('r_mouth',8*TS_SCALE,8*TS_SCALE);
+  put('r_falls',10*TS_SCALE,12*TS_SCALE);
+  put('bridge',TS_TW,TS_TH);
   nl();
   return {sheetW:SHEET_W,sheetH:y,slots};
 }
-function exportTilesetTemplate(returnOnly){
-  const L=tilesetSlots();
-  const mk=()=>{const c=document.createElement('canvas');c.width=L.sheetW;c.height=L.sheetH;
-    const g=c.getContext('2d');g.imageSmoothingEnabled=false;return [c,g]};
-  const [tcv,tg]=mk(),[mcv,mg]=mk();
-  mg.font='9px monospace';
-  for(const sl of L.slots){
-    const sp=SPR[sl.src];
-    if(sp)tg.drawImage(ATLAS.cv,sp.x,sp.y,sp.w,sp.h,sl.x,sl.y,sl.w,sl.h);
-    mg.strokeStyle='#e64ae6';mg.lineWidth=1;
-    mg.strokeRect(sl.x-0.5,sl.y-0.5,sl.w+1,sl.h+1);
-    mg.fillStyle='#e64ae6';
-    mg.fillText(sl.name,sl.x,sl.y-4);
+/* демо-паттерн пары: рваный остров U-гексов на поле GWxGH, в котором
+   присутствуют ВСЕ варианты стыков (обе ориентации, маски 1..6), полные
+   треугольники верха (>=2 на ориентацию) и подложки. Детерминирован. */
+function tsBlobPattern(){
+  const GW=11,GH=9;
+  const rng=mulberry32(20260705);
+  for(let att=0;att<20000;att++){
+    const set=new Uint8Array(GW*GH);
+    const cx2=GW/2-0.5,cy2=GH/2-0.5;
+    for(let y=1;y<GH-1;y++)for(let x=1;x<GW-1;x++){
+      const d=Math.hypot((x-cx2)/(GW*0.42),(y-cy2)/(GH*0.42));
+      if(d+rng()*0.9-0.45<0.72)set[y*GW+x]=1;
+    }
+    // покрытие: соберём варианты по треугольникам
+    const seen=new Set();let fullU={l:0,r:0},fullL={l:0,r:0};
+    for(let x=0;x<GW-1;x++)for(let y=0;y<GH-1;y++)
+      for(const tr of colTris(x,y)){
+        if(tr.corners.some(c=>c[0]<0||c[1]<0||c[0]>=GW||c[1]>=GH))continue;
+        const b=tr.corners.reduce((m,c,k)=>m|(set[c[1]*GW+c[0]]<<k),0);
+        if(b===7)fullU[tr.or]++;
+        else if(b===0)fullL[tr.or]++;
+        else seen.add(tr.or+b);
+      }
+    let ok=fullU.l>=2&&fullU.r>=2&&fullL.l>=2&&fullL.r>=2;
+    if(ok)for(const orr of ['l','r'])for(let b=1;b<7;b++)if(!seen.has(orr+b))ok=false;
+    if(ok)return {GW,GH,set};
   }
-  const map={version:1,scale:TS_SCALE,sheetW:L.sheetW,sheetH:L.sheetH,
-    note:'слоты tileset.png; имена спрайтов игры; см. docs/tileset-pipeline.md',
-    slots:L.slots.map(s2=>({name:s2.name,x:s2.x,y:s2.y,w:s2.w,h:s2.h}))};
-  const json=JSON.stringify(map,null,1);
+  throw new Error('tsBlobPattern: покрытие не найдено');
+}
+// позиция треугольника (x,y,baseCol) демо-патча в пикселях листа
+function tsTriPx(ox,oy,x,y,baseCol){
+  return [ox+x*TS_TW, oy+y*TS_TH+((baseCol&1)?TS_TH/2:0)];
+}
+// углы треугольника (центры гексов) в пикселях листа — для сетки разметки
+function tsCornerPx(ox,oy,cx2,cy2){
+  return [ox+cx2*TS_TW, oy+cy2*TS_TH+((cx2&1)?TS_TH/2:0)];
+}
+// маска покрытия верхним материалом в координатах слота 56x64:
+// та же барицентрическая интерполяция углов + тот же шум кромки, что у
+// paintTriTransition (масштаб x4) — нарезка сходится с процедурными тайлами
+function tsMaskAt(orr,bits,t,px2,py2,noise){
+  if(bits===7)return true;
+  if(bits===0)return false;
+  const w=triBary(orr,px2/TS_SCALE+0.125,py2/TS_SCALE+0.125);
+  if(w[0]<-0.045||w[1]<-0.045||w[2]<-0.045)return false;
+  const c=[bits&1,(bits>>1)&1,(bits>>2)&1];
+  let v=w[0]*c[0]+w[1]*c[1]+w[2]*c[2];
+  if(noise)v+=hash2((px2>>2)+t*31,(py2>>2)+bits*7+(orr==='r'?191:0),911)*0.30-0.15;
+  return v>0.5;
+}
+function tsInsideTri(orr,px2,py2){
+  const w=triBary(orr,px2/TS_SCALE+0.125,py2/TS_SCALE+0.125);
+  return w[0]>=-0.045&&w[1]>=-0.045&&w[2]>=-0.045;
+}
+function exportTilesetTemplate(returnOnly){
+  tsFlatInit();
+  const blob=tsBlobPattern();
+  const {GW,GH,set}=blob;
+  const patchW=(GW-1)*TS_TW,patchH=(GH-1)*TS_TH+TS_TH/2;
+  const MX=24,MY=34;
+  const sheetW=MX*2+patchW;
+  const sheetH=(MY+patchH)*TS_PAIRS.length+MY;
+  const mk=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;
+    const g=c.getContext('2d');g.imageSmoothingEnabled=false;return [c,g]};
+  const [tcv,tg]=mk(sheetW,sheetH),[mcv,mg]=mk(sheetW,sheetH);
+  mg.font='11px monospace';
+  const pairsMeta=[];
+  TS_PAIRS.forEach((pr,pi)=>{
+    const ox=MX,oy=MY+(MY+patchH)*pi;
+    mg.fillStyle='#e64ae6';
+    mg.fillText(TNAME[pr.u]+' ('+pr.u+') на '+TNAME[pr.l]+' ('+pr.l+') — полотно непрерывно, рисовать целиком',ox,oy-8);
+    const canon={},fullsU=[],fullsL=[];
+    for(let x=0;x<GW-1;x++)for(let y=0;y<GH-1;y++)
+      for(const tr of colTris(x,y)){
+        if(tr.corners.some(c=>c[0]<0||c[1]<0||c[0]>=GW||c[1]>=GH))continue;
+        const bits=tr.corners.reduce((m,c,k)=>m|(set[c[1]*GW+c[0]]<<k),0);
+        const [px2,py2]=tsTriPx(ox,oy,x,y,tr.baseCol);
+        // плоская разметка: подложка всюду, верх по крисп-маске углов
+        for(let yy=0;yy<TS_TH;yy++)for(let xx=0;xx<TS_TW;xx++){
+          if(!tsInsideTri(tr.or,xx,yy))continue;
+          tg.fillStyle=tsMaskAt(tr.or,bits,pr.u,xx,yy,false)?TS_FLAT[pr.u]:TS_FLAT[pr.l];
+          tg.fillRect(px2+xx,py2+yy,1,1);
+        }
+        // канонические экземпляры для нарезки (по 2 полных на ориентацию)
+        const rec={x,y,or:tr.or,bits,px:px2-ox,py:py2-oy};
+        if(bits===7){if(fullsU.filter(f=>f.or===tr.or).length<2)fullsU.push(rec)}
+        else if(bits===0){if(fullsL.filter(f=>f.or===tr.or).length<2)fullsL.push(rec)}
+        else if(!canon[tr.or+bits])canon[tr.or+bits]=rec;
+      }
+    pairsMeta.push({u:pr.u,l:pr.l,ox,oy,canon:Object.values(canon),fullsU,fullsL});
+  });
+  // разметка: сетка треугольников + метки канонических слотов
+  mg.strokeStyle='rgba(230,74,230,0.55)';mg.lineWidth=1;
+  for(const pm of pairsMeta){
+    for(let x=0;x<GW-1;x++)for(let y=0;y<GH-1;y++)
+      for(const tr of colTris(x,y)){
+        if(tr.corners.some(c=>c[0]<0||c[1]<0||c[0]>=GW||c[1]>=GH))continue;
+        const P=tr.corners.map(c=>tsCornerPx(pm.ox,pm.oy,c[0],c[1]));
+        mg.beginPath();mg.moveTo(P[0][0],P[0][1]);mg.lineTo(P[1][0],P[1][1]);mg.lineTo(P[2][0],P[2][1]);mg.closePath();mg.stroke();
+      }
+    mg.fillStyle='#ffffff';
+    const lbl=(r,txt)=>{mg.fillText(txt,pm.ox+r.px+TS_TW/2-8,pm.oy+r.py+TS_TH/2+4)};
+    for(const r of pm.canon)lbl(r,r.or+r.bits);
+    pm.fullsU.forEach((r,i)=>lbl(r,'F'+r.or+i%2));
+    pm.fullsL.forEach((r,i)=>lbl(r,'f'+r.or+i%2));
+  }
+  const map={version:2,mode:'context',scale:TS_SCALE,sheetW,sheetH,
+    note:'контекстный шаблон: полотна пар «верх на подложке»; нарезка — кнопкой в игре; out — раскладка готового tileset.png',
+    grid:{GW,GH,cells:Array.from(set)},
+    pairs:pairsMeta.map(pm=>({u:pm.u,l:pm.l,ox:pm.ox,oy:pm.oy,
+      canon:pm.canon.map(r=>({or:r.or,bits:r.bits,px:r.px,py:r.py})),
+      fullsU:pm.fullsU.map(r=>({or:r.or,px:r.px,py:r.py})),
+      fullsL:pm.fullsL.map(r=>({or:r.or,px:r.px,py:r.py}))})),
+    out:tilesetSlots()};
+  const json=JSON.stringify(map);
   if(returnOnly)return {template:tcv.toDataURL('image/png'),markup:mcv.toDataURL('image/png'),json};
   const dl=(href,fn)=>{const a=document.createElement('a');a.href=href;a.download=fn;a.click()};
   dl(tcv.toDataURL('image/png'),'tileset_template.png');
   dl(mcv.toDataURL('image/png'),'tileset_markup.png');
   dl('data:application/json;charset=utf-8,'+encodeURIComponent(json),'tileset_map.json');
-  log('🎨 Шаблон тайлсета скачан: template + markup + map (слоты '+L.slots.length+').');
+  log('🎨 Контекстный шаблон скачан: '+TS_PAIRS.length+' полотен пар, разметка, карта нарезки.');
+}
+/* нарезка перерисованного полотна -> готовый tileset.png (раскладка out).
+   Альфа тайла = маска углов с тем же шумом кромки, что в игре. */
+function sliceTilesetSheet(img,M){
+  const src=document.createElement('canvas');src.width=M.sheetW;src.height=M.sheetH;
+  const sg=src.getContext('2d');sg.imageSmoothingEnabled=false;sg.drawImage(img,0,0);
+  const out=document.createElement('canvas');out.width=M.out.sheetW;out.height=M.out.sheetH;
+  const og=out.getContext('2d');
+  const slotByName={};for(const sl of M.out.slots)slotByName[sl.name]=sl;
+  const cut=(sx,sy,orr,bits,t,slotName,noise)=>{
+    const sl=slotByName[slotName];if(!sl)return;
+    const id=sg.getImageData(sx,sy,TS_TW,TS_TH);
+    const d=id.data;
+    for(let yy=0;yy<TS_TH;yy++)for(let xx=0;xx<TS_TW;xx++){
+      const keep=bits===7?tsInsideTri(orr,xx,yy):tsMaskAt(orr,bits,t,xx,yy,noise);
+      if(!keep)d[(yy*TS_TW+xx)*4+3]=0;
+    }
+    og.putImageData(id,sl.x,sl.y);
+  };
+  for(const pm of M.pairs){
+    for(const r of pm.canon)
+      cut(pm.ox+r.px,pm.oy+r.py,r.or,r.bits,pm.u,'tri'+pm.u+'_'+r.or+'_'+r.bits,true);
+    const seenU={l:0,r:0},seenL={l:0,r:0};
+    for(const r of pm.fullsU)
+      cut(pm.ox+r.px,pm.oy+r.py,r.or,7,pm.u,'tri'+pm.u+'_'+r.or+'_full'+(seenU[r.or]++%2),false);
+    if(pm.l===T.WATER)for(const r of pm.fullsL) // подложка первой пары даёт базовую воду
+      cut(pm.ox+r.px,pm.oy+r.py,r.or,7,pm.l,'tri'+pm.l+'_'+r.or+'_full'+(seenL[r.or]++%2),false);
+  }
+  return out;
+}
+function importSheetDialog(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/png';
+  inp.onchange=()=>{
+    const f=inp.files&&inp.files[0];if(!f)return;
+    const url=URL.createObjectURL(f);
+    const im=new Image();
+    im.onload=()=>{
+      URL.revokeObjectURL(url);
+      const M=JSON.parse(exportTilesetTemplate(true).json); // геометрия детерминирована
+      if(im.width!==M.sheetW||im.height!==M.sheetH){
+        log('🚫 Лист '+im.width+'x'+im.height+' не совпадает с шаблоном '+M.sheetW+'x'+M.sheetH);
+        return;
+      }
+      const out=sliceTilesetSheet(im,M);
+      const a=document.createElement('a');a.href=out.toDataURL('image/png');a.download='tileset.png';a.click();
+      log('✂ Лист нарезан -> tileset.png (положи в assets/ и пересобери).');
+    };
+    im.src=url;
+  };
+  inp.click();
 }
 /* превью атласа: что реально нарезано (PNG-слоты видны крупными) */
 function tilesetPreview(){
