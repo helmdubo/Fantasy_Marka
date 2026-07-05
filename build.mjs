@@ -73,11 +73,15 @@ function build() {
   if (!shell.includes(marker)) throw new Error('shell.html: маркер /*__GAME_JS__*/ не найден');
   const html = shell.replace(marker, js);
 
-  fs.writeFileSync(path.join(ROOT, 'index.html'), html);
+  // Владелец мог временно заменить index.html ручным лоадером (CDN-скрипты
+  // для Android) — такой файл НЕ перезаписываем, сборка уходит в dist/.
+  const idx = path.join(ROOT, 'index.html');
+  const manualLoader = fs.existsSync(idx) && fs.readFileSync(idx, 'utf8').includes('ВРЕМЕННЫЙ ANDROID-LOADER');
   fs.mkdirSync(path.join(ROOT, 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(ROOT, manualLoader ? path.join('dist', 'index.html') : 'index.html'), html);
   fs.writeFileSync(path.join(ROOT, 'dist', 'game.js'), js);
   writeFunctionIndex();
-  console.log(`index.html: ${html.length} bytes · dist/game.js: ${js.length} bytes · модулей: ${MANIFEST.length} · PNG-тайлсет: ${ts.on ? 'ВКЛ' : 'нет'}`);
+  console.log(`${manualLoader ? 'index.html: РУЧНОЙ ЛОАДЕР (не тронут), сборка -> dist/index.html' : 'index.html: ' + html.length + ' bytes'} · dist/game.js: ${js.length} bytes · модулей: ${MANIFEST.length} · PNG-тайлсет: ${ts.on ? 'ВКЛ' : 'нет'}`);
 }
 
 function writeFunctionIndex() {
