@@ -1,8 +1,8 @@
 <!doctype html>
 <!-- ВРЕМЕННЫЙ ANDROID-LOADER.
-     Контейнер ChatGPT не имеет сетевого доступа к GitHub, поэтому node build.mjs нельзя выполнить здесь напрямую.
-     Этот index.html повторяет src/shell.html и подключает src/*.js по порядку с jsDelivr
-     из commit d64f22fed2e42535c517cc2b7cf601b9721f4e32 ветки claude/wfc-map-generation-9hwwjn. -->
+     Этот index.html повторяет src/shell.html и подключает src/*.js по порядку с jsDelivr.
+     25_boot.js подключён из commit 784d504539c1b7f7acbe4214e0dcaaaf4600e173, где grid overlay включается по умолчанию:
+     hex / Voronoi grid — yellow, dual triangle grid — blue. -->
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -82,7 +82,6 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 #leftHead .car{color:var(--gold)}
 #pausemark{position:absolute;top:60px;left:50%;transform:translateX(-50%);color:var(--gold);
   letter-spacing:4px;font-size:15px;text-shadow:0 2px 0 #000;display:none}
-
 .lvlrow .amt{width:70px;color:var(--gold);text-align:right;font-weight:700}
 .lvlrow.meta .nm{width:94px}
 .lvlrow.meta .amt{width:auto;flex:1;text-align:left}
@@ -95,15 +94,12 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 .fxpop.info{color:var(--gold)}
 .portbar{position:absolute;width:38px;height:6px;background:#171209;border:1px solid var(--edge);box-shadow:0 1px 0 #000;z-index:33;pointer-events:none}
 .portbar>div{height:100%;background:var(--gold);image-rendering:pixelated}
-/* -------- экран боя (п.11) -------- */
-#battle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,94vw);
-  z-index:40;display:none;text-align:center}
+#battle{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,94vw);z-index:40;display:none;text-align:center}
 #bt_field{display:flex;align-items:stretch;justify-content:center;gap:8px;margin:10px 0}
 .bt-side{display:flex;gap:6px}
 .bt-col{display:flex;flex-direction:column;gap:8px;justify-content:center;min-width:86px}
 .bt-vs{align-self:center;color:var(--gold);font-size:20px;padding:0 4px}
-.bt-unit{background:var(--panel2);border:2px solid var(--edge);box-shadow:inset 0 0 0 1px var(--hl);
-  padding:4px;width:86px}
+.bt-unit{background:var(--panel2);border:2px solid var(--edge);box-shadow:inset 0 0 0 1px var(--hl);padding:4px;width:86px}
 .bt-unit canvas{width:48px;height:48px;image-rendering:pixelated}
 .bt-unit .nm{font-size:10px;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bt-unit .hpbar{height:6px;background:#171209;border:1px solid var(--edge);margin-top:3px}
@@ -111,8 +107,7 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 .bt-unit.dead{opacity:.35;filter:grayscale(1)}
 .bt-unit.hitfx{outline:2px solid var(--bad)}
 .bt-unit.healfx{outline:2px solid var(--ok)}
-#bt_log{max-height:90px;overflow:hidden;font-size:11px;text-align:left;margin:6px 0;
-  background:rgba(20,14,9,.6);border:1px solid var(--edge);padding:4px 7px}
+#bt_log{max-height:90px;overflow:hidden;font-size:11px;text-align:left;margin:6px 0;background:rgba(20,14,9,.6);border:1px solid var(--edge);padding:4px 7px}
 #bt_log .e{margin:1px 0;color:var(--dim)}
 #bt_log .e:first-child{color:var(--tx)}
 .bt-rowlabel{font-size:9px;color:var(--dim);letter-spacing:1px}
@@ -140,17 +135,9 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
     <div id="levels"></div>
     <div id="cityControls">
       <div class="ptitle">Управление временем</div>
-      <div id="timectl">
-        <button id="btnPause">⏸</button>
-        <button id="spd1" class="on">×1</button>
-        <button id="spd2">×2</button>
-        <button id="spd4">×4</button>
-      </div>
+      <div id="timectl"><button id="btnPause">⏸</button><button id="spd1" class="on">×1</button><button id="spd2">×2</button><button id="spd4">×4</button></div>
       <div class="ptitle">Новый мир</div>
-      <div id="seedbox">
-        <input type="text" id="seed" placeholder="сид">
-        <button id="btnNew">Запуск</button>
-      </div>
+      <div id="seedbox"><input type="text" id="seed" placeholder="сид"><button id="btnNew">Запуск</button></div>
     </div>
   </div>
 </div>
@@ -158,39 +145,13 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 <div id="logbox"></div>
 <div id="tip"></div>
 <div id="pausemark">— ПАУЗА —</div>
-<div id="thbanner" class="panel" style="display:none;position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:30;text-align:center">
-  ⛺ Разведка окрестностей — <b>выберите место для ратуши</b> (тап по разведанному лугу)
-  <button id="btnAutoTH" style="margin-left:8px">Авто</button>
-</div>
+<div id="thbanner" class="panel" style="display:none;position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:30;text-align:center">⛺ Разведка окрестностей — <b>выберите место для ратуши</b> (тап по разведанному лугу)<button id="btnAutoTH" style="margin-left:8px">Авто</button></div>
 <div id="hint">драг — карта · колесо/пинч — зум · тап/клик — инспектор · пробел — пауза · ~ — отладка</div>
 <div id="debug" class="panel hidden"></div>
-<div id="party" class="panel" style="display:none;right:8px;top:52px;width:270px;max-height:70vh;overflow:auto;z-index:25">
-  <div class="ptitle">Отряды <span id="party_x" style="float:right;cursor:pointer">✕</span></div>
-  <div id="party_slots"></div>
-  <div class="ptitle" style="margin-top:8px">Герои</div>
-  <div id="party_heroes"></div>
-  <button id="party_form" style="margin-top:6px;width:100%">Сформировать пати (0/3)</button>
-</div>
-<div id="stagecard" class="panel" style="display:none;left:50%;top:38%;transform:translate(-50%,-50%);width:300px;text-align:center;z-index:30">
-  <div class="ptitle" id="sc_title">Этап пройден</div>
-  <div id="sc_body" style="margin:8px 0;text-align:left"></div>
-  <div><button id="sc_go">Дальше</button> <button id="sc_back">Отступить с добычей</button></div>
-</div>
-<div id="battle" class="panel">
-  <div class="ptitle" id="bt_title">Бой</div>
-  <div id="bt_field">
-    <div class="bt-side"><div class="bt-col" id="bt_p_back"></div><div class="bt-col" id="bt_p_front"></div></div>
-    <div class="bt-vs">⚔</div>
-    <div class="bt-side"><div class="bt-col" id="bt_e_front"></div><div class="bt-col" id="bt_e_back"></div></div>
-  </div>
-  <div id="bt_log"></div>
-  <div><button id="bt_flee">Отступить</button> <button id="bt_fast">Быстрее ×2</button></div>
-</div>
-<div id="gameover" class="panel" style="display:none;left:50%;top:40%;transform:translate(-50%,-50%);width:320px;text-align:center;z-index:30">
-  <div class="ptitle" style="color:var(--bad)">МАРКА ПАЛА</div>
-  <div id="go_body" style="margin:8px 0;text-align:left"></div>
-  <button id="go_new">Новый мир</button>
-</div>
+<div id="party" class="panel" style="display:none;right:8px;top:52px;width:270px;max-height:70vh;overflow:auto;z-index:25"><div class="ptitle">Отряды <span id="party_x" style="float:right;cursor:pointer">✕</span></div><div id="party_slots"></div><div class="ptitle" style="margin-top:8px">Герои</div><div id="party_heroes"></div><button id="party_form" style="margin-top:6px;width:100%">Сформировать пати (0/3)</button></div>
+<div id="stagecard" class="panel" style="display:none;left:50%;top:38%;transform:translate(-50%,-50%);width:300px;text-align:center;z-index:30"><div class="ptitle" id="sc_title">Этап пройден</div><div id="sc_body" style="margin:8px 0;text-align:left"></div><div><button id="sc_go">Дальше</button> <button id="sc_back">Отступить с добычей</button></div></div>
+<div id="battle" class="panel"><div class="ptitle" id="bt_title">Бой</div><div id="bt_field"><div class="bt-side"><div class="bt-col" id="bt_p_back"></div><div class="bt-col" id="bt_p_front"></div></div><div class="bt-vs">⚔</div><div class="bt-side"><div class="bt-col" id="bt_e_front"></div><div class="bt-col" id="bt_e_back"></div></div></div><div id="bt_log"></div><div><button id="bt_flee">Отступить</button> <button id="bt_fast">Быстрее ×2</button></div></div>
+<div id="gameover" class="panel" style="display:none;left:50%;top:40%;transform:translate(-50%,-50%);width:320px;text-align:center;z-index:30"><div class="ptitle" style="color:var(--bad)">МАРКА ПАЛА</div><div id="go_body" style="margin:8px 0;text-align:left"></div><button id="go_new">Новый мир</button></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/helmdubo/Fantasy_Marka@d64f22fed2e42535c517cc2b7cf601b9721f4e32/src/00_config.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/helmdubo/Fantasy_Marka@d64f22fed2e42535c517cc2b7cf601b9721f4e32/src/01_core.js"></script>
@@ -222,6 +183,6 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 <script src="https://cdn.jsdelivr.net/gh/helmdubo/Fantasy_Marka@d64f22fed2e42535c517cc2b7cf601b9721f4e32/src/22b_battle_ui.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/helmdubo/Fantasy_Marka@d64f22fed2e42535c517cc2b7cf601b9721f4e32/src/23_main.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/helmdubo/Fantasy_Marka@d64f22fed2e42535c517cc2b7cf601b9721f4e32/src/24_headless.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/helmdubo/Fantasy_Marka@d64f22fed2e42535c517cc2b7cf601b9721f4e32/src/25_boot.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/helmdubo/Fantasy_Marka@784d504539c1b7f7acbe4214e0dcaaaf4600e173/src/25_boot.js"></script>
 </body>
 </html>
