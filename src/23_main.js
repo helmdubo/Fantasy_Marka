@@ -15,6 +15,8 @@ function restart(seedStr){
   genViewer(); // режим «генератор»: каждый запуск показывает сборку карты по шагам
 }
 function boot(){
+  // PNG-тайлсет (если вшит) грузится асинхронно ДО первого атласа
+  if(!TS_TRIED){loadTileset(boot);return}
   const seed=String((Math.random()*1e9)|0);
   newGame(seed);
   buildAtlas();

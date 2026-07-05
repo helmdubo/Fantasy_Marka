@@ -51,8 +51,23 @@ export const MANIFEST = [
   '25_boot.js',         // точка входа: браузер -> boot(), node -> runHeadless()
 ];
 
+// PNG-тайлсет (docs/tileset-pipeline.md): если рядом лежат assets/tileset.png
+// + assets/tileset_map.json — инлайним как base64 (data-URI не «портит» canvas,
+// в отличие от file://), атлас нарежет их вместо процедурных спрайтов.
+function tilesetInject() {
+  const png = path.join(ROOT, 'assets', 'tileset.png');
+  const map = path.join(ROOT, 'assets', 'tileset_map.json');
+  if (fs.existsSync(png) && fs.existsSync(map)) {
+    const b64 = fs.readFileSync(png).toString('base64');
+    const m = JSON.stringify(JSON.parse(fs.readFileSync(map, 'utf8'))); // валидация + минификация
+    return { js: `const TILESET_PNG='data:image/png;base64,${b64}';\nconst TILESET_MAP=${m};\n`, on: true };
+  }
+  return { js: 'const TILESET_PNG=null,TILESET_MAP=null;\n', on: false };
+}
+
 function build() {
-  const js = MANIFEST.map(f => fs.readFileSync(path.join(SRC, f), 'utf8')).join('');
+  const ts = tilesetInject();
+  const js = ts.js + MANIFEST.map(f => fs.readFileSync(path.join(SRC, f), 'utf8')).join('');
   const shell = fs.readFileSync(path.join(SRC, 'shell.html'), 'utf8');
   const marker = '/*__GAME_JS__*/\n';
   if (!shell.includes(marker)) throw new Error('shell.html: маркер /*__GAME_JS__*/ не найден');
@@ -62,7 +77,7 @@ function build() {
   fs.mkdirSync(path.join(ROOT, 'dist'), { recursive: true });
   fs.writeFileSync(path.join(ROOT, 'dist', 'game.js'), js);
   writeFunctionIndex();
-  console.log(`index.html: ${html.length} bytes · dist/game.js: ${js.length} bytes · модулей: ${MANIFEST.length}`);
+  console.log(`index.html: ${html.length} bytes · dist/game.js: ${js.length} bytes · модулей: ${MANIFEST.length} · PNG-тайлсет: ${ts.on ? 'ВКЛ' : 'нет'}`);
 }
 
 function writeFunctionIndex() {

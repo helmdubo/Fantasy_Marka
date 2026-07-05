@@ -1,5 +1,39 @@
 /* ================= ATLAS (browser only) ================= */
 let ATLAS=null,SPR={},ICONS={};
+/* ---------- PNG-тайлсет (docs/tileset-pipeline.md) ----------
+   TILESET_PNG/TILESET_MAP инжектит build.mjs из assets/. Слоты с
+   непустой альфой замещают процедурные спрайты (террейн ×4 = 56×64),
+   пустые/отсутствующие — фолбэк на процедурную отрисовку: атлас можно
+   перерисовывать по кусочку. Реки в тайлсете без подкраски берегов:
+   один слот rt_<orr>_<m> регистрируется для всех тинтов. */
+let TS=null,TS_IDX=null,TS_TRIED=false;
+function loadTileset(cb){
+  if(TS_TRIED||typeof TILESET_PNG==='undefined'||!TILESET_PNG){TS_TRIED=true;cb();return}
+  const im=new Image();
+  im.onload=()=>{
+    const cv=document.createElement('canvas');cv.width=im.width;cv.height=im.height;
+    const ctx=cv.getContext('2d');ctx.drawImage(im,0,0);
+    TS=cv;TS_IDX={};
+    for(const sl of TILESET_MAP.slots){
+      // слот «занят», если в нём есть непрозрачные пиксели
+      const d=ctx.getImageData(sl.x,sl.y,sl.w,sl.h).data;
+      let used=false;
+      for(let i=3;i<d.length;i+=4)if(d[i]>10){used=true;break}
+      if(used)TS_IDX[sl.name]=sl;
+    }
+    TS_TRIED=true;cb();
+  };
+  im.onerror=()=>{console.warn('tileset.png не загрузился — процедурные спрайты');TS_TRIED=true;cb()};
+  im.src=TILESET_PNG;
+}
+// рисует слот тайлсета в атлас; null = слота нет (рисуй процедурно)
+function tsPlace(name,place,ctx){
+  const sl=TS_IDX&&TS_IDX[name];
+  if(!sl)return null;
+  const p=place(sl.w,sl.h);
+  ctx.drawImage(TS,sl.x,sl.y,sl.w,sl.h,p.x,p.y,sl.w,sl.h);
+  return {x:p.x,y:p.y,w:sl.w,h:sl.h};
+}
 function reg(name,x,y,w,h){
   SPR[name]={x,y,w,h,u0:x/ATLAS.W,u1:(x+w)/ATLAS.W,v1:1-y/ATLAS.H,v0:1-(y+h)/ATLAS.H};
 }
@@ -403,6 +437,7 @@ function paintIcon(name){
 function buildAtlas(){
   const t0=performance.now();
   ATLAS={W:256,H:1024,cur:{x:0,y:0,rowH:0}};
+  if(TS)ATLAS.W=512,ATLAS.H=2048; // ×4-слоты террейна не влезают в 256×1024
   const cv=document.createElement('canvas');cv.width=ATLAS.W;cv.height=ATLAS.H;
   const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
   ATLAS.cv=cv;ATLAS.ctx=ctx;SPR={};
@@ -415,12 +450,20 @@ function buildAtlas(){
   // Drop I: dual-triangle террейн (flat-top: ◀/▶). Полные (2 варианта шума) + маски 1..6.
   for(const t of [T.WATER,T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN]){
     for(const orr of ['l','r'])
-      for(let v=0;v<2;v++){const p=place(TRIW,TRIH);paintTriFull(ctx,p.x,p.y,t,orr,v);reg('tri'+t+'_'+orr+'_full'+v,p.x,p.y,TRIW,TRIH)}
+      for(let v=0;v<2;v++){
+        const nm='tri'+t+'_'+orr+'_full'+v;
+        const d=tsPlace(nm,place,ctx);
+        if(d){reg(nm,d.x,d.y,d.w,d.h);continue}
+        const p=place(TRIW,TRIH);paintTriFull(ctx,p.x,p.y,t,orr,v);reg(nm,p.x,p.y,TRIW,TRIH);
+      }
   }
   for(const t of [T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN]){
     for(const orr of ['l','r'])
       for(let bits=1;bits<7;bits++){
-        const p=place(TRIW,TRIH);paintTriTransition(ctx,p.x,p.y,t,orr,bits);reg('tri'+t+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
+        const nm='tri'+t+'_'+orr+'_'+bits;
+        const d=tsPlace(nm,place,ctx);
+        if(d){reg(nm,d.x,d.y,d.w,d.h);continue}
+        const p=place(TRIW,TRIH);paintTriTransition(ctx,p.x,p.y,t,orr,bits);reg(nm,p.x,p.y,TRIW,TRIH);
       }
   }
   // units
@@ -499,12 +542,28 @@ function buildAtlas(){
   p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
   p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
   for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
+  // реки из PNG-тайлсета — один слот на маску, берега альфой (тинт не нужен)
+  for(const orr of ['l','r'])
+    for(let m=1;m<8;m++){
+      const d=tsPlace('rt_'+orr+'_'+m,place,ctx);
+      if(d)for(const t of [T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN])
+        reg('rt_'+t+'_'+orr+'_'+m,d.x,d.y,d.w,d.h);
+    }
   for(const t of [T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN])
     for(const orr of ['l','r'])
-      for(let m=1;m<8;m++){p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,14,16)}
-  p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);
-  p=place(10,12);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,10,12);
-  p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16);
+      for(let m=1;m<8;m++){
+        if(SPR['rt_'+t+'_'+orr+'_'+m])continue; // уже из тайлсета
+        p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,14,16);
+      }
+  {const d=tsPlace('r_mouth',place,ctx);
+   if(d)reg('r_mouth',d.x,d.y,d.w,d.h);
+   else{p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8)}}
+  {const d=tsPlace('r_falls',place,ctx);
+   if(d)reg('r_falls',d.x,d.y,d.w,d.h);
+   else{p=place(10,12);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,10,12)}}
+  {const d=tsPlace('bridge',place,ctx);
+   if(d)reg('bridge',d.x,d.y,d.w,d.h);
+   else{p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16)}}
   for(const k of ['b_hut','b_house2','b_tent','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }
@@ -513,3 +572,76 @@ function buildAtlas(){
   S.atlasMs=performance.now()-t0;
 }
 
+
+/* ---------- экспорт шаблона PNG-тайлсета (docs/tileset-pipeline.md) ----------
+   Три файла: tileset_template.png (плейсхолдеры = текущие спрайты ×TS_SCALE,
+   на прозрачном фоне — вход для нейрогенерации/художника),
+   tileset_markup.png (те же слоты: рамки, подписи, ориентиры — слой-оверлей),
+   tileset_map.json (разметка слотов — по ней работает импорт в buildAtlas).
+   Скоуп: террейн + реки (остальное пока процедурное). */
+const TS_SCALE=4; // целевое разрешение: треугольник 14x16 -> 56x64
+function tilesetSlots(){
+  // раскладка листа: ряд на террейн (l: full0,full1,маски1..6, r: то же), ряд рек
+  const SHEET_W=1056,MX=8,MY=22; // MY: место под подпись в markup
+  const slots=[];let x=MX,y=MY,rowH=0;
+  const put=(name,w,h,src)=>{
+    if(x+w+MX>SHEET_W){x=MX;y+=rowH+MY;rowH=0}
+    slots.push({name,x,y,w,h,src});
+    x+=w+MX;if(h>rowH)rowH=h;
+  };
+  const nl=()=>{if(x>MX){x=MX;y+=rowH+MY;rowH=0}};
+  const TW=TRIW*TS_SCALE,TH=TRIH*TS_SCALE;
+  for(const t of [T.WATER,T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN]){
+    for(const orr of ['l','r']){
+      for(let v=0;v<2;v++)put('tri'+t+'_'+orr+'_full'+v,TW,TH,'tri'+t+'_'+orr+'_full'+v);
+      if(t!==T.WATER)for(let b=1;b<7;b++)put('tri'+t+'_'+orr+'_'+b,TW,TH,'tri'+t+'_'+orr+'_'+b);
+    }
+    nl();
+  }
+  for(const orr of ['l','r'])
+    for(let m=1;m<8;m++)put('rt_'+orr+'_'+m,TW,TH,'rt_'+T.GRASS+'_'+orr+'_'+m);
+  put('r_mouth',8*TS_SCALE,8*TS_SCALE,'r_mouth');
+  put('r_falls',10*TS_SCALE,12*TS_SCALE,'r_falls');
+  put('bridge',TW,TH,'bridge');
+  nl();
+  return {sheetW:SHEET_W,sheetH:y,slots};
+}
+function exportTilesetTemplate(returnOnly){
+  const L=tilesetSlots();
+  const mk=()=>{const c=document.createElement('canvas');c.width=L.sheetW;c.height=L.sheetH;
+    const g=c.getContext('2d');g.imageSmoothingEnabled=false;return [c,g]};
+  const [tcv,tg]=mk(),[mcv,mg]=mk();
+  mg.font='9px monospace';
+  for(const sl of L.slots){
+    const sp=SPR[sl.src];
+    if(sp)tg.drawImage(ATLAS.cv,sp.x,sp.y,sp.w,sp.h,sl.x,sl.y,sl.w,sl.h);
+    mg.strokeStyle='#e64ae6';mg.lineWidth=1;
+    mg.strokeRect(sl.x-0.5,sl.y-0.5,sl.w+1,sl.h+1);
+    mg.fillStyle='#e64ae6';
+    mg.fillText(sl.name,sl.x,sl.y-4);
+  }
+  const map={version:1,scale:TS_SCALE,sheetW:L.sheetW,sheetH:L.sheetH,
+    note:'слоты tileset.png; имена спрайтов игры; см. docs/tileset-pipeline.md',
+    slots:L.slots.map(s2=>({name:s2.name,x:s2.x,y:s2.y,w:s2.w,h:s2.h}))};
+  const json=JSON.stringify(map,null,1);
+  if(returnOnly)return {template:tcv.toDataURL('image/png'),markup:mcv.toDataURL('image/png'),json};
+  const dl=(href,fn)=>{const a=document.createElement('a');a.href=href;a.download=fn;a.click()};
+  dl(tcv.toDataURL('image/png'),'tileset_template.png');
+  dl(mcv.toDataURL('image/png'),'tileset_markup.png');
+  dl('data:application/json;charset=utf-8,'+encodeURIComponent(json),'tileset_map.json');
+  log('🎨 Шаблон тайлсета скачан: template + markup + map (слоты '+L.slots.length+').');
+}
+/* превью атласа: что реально нарезано (PNG-слоты видны крупными) */
+function tilesetPreview(){
+  const sc=Math.max(1,Math.floor(Math.min(innerWidth/ATLAS.W,(innerHeight-40)/ATLAS.H)*2)/2);
+  const cv=document.createElement('canvas');
+  cv.width=ATLAS.W*sc;cv.height=ATLAS.H*sc;
+  cv.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-height:96vh;'+
+    'z-index:61;image-rendering:pixelated;border:2px solid var(--edge);background:#1b1522;box-shadow:0 6px 0 rgba(0,0,0,.5)';
+  const g=cv.getContext('2d');g.imageSmoothingEnabled=false;
+  g.drawImage(ATLAS.cv,0,0,cv.width,cv.height);
+  g.fillStyle='#eec658';g.font='12px monospace';
+  g.fillText(TS?'PNG-тайлсет: ВКЛ ('+Object.keys(TS_IDX).length+' слотов)':'PNG-тайлсет: нет (всё процедурное)',6,14);
+  document.body.appendChild(cv);
+  cv.onclick=()=>cv.remove();
+}
