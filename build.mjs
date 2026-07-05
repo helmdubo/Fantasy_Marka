@@ -21,7 +21,8 @@ export const MANIFEST = [
   '00_config.js',       // CFG: все игровые константы; таблицы T/F/RACES/LAIR_DEFS
   '01_core.js',         // RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по террейну
   '02_hex.js',          // гекс-математика flat-top odd-q: координаты, соседи, LOS, A* findPath
-  '02c_worldgen.js',    // генератор мира: остров, хребты-графы, высота, WFC-заполнение от контуров
+  '02b_wfc.js',         // WFC-солвер: домены, AC-4-пропагация, мин-энтропия, бэктрекинг
+  '02c_worldgen.js',    // генератор мира v2: вороной-патчи -> роли -> высоты -> террейн (WFC), реки
   '03_state_mapgen.js', // глобальное состояние S; newGame, генерация мира, spawn поселенцев
   '04_econ.js',         // уровни запасов, canPay/payCost
   '05_vision.js',       // туман войны: stampVision, recomputeVision, exploreRing, pickHex

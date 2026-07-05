@@ -6,7 +6,7 @@
 
 CFG: все игровые константы; таблицы T/F/RACES/LAIR_DEFS
 
-`VERSION` · `IS_BROWSER` · `CFG` · `UTIL` · `T` · `TNAME` · `F` · `FNAME` · `RACES` · `RNAME` · `ACTNAME` · `LAIR_DEFS`
+`VERSION` · `IS_BROWSER` · `CFG` · `UTIL` · `T` · `TNAME` · `WFC` · `F` · `FNAME` · `RACES` · `RNAME` · `ACTNAME` · `LAIR_DEFS`
 
 ## src/01_core.js
 
@@ -20,11 +20,17 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 `CW` · `zig()` · `WXC()` · `WYCC()` · `hexDirs()` · `offToCube()` · `hexDist2()` · `cubeToOff()` · `hexLine()` · `losClear()` · `colTris()` · `findPath()`
 
+## src/02b_wfc.js
+
+WFC-солвер: домены, AC-4-пропагация, мин-энтропия, бэктрекинг
+
+`WFC_POP` · `wfcSolve()`
+
 ## src/02c_worldgen.js
 
-генератор мира: остров, хребты-графы, высота, WFC-заполнение от контуров
+генератор мира v2: вороной-патчи -> роли -> высоты -> террейн (WFC), реки
 
-`WFC_DEBUG` · `genWorld()` · `wgIsland()` · `wgBfsField()` · `wgLakes()` · `wgRidges()` · `wgElevation()` · `wgFill()` · `wgEntities()` · `wgValidate()`
+`PR` · `PRNAME` · `WT_NODE` · `HEX_OPP` · `genWorld()` · `genAttempt()` · `wgBfsField()` · `wgHexNb()` · `wgPatches()` · `wgHeights()` · `wgTerrain()` · `wgEntities()` · `wgValidate()`
 
 ## src/03_state_mapgen.js
 
@@ -156,7 +162,7 @@ three.js: батчи, меши террейна/дорог/зданий/юнит
 
 DOM UI: панели, дебаг, пати-окно, инспектор, updateUI
 
-`el()` · `togglePause()` · `setSpeed()` · `debugBuilt` · `toggleDebug()` · `buildDebug()` · `wfcReplay()` · `updateDebug()` · `PICK` · `toggleParty()` · `renderParty()` · `buildUI()` · `raceCounts()` · `ammoCount()` · `updateUI()` · `dispName()` · `updateInspector()`
+`el()` · `togglePause()` · `setSpeed()` · `debugBuilt` · `toggleDebug()` · `buildDebug()` · `GENV` · `genViewer()` · `updateDebug()` · `PICK` · `toggleParty()` · `renderParty()` · `buildUI()` · `raceCounts()` · `ammoCount()` · `updateUI()` · `dispName()` · `updateInspector()`
 
 ## src/22b_battle_ui.js
 

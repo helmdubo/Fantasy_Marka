@@ -9,9 +9,13 @@ const PAL={
   DI:'#6d5238',w:'#8a6b45',Wd:'#6b4f30',
   r:'#a5533a',R:'#7c3b2a',y:'#eec658',k:'#100c14',
   SK:'#d9a066',Cb:'#3a5aa8',Cg:'#3f7d5a',Cr:'#a8353a',
-  TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c'
+  TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c',
+  SA1:'#a8935f',SA2:'#c4af74',SA3:'#dbcb92',      // пляж
+  SW1:'#2c4a42',SW2:'#3a5f50',SW3:'#4b7a5c',      // болото
+  SC1:'#54713a',SC2:'#6f8c43',SC3:'#8ba650'       // опушка/кустарник
 };
 const OUTL={};OUTL[T.GRASS]=PAL.G1;OUTL[T.FOREST]=PAL.F1;OUTL[T.ROCK]=PAL.R1;OUTL[T.MTN]=PAL.o;
+OUTL[T.SAND]=PAL.SA1;OUTL[T.SWAMP]=PAL.SW1;OUTL[T.SCRUB]=PAL.SC1;
 
 const G_HUMAN=[
 "................",
@@ -385,6 +389,9 @@ function terrPix(t,x,y,seed){
     case T.MTN:{const d=(x+y)&7;let c=(d<3)?PAL.M2:PAL.M1;
       if(y<5&&hash2(x,y,seed+7)<0.55)c=PAL.SN;
       if(h<0.07)c=PAL.M1;return c}
+    case T.SAND: if(h<0.10)return PAL.SA3; if(h>0.90)return PAL.SA1; return PAL.SA2;
+    case T.SCRUB:{const b=hash2(x>>1,y>>1,seed+9);if(b<0.24)return PAL.SC1;if(b>0.78&&h<0.5)return PAL.SC3;return PAL.SC2}
+    case T.SWAMP:{if(h<0.10)return PAL.W2;const b=hash2(x>>1,y>>1,seed+5);if(b<0.3)return PAL.SW1;if(h>0.9)return PAL.SW3;return PAL.SW2}
   }
   return '#f0f';
 }

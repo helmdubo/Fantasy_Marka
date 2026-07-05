@@ -261,8 +261,11 @@ const CFG={
     libTier2:{stone:16,gems:3}},
 };
 const UTIL={oper:3.0,watch:2.4,build:2.6,repair:2.8,supply:2.7,pave:1.8,clear:1.8,ruins:1.6};
-const T={WATER:0,GRASS:1,FOREST:2,ROCK:3,MTN:4};
-const TNAME=['Вода','Луга','Лес','Скалы','Горы'];
+// Порядок T = порядок слоёв рендера (20_render: S.terr[i]>=t) — не менять произвольно!
+const T={WATER:0,SAND:1,SWAMP:2,GRASS:3,SCRUB:4,FOREST:5,ROCK:6,MTN:7};
+const TNAME=['Вода','Пляж','Болото','Луга','Кустарник','Лес','Скалы','Горы'];
+// Генератор мира v2 (WFC, docs/wfc-design.md)
+const WFC={minDist:8,maxSites:44,btRoles:150,btHeights:600,btTerrain:900};
 const F={NONE:0,BERRY:1,DEADFALL:2,RUBBLE:3,VEIN:4,FISH:5,RUINS:6,WHEAT:7,STUMP:8};
 const FNAME=['','Ягодник','Бурелом (завал)','Каменная осыпь','Самоцветная жила','Рыбное место','Древние руины','Пшеничное поле','Пеньки (вырубка)'];
 const RACES=['human','dwarf','elf','troll'];
@@ -293,6 +296,8 @@ function terrainSpeed(u,cx,cy){
   const t=S.terr[idx(cx,cy)];
   if(t===T.ROCK)return (u.race==='dwarf'||u.race==='troll')?1:0.7;
   if(t===T.FOREST)return (u.race==='elf')?1:0.75;
+  if(t===T.SCRUB)return (u.race==='elf')?1:0.85;
+  if(t===T.SWAMP)return (u.race==='troll')?1:0.6;
   return 1;
 }
 
@@ -413,71 +418,254 @@ function findPath(S,sx,sy,tx,ty,adjOk,orthOnly){
   return null;
 }
 
-/* ---------- ГЕНЕРАТОР МИРА (WFC + граф-скелеты) ----------
-   Пайплайн: остров (море со всех сторон) -> озёра среднего пояса ->
-   горные хребты-«снежинки» (тонкие цепи с отрогами, граф-entity) ->
-   поле высоты (от берега к хребту) -> реки деревом parent/child по
-   dual-сетке -> WFC-заполнение GRASS/FOREST/ROCK: волна идёт ОТ КОНТУРОВ
-   (вода/горы/поймы) к незаполненным клеткам, вес тайла = зональный приор
-   (кольца от берега, предгорья, поймы) x аффинность уже схлопнутых
-   соседей (лес липнет к лесу — кластеры). Противоречий нет: правила
-   мягкие, GRASS — универсальный запасной тайл.
-   Все структуры остаются как entity в S.world (хребты/реки/озёра/леса). */
+/* ---------- WFC-СОЛВЕР (общий для всех слоёв генерации) ----------
+   Классический constraint-solver: домен-битмаска возможных тайлов на
+   клетку, матрица допустимых соседств, выбор клетки с минимальной
+   энтропией Шеннона, AC-4-пропагация (счётчики enabler'ов, O(1) на
+   удаление), при пустом домене — бэктрекинг с лимитом откатов.
+   Сетко-независим: клетки — индексы 0..n-1, соседство — колбэк.
+   Работает и в Node (headless), DOM не трогает.
 
-let WFC_DEBUG=false; // флаг вне S: restart пересоздаёт состояние
-function genWorld(){
-  const W=S.W,H=S.H,N=W*H;
-  for(let attempt=0;attempt<5;attempt++){
-    S.world={ranges:[],rivers:[],lakes:[],forests:[]};
-    wgIsland();
-    wgLakes();
-    classifyWater();
-    wgRidges();
-    wgElevation();
-    genRivers();       // реки v2 (рёберные), высоту берут из S.elev
-    classifyWater();   // тупиковые пруды рек становятся озёрами
-    wgFill();
-    wgEntities();
-    const err=wgValidate();
-    if(!err)return;
-    log('🌀 Картограф недоволен ('+err+') — перекладывает карту…');
+   wfcSolve({
+     n, numTiles, neighbors(i)=>[[j,dirTag],...],
+       dirTag выбирает adj-маску; обратные рёбра находятся автоматически
+       (граф может иметь любую степень и один dirTag на все рёбра),
+     adj[t][dirTag]=битмаска допустимых тайлов соседа via dirTag,
+       симметрия обязательна: bit(adj[t][d],u) === bit(adj[u][rev d],t),
+     weights(i)=>Float32Array[numTiles],   // веса зависят от позиции
+     domains?: Uint16Array(n),             // стартовое сужение доменов
+     pins?: Map(i->tile),
+     rng, backtrackLimit,
+     onCollapse?: (cell,tile,ban,tileAt)=>void, // кастом-ограничения;
+       tileAt(i) = схлопнутый тайл клетки или -1 (текущее состояние)
+     trace?: []                            // события {c,t}|{u:cell}|{bt:1}
+   }) => Int8Array(n) | null (лимит откатов исчерпан)                  */
+const WFC_POP=(()=>{const p=new Uint8Array(65536);for(let i=1;i<65536;i++)p[i]=p[i>>1]+(i&1);return p})();
+function wfcSolve(o){
+  const n=o.n,NT=o.numTiles,rng=o.rng,trace=o.trace||null;
+  const FULL=(1<<NT)-1;
+  /* --- соседи в плоские массивы; счётчики индексируются СЛОТОМ соседа
+     (k-nbStart[i]), а не направлением: у нерегулярного графа все рёбра
+     могут иметь один dirTag — направление нужно только для adj-масок --- */
+  let ND=1,D=1; // ND: число dir-тегов (adj), D: макс. степень (слоты enab)
+  const nbStart=new Int32Array(n+1);
+  {let m=0;for(let i=0;i<n;i++){const l=o.neighbors(i);m+=l.length;
+     if(l.length>D)D=l.length;
+     for(const nb of l)if(nb[1]+1>ND)ND=nb[1]+1}
+   nbStart[n]=m}
+  const M=nbStart[n];
+  const nbCell=new Int32Array(M),nbDir=new Uint8Array(M);
+  {let m=0;for(let i=0;i<n;i++){nbStart[i]=m;for(const nb of o.neighbors(i)){nbCell[m]=nb[0];nbDir[m]=nb[1];m++}}}
+  // обратное ребро: revSlot[k] = слот записи j->i у соседа j (для ребра k: i->j)
+  const revSlot=new Int32Array(M).fill(-1),revDir=new Uint8Array(M);
+  for(let i=0;i<n;i++)for(let k=nbStart[i];k<nbStart[i+1];k++){
+    const j=nbCell[k];
+    for(let k2=nbStart[j];k2<nbStart[j+1];k2++)
+      if(nbCell[k2]===i){revSlot[k]=k2-nbStart[j];revDir[k]=nbDir[k2];break}
   }
-}
-
-/* --- 1. остров: море по краям, суша к центру --- */
-function wgIsland(){
-  const W=S.W,H=S.H,N=W*H;
-  const cx=W/2+((S.rng()*2-1)*W*0.06),cy=H/2+((S.rng()*2-1)*H*0.06);
-  const maxR=Math.min(W,H)*0.5;
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const dx=(x-cx)/maxR,dy=(y-cy)/maxR;
-    const d=Math.hypot(dx,dy);
-    const n=fbm(x/23,y/23,S.seed,4);
-    const v=(1-d)*0.9+(n-0.5)*0.55;
-    S.terr[idx(x,y)]=(v>0.18&&x>2&&y>2&&x<W-3&&y<H-3)?T.GRASS:T.WATER;
+  /* --- домены, веса, кэш энтропии --- */
+  const dom=new Uint16Array(n).fill(FULL);
+  const wt=new Float32Array(n*NT),wlog=new Float32Array(n*NT);
+  const sumW=new Float32Array(n),sumWL=new Float32Array(n);
+  for(let i=0;i<n;i++){
+    const w=o.weights(i);
+    for(let t=0;t<NT;t++){
+      const v=Math.max(1e-6,w[t]);
+      wt[i*NT+t]=v;wlog[i*NT+t]=v*Math.log(v);
+      sumW[i]+=v;sumWL[i]+=v*Math.log(v);
+    }
   }
-  // оставить только крупнейший массив суши — «один остров»
-  const comp=new Int32Array(N).fill(-1);
-  const sizes=[];
-  for(let i=0;i<N;i++){
-    if(S.terr[i]===T.WATER||comp[i]>=0)continue;
-    const id=sizes.length,q=[i];comp[i]=id;
-    for(let h2=0;h2<q.length;h2++){
-      const c=q[h2],x=c%W,y=(c/W)|0;
-      for(const d of hexDirs(x)){
-        const nx=x+d[0],ny=y+d[1];
-        if(!inMap(nx,ny))continue;
-        const ni=ny*W+nx;
-        if(comp[ni]<0&&S.terr[ni]!==T.WATER){comp[ni]=id;q.push(ni)}
+  /* --- счётчики enabler'ов: enab[i,t,slot] = сколько тайлов в домене
+     соседа (слот slot у клетки i) поддерживают тайл t у клетки i --- */
+  const supp=new Uint8Array(NT*ND); // support-count при полном домене соседа
+  for(let t=0;t<NT;t++)for(let d=0;d<ND;d++){
+    let c=0;
+    for(let u=0;u<NT;u++)if((o.adj[u][d]>>t)&1)c++;
+    supp[t*ND+d]=c;
+  }
+  const enab=new Uint8Array(n*NT*D);
+  for(let i=0;i<n;i++)
+    for(let k=nbStart[i];k<nbStart[i+1];k++){
+      const s2=k-nbStart[i],rd=revDir[k]; // dirTag ребра сосед->я
+      for(let t=0;t<NT;t++)enab[(i*NT+t)*D+s2]=supp[t*ND+rd];
+    }
+  /* --- undo-лог и стек решений --- */
+  const logC=[],logT=[],logFx=[]; // ban-события; logFx=1 если ban схлопнул клетку
+  const decisions=[];             // {cell,tile,mark}
+  let collapsed=0,contradiction=false,backtracks=0;
+  const stackC=[],stackT=[];      // очередь пропагации
+  const tileAt=(i)=>{const d2=dom[i];return WFC_POP[d2]===1?31-Math.clz32(d2):-1};
+  /* --- мин-куча по энтропии (ленивая) --- */
+  const heap=[];const ver=new Int32Array(n);
+  const entropy=(i)=>Math.log(sumW[i])-sumWL[i]/sumW[i]+rng()*1e-4;
+  const hpush=(i)=>{heap.push([entropy(i),i,ver[i]]);let k=heap.length-1;
+    while(k>0){const p=(k-1)>>1;if(heap[p][0]<=heap[k][0])break;const t2=heap[p];heap[p]=heap[k];heap[k]=t2;k=p}};
+  const hpop=()=>{ // до валидной вершины
+    while(heap.length){
+      const top=heap[0],last=heap.pop();
+      if(heap.length){heap[0]=last;let k=0;
+        for(;;){const a=2*k+1,b=2*k+2;let m=k;
+          if(a<heap.length&&heap[a][0]<heap[m][0])m=a;
+          if(b<heap.length&&heap[b][0]<heap[m][0])m=b;
+          if(m===k)break;const t2=heap[m];heap[m]=heap[k];heap[k]=t2;k=m}}
+      const i=top[1];
+      if(top[2]===ver[i]&&WFC_POP[dom[i]]>1)return i;
+    }
+    return -1;
+  };
+  for(let i=0;i<n;i++)hpush(i);
+  /* --- ban: удалить тайл из домена клетки --- */
+  const ban=(i,t)=>{
+    if(!((dom[i]>>t)&1)||contradiction)return;
+    dom[i]&=~(1<<t);
+    const pc=WFC_POP[dom[i]];
+    if(pc===0){contradiction=true;dom[i]|=(1<<t);return} // откатим по логу до маркера
+    sumW[i]-=wt[i*NT+t];sumWL[i]-=wlog[i*NT+t];
+    ver[i]++;
+    logC.push(i);logT.push(t);logFx.push(pc===1?1:0);
+    stackC.push(i);stackT.push(t);
+    if(pc===1){
+      collapsed++;
+      const tile=31-Math.clz32(dom[i]);
+      if(trace)trace.push({c:i,t:tile});
+      if(o.onCollapse)o.onCollapse(i,tile,ban,tileAt);
+    }else hpush(i);
+  };
+  /* --- пропагация AC-4 --- */
+  const propagate=()=>{
+    while(stackC.length&&!contradiction){
+      const j=stackC.pop(),u=stackT.pop();
+      for(let k=nbStart[j];k<nbStart[j+1];k++){
+        const i2=nbCell[k],rs=revSlot[k];
+        if(rs<0)continue; // одностороннее ребро — не давит
+        // u удалён у j: тайлы adj[u][dir j->i2] теряют опору у i2 (слот rs)
+        let m=o.adj[u][nbDir[k]];
+        while(m){
+          const t=31-Math.clz32(m);m&=~(1<<t);
+          const e=--enab[(i2*NT+t)*D+rs];
+          if(e===0&&((dom[i2]>>t)&1))ban(i2,t);
+        }
       }
     }
-    sizes.push(q.length);
+    stackC.length=0;stackT.length=0;
+  };
+  /* --- откат до маркера undo-лога --- */
+  const undoTo=(mark)=>{
+    while(logC.length>mark){
+      const i2=logC.pop(),t=logT.pop(),fx=logFx.pop();
+      if(fx){collapsed--;if(trace)trace.push({u:i2})}
+      dom[i2]|=(1<<t);
+      sumW[i2]+=wt[i2*NT+t];sumWL[i2]+=wlog[i2*NT+t];
+      ver[i2]++;hpush(i2);
+      for(let k=nbStart[i2];k<nbStart[i2+1];k++){
+        const j=nbCell[k],rs=revSlot[k];
+        if(rs<0)continue;
+        let m=o.adj[t][nbDir[k]];
+        while(m){
+          const t2=31-Math.clz32(m);m&=~(1<<t2);
+          enab[(j*NT+t2)*D+rs]++;
+        }
+      }
+    }
+  };
+  /* стартовые сужения: domains и pins через общую механику (до решений) */
+  const fail=(why)=>{if(o.stats){o.stats.backtracks=backtracks;o.stats.reason=why}return null};
+  if(o.domains)for(let i=0;i<n;i++){
+    let cut=FULL&~o.domains[i];
+    while(cut){const t=31-Math.clz32(cut);cut&=~(1<<t);ban(i,t)}
+    propagate();
+    if(contradiction)return fail('init-domains@'+i); // несовместимые стартовые домены
   }
-  let big=0;for(let i2=1;i2<sizes.length;i2++)if(sizes[i2]>sizes[big])big=i2;
-  for(let i=0;i<N;i++)if(comp[i]>=0&&comp[i]!==big)S.terr[i]=T.WATER;
-  // поле расстояния от МОРЯ (кольца зон)
-  S.distCoast=wgBfsField(i=>S.terr[i]===T.WATER);
+  if(o.pins)for(const [i,tile] of o.pins){
+    let cut=dom[i]&~(1<<tile);
+    while(cut){const t=31-Math.clz32(cut);cut&=~(1<<t);ban(i,t)}
+    propagate();
+    if(contradiction)return fail('init-pins@'+i);
+  }
+  /* --- основной цикл: observe -> propagate -> (backtrack) --- */
+  const limit=o.backtrackLimit||500;
+  while(collapsed<n){
+    const i=hpop();
+    if(i<0)break; // всё схлопнуто/куча пуста
+    // взвешенный бросок по оставшимся тайлам
+    let tot=0;
+    for(let t=0;t<NT;t++)if((dom[i]>>t)&1)tot+=wt[i*NT+t];
+    let roll=rng()*tot,tile=-1;
+    for(let t=0;t<NT;t++)if((dom[i]>>t)&1){roll-=wt[i*NT+t];if(roll<=0){tile=t;break}}
+    if(tile<0)for(let t=NT-1;t>=0;t--)if((dom[i]>>t)&1){tile=t;break}
+    decisions.push({cell:i,tile,mark:logC.length});
+    let cut=dom[i]&~(1<<tile);
+    while(cut){const t=31-Math.clz32(cut);cut&=~(1<<t);ban(i,t)}
+    propagate();
+    while(contradiction){
+      if(backtracks++>=limit)return fail('limit');
+      if(trace)trace.push({bt:1});
+      const dec=decisions.pop();
+      if(!dec)return fail('exhausted'); // противоречие без решений — слой невыполним
+      contradiction=false;
+      stackC.length=0;stackT.length=0;
+      undoTo(dec.mark);
+      ban(dec.cell,dec.tile); // испробованный тайл запрещаем (принадлежит родителю)
+      propagate();
+    }
+  }
+  /* --- результат --- */
+  const out=new Int8Array(n);
+  for(let i=0;i<n;i++){
+    const d2=dom[i];
+    out[i]=WFC_POP[d2]===1?31-Math.clz32(d2):-1;
+  }
+  if(o.stats){o.stats.backtracks=backtracks}
+  return out;
 }
+/* ---------- ГЕНЕРАТОР МИРА v2 (полноценный WFC, docs/wfc-design.md) ----------
+   Пайплайн: вороной-патчи (Poisson-диск + BFS) -> WFC №1 ролей патчей на
+   нерегулярном графе (континент с морским краем по случайному азимуту) ->
+   WFC №2 дискретных высот 0..6 на гексах (|Δh|<=1 — хребты и долины
+   эмерджентны, solver в духе Loren Schmidt) -> WFC №3 террейна (9 тайлов,
+   жёсткая матрица соседств: лес только через опушку, горы только через
+   скалы) -> реки v2 по высотам -> entity -> валидация.
+   Браузер: ОДНА попытка + полный трейс (S.wfcTrace) для пошагового
+   просмотра (genViewer в 22_ui); фейл останавливает генерацию, о причине —
+   в лог, новая попытка — кнопкой «Запуск». Headless: до 8 попыток. */
+
+/* роли патчей (слой 1) */
+const PR={SEA:0,LOW:1,WET:2,UP:3,HIGH:4,LAKE:5};
+const PRNAME=['Море','Низина','Топь','Возвышенность','Нагорье','Озеро'];
+/* внутренние тайлы слоя 3: T.* + узел хребта (в S.terr пишется как MTN) */
+const WT_NODE=8;
+const HEX_OPP=[1,0,5,4,3,2]; // встречные направления к порядку hexDirs (N,S,NE,NW,SE,SW)
+
+function genWorld(){
+  if(IS_BROWSER){ // дебаг-режим: одна попытка, трейс, стоп при фейле
+    S.genError=genAttempt(true);
+    if(S.genError)log('🌀 Генерация прервана: '+S.genError+'. Жми «Запуск» — новая попытка.');
+    return;
+  }
+  for(let a=0;a<8;a++){
+    S.genError=genAttempt(false);
+    if(!S.genError)return;
+    log('🌀 Картограф недоволен ('+S.genError+') — перекладывает карту…');
+  }
+}
+
+function genAttempt(traceOn){
+  const N=S.W*S.H;
+  S.world={ranges:[],rivers:[],lakes:[],forests:[],ridgeNodes:[]};
+  S.terr.fill(T.WATER);S.terrHp.fill(0);
+  S.wfcTrace=traceOn?{stages:[]}:null;
+  let err;
+  if((err=wgPatches()))return err;
+  if((err=wgHeights()))return err;
+  if((err=wgTerrain()))return err;
+  classifyWater();
+  S.distCoast=wgBfsField(i=>S.terr[i]===T.WATER&&S.waterKind[i]===2);
+  genRivers();
+  classifyWater(); // тупиковые пруды рек становятся озёрами
+  wgEntities();
+  return wgValidate();
+}
+
 // multi-source BFS по гексам; seedFn(i)=true — источники (dist 0)
 function wgBfsField(seedFn){
   const W=S.W,N=W*S.H;
@@ -495,85 +683,335 @@ function wgBfsField(seedFn){
   }
   return d;
 }
-
-/* --- 2. озёра: котловины среднего пояса, у берега почти не встречаются --- */
-function wgLakes(){
-  const W=S.W,H=S.H;
-  let maxDc=0;for(const v of S.distCoast)if(v<32767&&v>maxDc)maxDc=v;
-  const want=2+((S.rng()*3)|0); // 2-4 озера
-  const placed=[];
-  for(let t=0;t<400&&placed.length<want;t++){
-    const x=4+((S.rng()*(W-8))|0),y=4+((S.rng()*(H-8))|0);
-    const i=idx(x,y);
-    if(S.terr[i]===T.WATER)continue;
-    const dc=S.distCoast[i];
-    if(dc<Math.max(4,maxDc*0.22)||dc>maxDc*0.85)continue; // не у самого берега
-    if(placed.some(p=>cheb(x,y,p.x,p.y)<10))continue;
-    const r=1+((S.rng()*2.6)|0);
-    for(let dy=-r;dy<=r;dy++)for(let dx=-r;dx<=r;dx++){
-      const nx=x+dx,ny=y+dy;
-      if(inMap(nx,ny)&&cheb(nx,ny,x,y)<=r&&S.rng()<0.85)S.terr[idx(nx,ny)]=T.WATER;
-    }
-    placed.push({x,y});
+// соседи гекса для wfcSolve: [[j, dir 0..5], ...]
+function wgHexNb(i){
+  const W=S.W,x=i%W,y=(i/W)|0,out=[];
+  const dirs=hexDirs(x);
+  for(let d=0;d<6;d++){
+    const nx=x+dirs[d][0],ny=y+dirs[d][1];
+    if(inMap(nx,ny))out.push([ny*W+nx,d]);
   }
+  return out;
 }
 
-/* --- 3. хребты-«снежинки»: тонкие цепи с отрогами, узлы по степени --- */
-function wgRidges(){
-  const W=S.W,H=S.H;
-  let maxDc=0,core=-1;
-  for(let i=0;i<W*H;i++)if(S.terr[i]!==T.WATER&&S.distCoast[i]>maxDc){maxDc=S.distCoast[i];core=i}
-  if(core<0)return;
-  const canMtn=(x,y,prev)=>{ // «тонкость»: новый пик соседствует только с хвостом цепи
-    if(!inMap(x,y))return false;
-    const i=idx(x,y);
-    if(S.terr[i]!==T.GRASS)return false;
-    if(S.distCoast[i]<Math.max(4,maxDc*0.35))return false; // хребты не лезут к морю
+/* --- слой 1: вороной-патчи + WFC ролей на графе --- */
+function wgPatches(){
+  const W=S.W,H=S.H,N=W*H;
+  // Poisson-диск дротиками: сайты не ближе minDist (hex-метрика)
+  const sites=[];
+  for(let t=0;t<1200&&sites.length<WFC.maxSites;t++){
+    const x=1+((S.rng()*(W-2))|0),y=1+((S.rng()*(H-2))|0);
+    let ok=true;
+    for(const s2 of sites)if(hexDist2(x,y,s2.x,s2.y)<WFC.minDist){ok=false;break}
+    if(ok)sites.push({x,y});
+  }
+  const P=sites.length;
+  if(P<12)return 'мало патчей ('+P+')';
+  // приписка гексов к ближайшему сайту волной (границы органично рваные)
+  S.patchOf=new Int16Array(N).fill(-1);
+  {
+    const q=[];
+    sites.forEach((s2,pi)=>{const i=idx(s2.x,s2.y);S.patchOf[i]=pi;q.push(i)});
+    for(let h2=0;h2<q.length;h2++){
+      const c=q[h2],x=c%W,y=(c/W)|0;
+      for(const d of hexDirs(x)){
+        const nx=x+d[0],ny=y+d[1];
+        if(!inMap(nx,ny))continue;
+        const ni=ny*W+nx;
+        if(S.patchOf[ni]<0){S.patchOf[ni]=S.patchOf[c];q.push(ni)}
+      }
+    }
+  }
+  // граф патчей: смежность, размер, центроид, касание края карты
+  const adjSet=[],cellsN=new Int32Array(P),cx=new Float32Array(P),cy=new Float32Array(P),border=new Uint8Array(P);
+  for(let p=0;p<P;p++)adjSet.push(new Set());
+  for(let i=0;i<N;i++){
+    const p=S.patchOf[i],x=i%W,y=(i/W)|0;
+    cellsN[p]++;cx[p]+=x;cy[p]+=y;
+    if(x===0||y===0||x===W-1||y===H-1)border[p]=1;
     for(const d of hexDirs(x)){
       const nx=x+d[0],ny=y+d[1];
       if(!inMap(nx,ny))continue;
-      const ni=idx(nx,ny);
-      if(S.terr[ni]===T.MTN&&ni!==prev)return false;
+      const p2=S.patchOf[ny*W+nx];
+      if(p2!==p)adjSet[p].add(p2);
     }
-    return true;
+  }
+  for(let p=0;p<P;p++){cx[p]/=cellsN[p];cy[p]/=cellsN[p]}
+  const pNb=adjSet.map(s2=>[...s2].map(j=>[j,0]));
+  // континент: морской азимут — с той стороны море, противоположная — глубь материка
+  const az=S.rng()*Math.PI*2,ux=Math.cos(az),uy=Math.sin(az);
+  const proj=new Float32Array(P);
+  for(let p=0;p<P;p++)proj[p]=((cx[p]-W/2)*ux+(cy[p]-H/2)*uy)/(W/2);
+  // матрица смежности ролей (симметричная): HIGH только через UP, озеро не у моря
+  const ok=(a,b)=>{
+    const M=[
+      [1,1,1,1,0,0],  // SEA:  SEA LOW WET UP
+      [1,1,1,1,0,1],  // LOW
+      [1,1,1,1,0,1],  // WET
+      [1,1,1,1,1,1],  // UP
+      [0,0,0,1,1,0],  // HIGH: UP HIGH
+      [0,1,1,1,0,0]]; // LAKE: LOW WET UP
+    return M[a][b];
   };
-  const growChain=(sx,sy,len,bias,attach)=>{
-    const cells=[];
-    let x=sx,y=sy,prev=(attach!==undefined?attach:-1);
-    for(let s2=0;s2<len;s2++){
-      if(!canMtn(x,y,prev))break;
+  const adj=[];
+  for(let a=0;a<6;a++){let m=0;for(let b=0;b<6;b++)if(ok(a,b))m|=1<<b;adj.push([m])}
+  const pins=new Map(),domains=new Uint16Array(P).fill(63);
+  for(let p=0;p<P;p++){
+    if(border[p]){
+      if(proj[p]>0.12)pins.set(p,PR.SEA);          // морской край
+      else domains[p]=63&~(1<<PR.LAKE);            // суша уходит за карту; озёра не режем краем
+    }
+  }
+  { // гарантия нагорий: 1-2 пина вглубь материка (HIGH сам не выживает —
+    // ему нужны ВСЕ соседи UP/HIGH, поэтому сеем узлы явно, свиту строит пропагация)
+    let h1=-1,bv=1e9;
+    for(let p=0;p<P;p++)if(!pins.has(p)&&proj[p]<bv){bv=proj[p];h1=p}
+    if(h1>=0){pins.set(h1,PR.HIGH);
+      if(S.rng()<0.6){
+        let h2=-1,b2=1e9;
+        for(let p=0;p<P;p++){
+          if(pins.has(p)||proj[p]>0)continue;
+          if(hexDist2(cx[h1]|0,cy[h1]|0,cx[p]|0,cy[p]|0)<W/3)continue;
+          if(proj[p]<b2){b2=proj[p];h2=p}
+        }
+        if(h2>=0)pins.set(h2,PR.HIGH);
+      }
+    }
+  }
+  const ev=S.wfcTrace?[]:null;
+  const roles=wfcSolve({
+    n:P,numTiles:6,neighbors:(p)=>pNb[p],opposite:[0],adj,
+    weights:(p)=>{
+      const w=new Float32Array(6);
+      // море: на краю с морской стороны — щедро, вглубь — быстро затухает
+      // (иначе морской клин рассекает сушу пополам)
+      w[PR.SEA]=border[p]?(proj[p]>0?0.15+proj[p]*3.4:0.03):Math.max(0.03,(proj[p]-0.18)*2.2);
+      w[PR.LOW]=1.35;
+      w[PR.WET]=0.5;
+      w[PR.UP]=1.0;
+      w[PR.HIGH]=Math.max(0.04,0.16-proj[p]*0.7); // нагорья тяготеют вглубь материка
+      w[PR.LAKE]=0.28;
+      return w;
+    },
+    pins,domains,rng:S.rng,backtrackLimit:WFC.btRoles,trace:ev,
+  });
+  if(!roles)return 'роли патчей не сошлись';
+  S.patchRole=roles;S.patchN=P;
+  if(S.wfcTrace)S.wfcTrace.stages.push({k:'roles',ev});
+  // валидация слоя: доля моря, связность суши, нагорья
+  let seaCells=0,high=0,lakes=0;
+  for(let p=0;p<P;p++){
+    if(roles[p]===PR.SEA)seaCells+=cellsN[p];
+    else if(roles[p]===PR.HIGH)high++;
+    else if(roles[p]===PR.LAKE)lakes++;
+  }
+  const seaFrac=seaCells/N;
+  if(seaFrac<0.10)return 'море пересохло ('+(seaFrac*100|0)+'%)';
+  if(seaFrac>0.45)return 'море затопило ('+(seaFrac*100|0)+'%)';
+  if(!high)return 'нет нагорья';
+  if(lakes>3)return 'озёр перебор';
+  { // суша (не SEA) должна быть одним массивом на графе патчей
+    const seen=new Uint8Array(P);let first=-1,cnt=0,tot=0;
+    for(let p=0;p<P;p++)if(roles[p]!==PR.SEA){tot++;if(first<0)first=p}
+    const q=[first];seen[first]=1;
+    for(let h2=0;h2<q.length;h2++){cnt++;
+      for(const [j] of pNb[q[h2]])if(!seen[j]&&roles[j]!==PR.SEA){seen[j]=1;q.push(j)}
+    }
+    if(cnt<tot)return 'суша рассечена морем';
+  }
+  return null;
+}
+
+/* --- слой 2: дискретные высоты 0..6, |Δh|<=1 (структура из локального правила) --- */
+function wgHeights(){
+  const W=S.W,H=S.H,N=W*H;
+  const ROLE_TGT=[0,1.5,1.0,3.2,5.4,1]; // целевая высота роли
+  // целевое поле: роль патча + сглаживание (склоны через границы патчей) + шум
+  let tgt=new Float32Array(N);
+  const isWater=new Uint8Array(N); // море и озёра — пин уровня
+  for(let i=0;i<N;i++){
+    const r=S.patchRole[S.patchOf[i]];
+    tgt[i]=ROLE_TGT[r];
+    if(r===PR.SEA||r===PR.LAKE)isWater[i]=1;
+  }
+  for(let pass=0;pass<6;pass++){
+    const nt=new Float32Array(N);
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
       const i=idx(x,y);
-      S.terr[i]=T.MTN;S.terrHp[i]=0;
-      cells.push(i);prev=i;
-      // следующий шаг: вглубь острова с инерцией направления
-      let best=null,bv=-1e9;
+      if(isWater[i]){nt[i]=tgt[i];continue}
+      let sum=tgt[i],n=1;
       for(const d of hexDirs(x)){
         const nx=x+d[0],ny=y+d[1];
-        if(!canMtn(nx,ny,prev))continue;
-        let v=S.distCoast[idx(nx,ny)]+S.rng()*2.2;
-        if(bias)v+=(d[0]*bias[0]+d[1]*bias[1])*1.6; // отрог держит направление
-        if(v>bv){bv=v;best={x:nx,y:ny}}
+        if(!inMap(nx,ny))continue;
+        sum+=tgt[idx(nx,ny)];n++;
       }
-      if(!best)break;
-      x=best.x;y=best.y;
+      nt[i]=sum/n;
     }
-    return cells;
+    tgt=nt;
+  }
+  for(let i=0;i<N;i++)if(!isWater[i])tgt[i]+=(fbm((i%W)/9,((i/W)|0)/9,S.seed+41,3)-0.5)*1.6;
+  // WFC: домен = уровень 0..6, сосед отличается максимум на 1
+  const adj=[];
+  for(let h=0;h<7;h++){
+    let m=1<<h;
+    if(h>0)m|=1<<(h-1);
+    if(h<6)m|=1<<(h+1);
+    adj.push([m,m,m,m,m,m]);
+  }
+  const pins=new Map(),domains=new Uint16Array(N).fill(127&~1); // суша: 1..6
+  for(let i=0;i<N;i++)if(isWater[i]){
+    const lake=S.patchRole[S.patchOf[i]]===PR.LAKE;
+    domains[i]=127;pins.set(i,lake?1:0);
+  }
+  const ev=S.wfcTrace?[]:null;
+  const res=wfcSolve({
+    n:N,numTiles:7,neighbors:wgHexNb,opposite:HEX_OPP,adj,
+    weights:(i)=>{
+      const w=new Float32Array(7);
+      for(let h=0;h<7;h++){const d=h-tgt[i];w[h]=Math.exp(-d*d/1.1)+0.02}
+      return w;
+    },
+    pins,domains,rng:S.rng,backtrackLimit:WFC.btHeights,trace:ev,
+  });
+  if(!res)return 'высоты не сошлись';
+  S.elevL=res;
+  if(S.wfcTrace)S.wfcTrace.stages.push({k:'elev',ev});
+  S.elev=new Float32Array(N);
+  for(let i=0;i<N;i++)
+    S.elev[i]=isWater[i]?0:res[i]/6+(fbm((i%W)/5,((i/W)|0)/5,S.seed+77,3)-0.5)*0.05;
+  S.wgWater=isWater; // пригодится слою террейна
+  return null;
+}
+
+/* --- слой 3: террейн (9 тайлов, жёсткая матрица, тонкие хребты) --- */
+function wgTerrain(){
+  const W=S.W,H=S.H,N=W*H;
+  const NT=9; // T.WATER..T.MTN + WT_NODE (узел хребта)
+  // допустимые пары (неориентированные, одинаковы по всем направлениям):
+  // лес только через опушку; горы только через скалы; лес/горы не у воды
+  const pairs=[
+    [T.WATER,T.WATER],[T.WATER,T.SAND],[T.WATER,T.GRASS],[T.WATER,T.SWAMP],[T.WATER,T.ROCK],
+    [T.SAND,T.SAND],[T.SAND,T.GRASS],[T.SAND,T.SCRUB],
+    [T.SWAMP,T.SWAMP],[T.SWAMP,T.GRASS],[T.SWAMP,T.SCRUB],
+    [T.GRASS,T.GRASS],[T.GRASS,T.SCRUB],[T.GRASS,T.ROCK],
+    [T.SCRUB,T.SCRUB],[T.SCRUB,T.FOREST],[T.SCRUB,T.ROCK],
+    [T.FOREST,T.FOREST],
+    [T.ROCK,T.ROCK],[T.ROCK,T.MTN],[T.ROCK,WT_NODE],
+    [T.MTN,T.MTN],[T.MTN,WT_NODE],[WT_NODE,WT_NODE],
+  ];
+  const mask=new Uint16Array(NT);
+  for(const [a,b] of pairs){mask[a]|=1<<b;mask[b]|=1<<a}
+  const adj=[];
+  for(let t=0;t<NT;t++)adj.push([mask[t],mask[t],mask[t],mask[t],mask[t],mask[t]]);
+  // домены: сужение по уровню высоты; пляж только у кромки моря
+  const seaSide=new Uint8Array(N); // гекс граничит с морской водой
+  for(let i=0;i<N;i++){
+    if(!S.wgWater[i])continue;
+    if(S.patchRole[S.patchOf[i]]===PR.LAKE)continue;
+    const x=i%W,y=(i/W)|0;
+    for(const d of hexDirs(x)){
+      const nx=x+d[0],ny=y+d[1];
+      if(inMap(nx,ny))seaSide[ny*W+nx]=1;
+    }
+  }
+  const B=(...ts)=>ts.reduce((m,t)=>m|1<<t,0);
+  const pins=new Map(),domains=new Uint16Array(N);
+  for(let i=0;i<N;i++){
+    if(S.wgWater[i]){domains[i]=(1<<NT)-1;pins.set(i,T.WATER);continue}
+    const h=S.elevL[i];
+    if(h<=1)domains[i]=B(T.GRASS,T.SCRUB,T.SWAMP,T.FOREST)|(seaSide[i]?B(T.SAND):0);
+    else if(h===2)domains[i]=B(T.GRASS,T.SCRUB,T.FOREST);
+    else if(h<=4)domains[i]=B(T.GRASS,T.SCRUB,T.FOREST,T.ROCK);
+    else domains[i]=B(T.GRASS,T.ROCK,T.MTN,WT_NODE);
+  }
+  // веса: приор роли патча x шумовые кластеры x крутизна склона
+  const ROLE_W=[]; // [role][tile]
+  ROLE_W[PR.SEA]=ROLE_W[PR.LAKE]=null; // запинены водой
+  ROLE_W[PR.LOW] =[0,0.9,0.06,1.9,0.45,0.8,0.3,0.8,0.02];
+  ROLE_W[PR.WET] =[0,0.3,2.0,1.0,0.5,0.5,0.25,0.6,0.02];
+  ROLE_W[PR.UP]  =[0,0.2,0.03,1.2,0.6,1.7,0.55,1.0,0.03];
+  ROLE_W[PR.HIGH]=[0,0.1,0.01,0.8,0.3,0.5,1.9,2.2,0.07];
+  const steep=new Uint8Array(N);
+  for(let i=0;i<N;i++){
+    const x=i%W,y=(i/W)|0;let s2=0;
+    for(const d of hexDirs(x)){
+      const nx=x+d[0],ny=y+d[1];
+      if(inMap(nx,ny)&&Math.abs(S.elevL[idx(nx,ny)]-S.elevL[i])>=1)s2++;
+    }
+    steep[i]=s2;
+  }
+  const ev=S.wfcTrace?[]:null;
+  const res=wfcSolve({
+    n:N,numTiles:NT,neighbors:wgHexNb,opposite:HEX_OPP,adj,
+    weights:(i)=>{
+      const w=new Float32Array(NT);
+      if(S.wgWater[i]){w[T.WATER]=1;return w}
+      const base=ROLE_W[S.patchRole[S.patchOf[i]]]||ROLE_W[PR.LOW];
+      const x=i%W,y=(i/W)|0;
+      for(let t=0;t<NT;t++)w[t]=base[t];
+      w[T.FOREST]*=0.4+1.8*fbm(x/6.5,y/6.5,S.seed+31,3);   // лесные кластеры
+      w[T.ROCK]*=(0.5+1.4*fbm(x/5,y/5,S.seed+53,3))*(1+0.25*steep[i]); // скалы на склонах
+      if(S.elevL[i]===6)w[T.MTN]*=1.8;                      // гребень
+      return w;
+    },
+    pins,domains,rng:S.rng,backtrackLimit:WFC.btTerrain,trace:ev,
+    // «тонкие хребты»: у MTN максимум 2 соседних пика; узел (WT_NODE) — до 4
+    onCollapse:(c,tile,ban,tileAt)=>{
+      if(tile!==T.MTN&&tile!==WT_NODE)return;
+      const x=c%W,y=(c/W)|0;
+      for(const d of hexDirs(x)){
+        const nx=x+d[0],ny=y+d[1];
+        if(!inMap(nx,ny))continue;
+        const nb=ny*W+nx;
+        if(tileAt(nb)>=0)continue; // уже схлопнут
+        let mtnN=0;
+        const nbx=nb%W,nby=(nb/W)|0;
+        for(const d2 of hexDirs(nbx)){
+          const mx=nbx+d2[0],my=nby+d2[1];
+          if(!inMap(mx,my))continue;
+          const t2=tileAt(my*W+mx);
+          if(t2===T.MTN||t2===WT_NODE)mtnN++;
+        }
+        if(mtnN>=2)ban(nb,T.MTN);
+        if(mtnN>=4)ban(nb,WT_NODE);
+      }
+    },
+  });
+  if(!res)return 'террейн не сошёлся';
+  if(S.wfcTrace)S.wfcTrace.stages.push({k:'terr',ev});
+  for(let i=0;i<N;i++){
+    const t=res[i]===WT_NODE?T.MTN:res[i];
+    S.terr[i]=t;
+    if(res[i]===WT_NODE)S.world.ridgeNodes.push(i);
+    if(t===T.FOREST)S.terrHp[i]=3;
+  }
+  return null;
+}
+
+/* --- entity: хребты/леса/озёра как floodfill-кластеры --- */
+function wgEntities(){
+  const W=S.W,N=W*S.H;
+  const fill=(match)=>{
+    const seen=new Uint8Array(N),out=[];
+    for(let i=0;i<N;i++){
+      if(seen[i]||!match(i))continue;
+      const q=[i];seen[i]=1;
+      for(let h2=0;h2<q.length;h2++){
+        const c=q[h2],x=c%W,y=(c/W)|0;
+        for(const d of hexDirs(x)){
+          const nx=x+d[0],ny=y+d[1];
+          if(!inMap(nx,ny))continue;
+          const ni=ny*W+nx;
+          if(!seen[ni]&&match(ni)){seen[ni]=1;q.push(ni)}
+        }
+      }
+      out.push(q);
+    }
+    return out;
   };
-  const mkRange=(sx,sy)=>{
-    const main=growChain(sx,sy,Math.round(W/5)+((S.rng()*6)|0),null);
-    if(main.length<4)return null;
-    const range={cells:main.slice(),spurs:[]};
-    // отроги от начала, середины и конца хребта (по форме — «снежинка»)
-    for(const at of [0,(main.length*0.33)|0,(main.length*0.66)|0,main.length-1]){
-      if(S.rng()<0.2)continue;
-      const i=main[at],x=i%W,y=(i/W)|0;
-      const dirs=hexDirs(x);
-      const d0=dirs[(S.rng()*6)|0];
-      const spur=growChain(x+d0[0],y+d0[1],2+((S.rng()*4)|0),d0,i);
-      if(spur.length){range.cells.push(...spur);range.spurs.push(spur)}
-    }
-    // классификация узлов по числу гребней (1 конец / 2 промежуточный / 3+ центральный)
-    range.nodes=range.cells.map(i=>{
+  for(const cells of fill(i=>S.terr[i]===T.MTN)){
+    if(cells.length<3)continue;
+    const nodes=cells.map(i=>{
       const x=i%W,y=(i/W)|0;
       let deg=0;
       for(const d of hexDirs(x)){
@@ -582,191 +1020,57 @@ function wgRidges(){
       }
       return {i,deg};
     });
-    S.world.ranges.push(range);
-    return range;
-  };
-  const cx=core%W,cy=(core/W)|0;
-  mkRange(cx,cy);
-  // 1-2 вторичные цепи в глубинке, поодаль от главной
-  const extra=1+((S.rng()*2)|0);
-  for(let e=0;e<extra;e++){
-    let best=-1,bv=-1;
-    for(let t=0;t<300;t++){
-      const x=6+((S.rng()*(W-12))|0),y=6+((S.rng()*(H-12))|0);
-      const i=idx(x,y);
-      if(S.terr[i]!==T.GRASS)continue;
-      const dc=S.distCoast[i];
-      if(dc<Math.max(5,maxDc*0.4))continue;
-      let farRidge=true;
-      for(const rg of S.world.ranges)for(const c of rg.cells)
-        if(cheb(x,y,c%W,(c/W)|0)<10){farRidge=false;break}
-      if(!farRidge)continue;
-      if(dc>bv){bv=dc;best=i}
-    }
-    if(best>=0)mkRange(best%W,(best/W)|0);
+    S.world.ranges.push({cells,nodes,spurs:[]});
   }
-}
-
-/* --- 4. высота: от берега вверх к хребту (реки текут строго вниз) --- */
-function wgElevation(){
-  const N=S.W*S.H;
-  const dr=wgBfsField(i=>S.terr[i]===T.MTN);
-  let maxDc=1;for(const v of S.distCoast)if(v<32767&&v>maxDc)maxDc=v;
-  S.elev=new Float32Array(N);
-  for(let i=0;i<N;i++){
-    if(S.terr[i]===T.WATER){S.elev[i]=0;continue}
-    const ridge=dr[i]>=32767?0:Math.max(0,1-dr[i]/16);
-    S.elev[i]=0.42*(S.distCoast[i]/maxDc)+0.58*ridge;
-  }
-}
-
-/* --- 5. WFC-заполнение: волна от контуров, мягкие правила соседства --- */
-function wgFill(){
-  const W=S.W,H=S.H,N=W*H;
-  let maxDc=1;for(const v of S.distCoast)if(v<32767&&v>maxDc)maxDc=v;
-  const dr=wgBfsField(i=>S.terr[i]===T.MTN);
-  const TILES=[T.GRASS,T.FOREST,T.ROCK];
-  const fixed=new Uint8Array(N); // контуры: вода и горы уже «схлопнуты»
-  for(let i=0;i<N;i++)if(S.terr[i]===T.WATER||S.terr[i]===T.MTN)fixed[i]=1;
-  // зональные приоры (кольца от берега, предгорья, поймы, берега озёр)
-  const prior=(i)=>{
-    const x=i%W,y=(i/W)|0;
-    const dc=S.distCoast[i],drr=dr[i];
-    let g=1.4,f=0.62,r=0.24;
-    if(dc<=5){f*=0.35;r*=(dc<=2?2.2:0.6)}         // прибрежье: луга, утёсы у кромки
-    else if(drr>6){f*=1.45}                         // средний пояс: лесные кластеры
-    if(drr<=3){r*=3.4;f*=0.45}                      // предгорья: скалы-холмы
-    let lake=false,sea=false;
-    for(const d of hexDirs(x)){
-      const nx=x+d[0],ny=y+d[1];
-      if(!inMap(nx,ny))continue;
-      const ni=idx(nx,ny);
-      if(S.terr[ni]===T.WATER)(S.waterKind[ni]===1?lake=true:sea=true);
-    }
-    if(lake){r*=1.6;f*=0.6}                         // скалы у озёр
-    if(cellNearRiver(x,y)){g*=2.0;f*=0.8;r*=0.6}    // поймы мягкие: река проходит и сквозь лес/скалы
-    return [g,f,r];
-  };
-  // волна: BFS-кольца от контуров к пустым областям (приоритет по фронту)
-  const order=[];
-  {
-    const dist=new Int16Array(N).fill(32767);
-    const q=[];
-    for(let i=0;i<N;i++)if(fixed[i]){dist[i]=0;q.push(i)}
-    for(let h2=0;h2<q.length;h2++){
-      const c=q[h2],x=c%W,y=(c/W)|0;
-      for(const d of hexDirs(x)){
-        const nx=x+d[0],ny=y+d[1];
-        if(!inMap(nx,ny))continue;
-        const ni=ny*W+nx;
-        if(dist[ni]>dist[c]+1){dist[ni]=dist[c]+1;q.push(ni);order.push(ni)}
-      }
-    }
-    // добить недостижимые (не бывает, но на всякий случай)
-    for(let i=0;i<N;i++)if(!fixed[i]&&dist[i]===32767)order.push(i);
-  }
-  const done=new Uint8Array(N);
-  // дебаг-реплей: записываем порядок и решения волны (кнопка WFC в отладке)
-  const trace=WFC_DEBUG?{fixed:[],steps:[],relax:[]}:null;
-  if(trace)for(let i=0;i<N;i++)if(fixed[i])trace.fixed.push(i);
-  for(const i of order){
-    if(fixed[i]||done[i])continue;
-    done[i]=1;
-    const [pg,pf,pr]=prior(i);
-    let wg=pg,wf=pf,wr=pr;
-    const x=i%W,y=(i/W)|0;
-    for(const d of hexDirs(x)){ // аффинность уже схлопнутых соседей
-      const nx=x+d[0],ny=y+d[1];
-      if(!inMap(nx,ny))continue;
-      const t=S.terr[idx(nx,ny)];
-      if(t===T.FOREST){wf*=1.6;wr*=0.75}
-      else if(t===T.ROCK){wr*=1.75;wf*=0.8}
-      else if(t===T.MTN){wr*=1.5;wf*=0.5}
-    }
-    let roll=S.rng()*(wg+wf+wr);
-    let t;
-    if((roll-=wg)<0)t=T.GRASS;
-    else if((roll-=wf)<0)t=T.FOREST;
-    else t=T.ROCK;
-    S.terr[i]=t;
-    if(t===T.FOREST)S.terrHp[i]=3;
-    if(trace)trace.steps.push({i,t});
-  }
-  // релаксация: укрупняем кластеры (одинокий лес -> луг, плотное окружение -> лес).
-  // Лес станет непроходимым — нужны цельные массивы с коридорами, а не крапинки.
-  for(let pass=0;pass<2;pass++){
-    const snap=S.terr.slice();
-    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-      const i=idx(x,y);
-      const t=snap[i];
-      if(t!==T.GRASS&&t!==T.FOREST)continue;
-      let f=0,n=0;
-      for(const d of hexDirs(x)){
-        const nx=x+d[0],ny=y+d[1];
-        if(!inMap(nx,ny))continue;
-        n++;
-        if(snap[idx(nx,ny)]===T.FOREST)f++;
-      }
-      if(t===T.FOREST&&f<=1){S.terr[i]=T.GRASS;S.terrHp[i]=0;if(trace)trace.relax.push({i,t:T.GRASS})}
-      else if(t===T.GRASS&&f>=4){S.terr[i]=T.FOREST;S.terrHp[i]=3;if(trace)trace.relax.push({i,t:T.FOREST})}
-    }
-    // одинокие скалы — визуальный мусор: без каменных соседей превращаем в луг
-    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-      const i=idx(x,y);
-      if(snap[i]!==T.ROCK||S.terr[i]!==T.ROCK)continue;
-      let rk=0;
-      for(const d of hexDirs(x)){
-        const nx=x+d[0],ny=y+d[1];
-        if(!inMap(nx,ny))continue;
-        const t2=S.terr[idx(nx,ny)];
-        if(t2===T.ROCK||t2===T.MTN)rk++;
-      }
-      if(rk===0){S.terr[i]=T.GRASS;if(trace)trace.relax.push({i,t:T.GRASS})}
-    }
-  }
-  if(trace)S.wfcTrace=trace;
-}
-
-/* --- 6. entity: леса и озёра как floodfill-кластеры --- */
-function wgEntities(){
-  const W=S.W,N=W*S.H;
-  const seen=new Uint8Array(N);
-  for(let i=0;i<N;i++){
-    if(seen[i]||S.terr[i]!==T.FOREST)continue;
-    const q=[i];seen[i]=1;
-    for(let h2=0;h2<q.length;h2++){
-      const c=q[h2],x=c%W,y=(c/W)|0;
-      for(const d of hexDirs(x)){
-        const nx=x+d[0],ny=y+d[1];
-        if(!inMap(nx,ny))continue;
-        const ni=ny*W+nx;
-        if(!seen[ni]&&S.terr[ni]===T.FOREST){seen[ni]=1;q.push(ni)}
-      }
-    }
-    if(q.length>=3)S.world.forests.push({cells:q.slice()});
-  }
+  for(const cells of fill(i=>S.terr[i]===T.FOREST))
+    if(cells.length>=3)S.world.forests.push({cells});
   if(S.waterComps)for(let ci=0;ci<S.waterComps.length;ci++)
     if(S.waterComps[ci].sea===1)S.world.lakes.push({comp:ci,size:S.waterComps[ci].size});
 }
 
-/* --- 7. валидация: инварианты мира, иначе retry --- */
+/* --- валидация: инварианты мира, иначе фейл попытки --- */
 function wgValidate(){
   const N=S.W*S.H;
-  let land=0,forest=0,mtn=0,rock=0;
+  let water=0,sea=0,forest=0,mtn=0,rock=0,swamp=0,sand=0;
   for(let i=0;i<N;i++){
     const t=S.terr[i];
-    if(t!==T.WATER)land++;
-    if(t===T.FOREST)forest++;
-    if(t===T.MTN)mtn++;
-    if(t===T.ROCK)rock++;
+    if(t===T.WATER){water++;if(S.waterKind[i]===2)sea++}
+    else if(t===T.FOREST)forest++;
+    else if(t===T.MTN)mtn++;
+    else if(t===T.ROCK)rock++;
+    else if(t===T.SWAMP)swamp++;
+    else if(t===T.SAND)sand++;
   }
-  const landFrac=land/N;
-  if(landFrac<0.30||landFrac>0.72)return 'суша '+(landFrac*100|0)+'%';
-  if(mtn<20)return 'нет хребта';
-  if(forest<50)return 'мало леса';
-  if(forest>land*0.42)return 'лес заполонил';
-  if(rock<20)return 'мало холмов';
+  const land=N-water,landFrac=land/N;
+  if(landFrac<0.5||landFrac>0.92)return 'суша '+(landFrac*100|0)+'%';
+  if(!sea)return 'нет моря';
+  if(mtn<12)return 'нет хребта';
+  if(forest<40)return 'мало леса';
+  if(forest>land*0.45)return 'лес заполонил';
+  if(rock<14)return 'мало скал';
+  if(swamp>land*0.10)return 'сплошная топь';
+  if(sand>land*0.08)return 'сплошной пляж';
   if(!S.world.rivers.length&&S.riverStats.springs+S.riverStats.outflows<1)return 'нет рек';
+  { // связность для ЖИТЕЛЕЙ (лес непроходим): крупнейший массив >= 75% проходимого
+    const pass=(i)=>{const t=S.terr[i];return t!==T.WATER&&t!==T.MTN&&t!==T.FOREST};
+    const seen=new Uint8Array(N);let tot=0,best=0;
+    for(let i=0;i<N;i++)if(pass(i))tot++;
+    for(let i=0;i<N;i++){
+      if(seen[i]||!pass(i))continue;
+      const q=[i];seen[i]=1;
+      for(let h2=0;h2<q.length;h2++){
+        const c=q[h2],x=c%S.W,y=(c/S.W)|0;
+        for(const d of hexDirs(x)){
+          const nx=x+d[0],ny=y+d[1];
+          if(!inMap(nx,ny))continue;
+          const ni=ny*S.W+nx;
+          if(!seen[ni]&&pass(ni)){seen[ni]=1;q.push(ni)}
+        }
+      }
+      if(q.length>best)best=q.length;
+    }
+    if(best<tot*0.75)return 'коридоры перекрыты';
+  }
   return null;
 }
 /* ================= STATE + MAPGEN ================= */
@@ -2753,7 +3057,7 @@ function siteOk(type,x,y){
   const i=idx(x,y);
   if(S.road[i])return false; // не на дороге
   const t=S.terr[i];
-  const terrOk=(t===T.GRASS)||(type==='mine'&&t===T.ROCK);
+  const terrOk=(t===T.GRASS)||(t===T.SCRUB)||(type==='mine'&&t===T.ROCK); // опушка застраиваема
   if(!terrOk||S.feat[i]!==F.NONE||S.bld[i]>=0||S.lairAt[i]>=0)return false;
   if(NEAR_ROAD_TYPES[type]){
     let nr=false;
@@ -4077,9 +4381,13 @@ const PAL={
   DI:'#6d5238',w:'#8a6b45',Wd:'#6b4f30',
   r:'#a5533a',R:'#7c3b2a',y:'#eec658',k:'#100c14',
   SK:'#d9a066',Cb:'#3a5aa8',Cg:'#3f7d5a',Cr:'#a8353a',
-  TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c'
+  TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c',
+  SA1:'#a8935f',SA2:'#c4af74',SA3:'#dbcb92',      // пляж
+  SW1:'#2c4a42',SW2:'#3a5f50',SW3:'#4b7a5c',      // болото
+  SC1:'#54713a',SC2:'#6f8c43',SC3:'#8ba650'       // опушка/кустарник
 };
 const OUTL={};OUTL[T.GRASS]=PAL.G1;OUTL[T.FOREST]=PAL.F1;OUTL[T.ROCK]=PAL.R1;OUTL[T.MTN]=PAL.o;
+OUTL[T.SAND]=PAL.SA1;OUTL[T.SWAMP]=PAL.SW1;OUTL[T.SCRUB]=PAL.SC1;
 
 const G_HUMAN=[
 "................",
@@ -4453,6 +4761,9 @@ function terrPix(t,x,y,seed){
     case T.MTN:{const d=(x+y)&7;let c=(d<3)?PAL.M2:PAL.M1;
       if(y<5&&hash2(x,y,seed+7)<0.55)c=PAL.SN;
       if(h<0.07)c=PAL.M1;return c}
+    case T.SAND: if(h<0.10)return PAL.SA3; if(h>0.90)return PAL.SA1; return PAL.SA2;
+    case T.SCRUB:{const b=hash2(x>>1,y>>1,seed+9);if(b<0.24)return PAL.SC1;if(b>0.78&&h<0.5)return PAL.SC3;return PAL.SC2}
+    case T.SWAMP:{if(h<0.10)return PAL.W2;const b=hash2(x>>1,y>>1,seed+5);if(b<0.3)return PAL.SW1;if(h>0.9)return PAL.SW3;return PAL.SW2}
   }
   return '#f0f';
 }
@@ -4595,6 +4906,7 @@ function paintRiverTri(ctx,x0,y0,orr,mask,tint){
   }
   // берега: пиксели рядом с водой, тон под террейн
   const bankC={};bankC[T.GRASS]=PAL.G1;bankC[T.FOREST]=PAL.F1;bankC[T.ROCK]=PAL.R1;bankC[T.MTN]=PAL.M1;
+  bankC[T.SAND]=PAL.SA1;bankC[T.SWAMP]=PAL.SW1;bankC[T.SCRUB]=PAL.SC1;
   ctx.fillStyle=bankC[tint]||PAL.G1;
   for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
     if(lit[py2*14+px2]||!ins(px2,py2))continue;
@@ -4871,11 +5183,11 @@ function buildAtlas(){
     return r;
   };
   // Drop I: dual-triangle террейн (flat-top: ◀/▶). Полные (2 варианта шума) + маски 1..6.
-  for(const t of [T.WATER,T.GRASS,T.FOREST,T.ROCK,T.MTN]){
+  for(const t of [T.WATER,T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN]){
     for(const orr of ['l','r'])
       for(let v=0;v<2;v++){const p=place(TRIW,TRIH);paintTriFull(ctx,p.x,p.y,t,orr,v);reg('tri'+t+'_'+orr+'_full'+v,p.x,p.y,TRIW,TRIH)}
   }
-  for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN]){
+  for(const t of [T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN]){
     for(const orr of ['l','r'])
       for(let bits=1;bits<7;bits++){
         const p=place(TRIW,TRIH);paintTriTransition(ctx,p.x,p.y,t,orr,bits);reg('tri'+t+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
@@ -4957,7 +5269,7 @@ function buildAtlas(){
   p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
   p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
   for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
-  for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN])
+  for(const t of [T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN])
     for(const orr of ['l','r'])
       for(let m=1;m<8;m++){p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,14,16)}
   p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);
@@ -5037,14 +5349,14 @@ function buildTerrain(){
       bQuad(base,WXC(x),wyTop-1,WXC(x)+CW,wyTop,spr);
     }
     let m=meshFromBatch(base,1);R.scene.add(m);R.terrStaticMeshes.push(m);
-    for(const [t,ord] of [[T.GRASS,2],[T.ROCK,4],[T.MTN,5]]){
+    for(const [t,ord] of [[T.SAND,2],[T.SWAMP,3],[T.GRASS,4],[T.SCRUB,5],[T.ROCK,7],[T.MTN,8]]){
       m=meshFromBatch(layerBatch(t),ord);R.scene.add(m);R.terrStaticMeshes.push(m);
     }
     buildRivers();
     S.terrFullDirty=false;
   }
   if(R.terrForestMesh){R.scene.remove(R.terrForestMesh);R.terrForestMesh.geometry.dispose()}
-  R.terrForestMesh=meshFromBatch(layerBatch(T.FOREST),3);
+  R.terrForestMesh=meshFromBatch(layerBatch(T.FOREST),6);
   R.scene.add(R.terrForestMesh);
   S.terrDirty=false;
 }
@@ -5063,7 +5375,7 @@ function buildRivers(){
       if(ov.kind==='mouth')bQuad(b,ov.wx-0.28,ov.wy-0.28,ov.wx+0.28,ov.wy+0.28,SPR['r_mouth']);
       else if(ov.kind==='falls')bQuad(b,ov.wx-0.34,ov.wy-0.4,ov.wx+0.34,ov.wy+0.4,SPR['r_falls']);
     }
-  R.riverMesh=meshFromBatch(b,6);R.scene.add(R.riverMesh);
+  R.riverMesh=meshFromBatch(b,8.5);R.scene.add(R.riverMesh); // над всеми слоями террейна (1..8)
 }
 function buildRoads(){
   if(R.roadMesh){R.scene.remove(R.roadMesh);R.roadMesh.geometry.dispose();R.roadMesh=null}
@@ -5121,7 +5433,7 @@ function buildRoads(){
       const cx=WXC(c.x),cy=WYCC(c.x,c.y);
       bQuad(b,cx-0.5,cy-0.5,cx+0.5,cy+0.5,SPR['stake']);
     }
-  R.roadMesh=meshFromBatch(b,7);R.scene.add(R.roadMesh);
+  R.roadMesh=meshFromBatch(b,9);R.scene.add(R.roadMesh); // дороги и мосты — над реками (8.5)
   S.roadDirty=false;
 }
 // Drop I: debug-оверлей сеток — как «Main grid & dual grid» у Оскара.
@@ -5875,7 +6187,7 @@ function buildDebug(){
     '<button id="dbg_wood">+10 дерева</button>'+
     '<button id="dbg_food">+10 еды</button>'+
     '<button id="dbg_stone">+10 камня</button>'+
-    '<button id="dbg_wfc">WFC-реплей</button>'+
+    '<button id="dbg_wfc">Генерация (реплей)</button>'+
     '</div>';
   el('dbg_reveal').onclick=()=>{S.revealAll=!S.revealAll;S.fogDirty=true};
   el('dbg_grid').onclick=()=>toggleGrid();
@@ -5884,20 +6196,19 @@ function buildDebug(){
   el('dbg_wood').onclick=()=>{S.stock.wood+=10;computeLevels()};
   el('dbg_food').onclick=()=>{S.stock.food+=10;computeLevels()};
   el('dbg_stone').onclick=()=>{S.stock.stone+=10;computeLevels()};
-  el('dbg_wfc').onclick=()=>wfcReplay();
+  el('dbg_wfc').onclick=()=>genViewer();
 }
-/* ---------- дебаг-реплей WFC: пошаговая сборка тайлов ----------
-   Перегенерирует текущий сид с записью трейса и проигрывает волну:
-   контуры (вода/горы) видны сразу, клетки схлопываются в порядке волны,
-   жёлтая точка — фронт; красные вспышки — релаксация (пересборка уже
-   схлопнутых тайлов; классического бэктрекинга нет: правила мягкие,
-   GRASS — запасной тайл, противоречия невозможны по построению). */
-function wfcReplay(){
-  WFC_DEBUG=true;
-  restart(S.seedStr);
-  WFC_DEBUG=false;
+/* ---------- просмотрщик генерации (главный экран режима «генератор») ----------
+   Проигрывает трейс S.wfcTrace по стадиям: 1) вороной-патчи (пастель),
+   2) роли патчей, 3) высоты (серым), 4) террейн, 5) реки. Красная вспышка —
+   откат бэктрекинга (uncollapse). Скорость подчиняется кнопкам скорости
+   (1x/2x/4x/×8). Фейл генерации — красный баннер с причиной, новая
+   попытка — кнопка «Запуск». Клик по канве — закрыть. */
+let GENV=null; // текущая канва просмотрщика
+function genViewer(){
+  if(GENV){GENV.stop=true;GENV.cv.remove();GENV=null}
   const tr=S.wfcTrace;
-  if(!tr){log('WFC-трейс пуст');return}
+  if(!tr){log('трейс генерации пуст');return}
   const SC=Math.max(4,Math.floor(Math.min(innerWidth,innerHeight-60)/S.W));
   const cv=document.createElement('canvas');
   cv.width=S.W*SC;cv.height=S.H*SC;
@@ -5905,48 +6216,81 @@ function wfcReplay(){
     'z-index:60;image-rendering:pixelated;border:2px solid var(--edge);box-shadow:0 6px 0 rgba(0,0,0,.5)';
   document.body.appendChild(cv);
   const ctx=cv.getContext('2d');
-  const cols={};cols[T.WATER]='#2a6f92';cols[T.GRASS]='#4c8a3f';cols[T.FOREST]='#1f4526';cols[T.ROCK]='#73717c';cols[T.MTN]='#e8e8f0';
-  const cell=(i,c)=>{ctx.fillStyle=c;ctx.fillRect((i%S.W)*SC,((i/S.W)|0)*SC,SC,SC)};
+  const v={cv,stop:false};GENV=v;
+  const W=S.W,N=W*S.H;
+  // цвета: тайлы террейна, роли патчей, пастель патчей
+  const tc=[];tc[T.WATER]='#2a6f92';tc[T.SAND]='#c4af74';tc[T.SWAMP]='#3a5f50';tc[T.GRASS]='#4c8a3f';
+  tc[T.SCRUB]='#6f8c43';tc[T.FOREST]='#1f4526';tc[T.ROCK]='#73717c';tc[T.MTN]='#e8e8f0';tc[8]='#ffffff';
+  const rc=['#2a6f92','#4c8a3f','#3a5f50','#8b7f4a','#dadde6','#4899b0'];
+  const patchCells=[]; // патч -> клетки (для стадий 1-2)
+  if(S.patchOf){
+    for(let p=0;p<S.patchN;p++)patchCells.push([]);
+    for(let i=0;i<N;i++)patchCells[S.patchOf[i]].push(i);
+  }
+  const cell=(i,c)=>{ctx.fillStyle=c;ctx.fillRect((i%W)*SC,((i/W)|0)*SC,SC,SC)};
+  const flash=(i)=>{cell(i,'#d05a4e');setTimeout(()=>{if(!v.stop)cell(i,'#221c28')},200)};
   ctx.fillStyle='#15101a';ctx.fillRect(0,0,cv.width,cv.height);
-  for(const i of tr.fixed)cell(i,S.waterKind&&S.waterKind[i]===1?'#4899b0':cols[S.terr[i]===T.MTN?T.MTN:T.WATER]);
-  let si=0,ri=0,stage=0,stop=false;
-  const speed=Math.max(6,Math.round(tr.steps.length/240)); // ~4 сек на волну
+  // стадия 0: вороной-разбиение целиком (пастель по id патча)
+  if(S.patchOf)for(let i=0;i<N;i++)
+    cell(i,'hsl('+((hash2(S.patchOf[i],7,S.seed)*360)|0)+' 32% 30%)');
   const drawRivers=()=>{
     if(!S.riverEdges)return;
     ctx.strokeStyle='#7fd4ff';ctx.lineWidth=Math.max(1,SC/4);
-    const N2=S.W*S.H;
     for(const k of S.riverEdges){
-      const a=Math.floor(k/N2),b=k%N2;
+      const a=Math.floor(k/N),b=k%N;
       ctx.beginPath();
-      ctx.moveTo((a%S.W+0.5)*SC,(((a/S.W)|0)+0.5)*SC);
-      ctx.lineTo((b%S.W+0.5)*SC,(((b/S.W)|0)+0.5)*SC);
+      ctx.moveTo((a%W+0.5)*SC,(((a/W)|0)+0.5)*SC);
+      ctx.lineTo((b%W+0.5)*SC,(((b/W)|0)+0.5)*SC);
       ctx.stroke();
     }
   };
-  const frame=()=>{
-    if(stop)return;
-    if(stage===0){ // волна от контуров
-      for(let k=0;k<speed&&si<tr.steps.length;k++,si++){
-        const st=tr.steps[si];
-        cell(st.i,cols[st.t]);
+  const banner=(msg,bad)=>{
+    ctx.fillStyle=bad?'rgba(120,28,24,0.92)':'rgba(24,80,36,0.92)';
+    ctx.fillRect(0,cv.height/2-16,cv.width,32);
+    ctx.fillStyle='#fff';ctx.font='bold '+Math.max(11,SC*2.5)+'px monospace';ctx.textAlign='center';
+    ctx.fillText(msg,cv.width/2,cv.height/2+5);
+  };
+  // проигрыватель: события всех стадий подряд, темп по РЕАЛЬНОМУ времени
+  // (~9 c на всю сборку при 1x; кнопки скорости ускоряют), не по кадрам —
+  // fps под three.js плавает и не должен влиять на длительность реплея
+  const stages=tr.stages||[];
+  const evs=[];
+  for(const st of stages)for(const e of st.ev)evs.push([st.k,e]);
+  const total=evs.length||1;
+  let eIdx=0,carry=0,lastT=performance.now(),done=false;
+  const paintEv=(k,e)=>{
+    if(e.u!==undefined){
+      if(k==='roles'){for(const i of patchCells[e.u]||[])flash(i)}
+      else flash(e.u);
+      return;
+    }
+    if(e.bt)return;
+    if(k==='roles'){for(const i of patchCells[e.c]||[])cell(i,rc[e.t])}
+    else if(k==='elev'){const g=30+e.t*30;cell(e.c,'rgb('+g+' '+(g-4)+' '+(g+6)+')')}
+    else cell(e.c,tc[e.t]||'#f0f');
+  };
+  const frame=(now)=>{
+    if(v.stop)return;
+    if(!done){
+      const dt=Math.min(0.2,(now-lastT)/1000);lastT=now;
+      carry+=(total/9)*(S.speed||1)*dt;
+      let k=carry|0;carry-=k;
+      for(;k>0&&eIdx<total;k--,eIdx++)paintEv(evs[eIdx][0],evs[eIdx][1]);
+      if(eIdx>=total){
+        done=true;
+        setTimeout(()=>{
+          if(v.stop)return;
+          drawRivers();
+          if(S.genError)banner('🌀 '+S.genError,true);
+          else banner('✓ карта готова · сид '+S.seedStr,false);
+        },250);
       }
-      if(si<tr.steps.length){ // жёлтый фронт
-        const st=tr.steps[si];
-        cell(st.i,'#eec658');
-      }else stage=1;
-    }else if(stage===1){ // релаксация — «пересборка» тайлов, красная вспышка
-      for(let k=0;k<3&&ri<tr.relax.length;k++,ri++){
-        const st=tr.relax[ri];
-        cell(st.i,'#d05a4e');
-        setTimeout(((i2,t2)=>()=>{if(!stop)cell(i2,cols[t2])})(st.i,st.t),220);
-      }
-      if(ri>=tr.relax.length){stage=2;setTimeout(()=>{if(!stop){drawRivers()}},350)}
     }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  cv.onclick=()=>{stop=true;cv.remove()};
-  log('🌀 WFC-реплей: волна от контуров; красное — релаксация; клик — закрыть.');
+  cv.onclick=()=>{v.stop=true;cv.remove();if(GENV===v)GENV=null};
+  log('🌀 Генерация: патчи → роли → высоты → террейн → реки. Красное — откаты. Клик — закрыть.');
 }
 function updateDebug(fps){
   if(el('debug').classList.contains('hidden'))return;
@@ -6386,6 +6730,7 @@ function restart(seedStr){
   buildUI();
   setSpeed(1);
   if(S.paused)togglePause();
+  genViewer(); // режим «генератор»: каждый запуск показывает сборку карты по шагам
 }
 function boot(){
   const seed=String((Math.random()*1e9)|0);
@@ -6396,6 +6741,7 @@ function boot(){
   console.log('[Марка] атлас за '+S.atlasMs.toFixed(1)+' мс, сид '+seed);
   initRender();
   buildUI();
+  genViewer(); // режим «генератор»: показать сборку стартовой карты
   let last=performance.now(),acc=0,uiT=0,fps=0,fc=0,ft=0;
   function frame(t){
     const dtR=Math.min(0.1,(t-last)/1000);last=t;
@@ -6480,7 +6826,7 @@ function runHeadless(){
   newGame(hseed);
   const hexErrs=hexSelfTest();
   console.log('hexgrid:',hexErrs.length?('ISSUES '+JSON.stringify(hexErrs.slice(0,5))):'ok');
-  const cnt=[0,0,0,0,0];for(const t of S.terr)cnt[t]++;
+  const cnt=new Array(TNAME.length).fill(0);for(const t of S.terr)cnt[t]++;
   console.log('terrain:',cnt.map((n,i)=>TNAME[i]+' '+(100*n/S.terr.length).toFixed(0)+'%').join(' | '));
   {const N2=S.W*S.H;let br=0;
    for(const k of (S.riverEdges||[])){const a=Math.floor(k/N2),b=k%N2;if(S.road[a]&&S.road[b])br++}

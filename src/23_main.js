@@ -12,6 +12,7 @@ function restart(seedStr){
   buildUI();
   setSpeed(1);
   if(S.paused)togglePause();
+  genViewer(); // режим «генератор»: каждый запуск показывает сборку карты по шагам
 }
 function boot(){
   const seed=String((Math.random()*1e9)|0);
@@ -22,6 +23,7 @@ function boot(){
   console.log('[Марка] атлас за '+S.atlasMs.toFixed(1)+' мс, сид '+seed);
   initRender();
   buildUI();
+  genViewer(); // режим «генератор»: показать сборку стартовой карты
   let last=performance.now(),acc=0,uiT=0,fps=0,fc=0,ft=0;
   function frame(t){
     const dtR=Math.min(0.1,(t-last)/1000);last=t;

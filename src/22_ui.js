@@ -23,7 +23,7 @@ function buildDebug(){
     '<button id="dbg_wood">+10 дерева</button>'+
     '<button id="dbg_food">+10 еды</button>'+
     '<button id="dbg_stone">+10 камня</button>'+
-    '<button id="dbg_wfc">WFC-реплей</button>'+
+    '<button id="dbg_wfc">Генерация (реплей)</button>'+
     '</div>';
   el('dbg_reveal').onclick=()=>{S.revealAll=!S.revealAll;S.fogDirty=true};
   el('dbg_grid').onclick=()=>toggleGrid();
@@ -32,20 +32,19 @@ function buildDebug(){
   el('dbg_wood').onclick=()=>{S.stock.wood+=10;computeLevels()};
   el('dbg_food').onclick=()=>{S.stock.food+=10;computeLevels()};
   el('dbg_stone').onclick=()=>{S.stock.stone+=10;computeLevels()};
-  el('dbg_wfc').onclick=()=>wfcReplay();
+  el('dbg_wfc').onclick=()=>genViewer();
 }
-/* ---------- дебаг-реплей WFC: пошаговая сборка тайлов ----------
-   Перегенерирует текущий сид с записью трейса и проигрывает волну:
-   контуры (вода/горы) видны сразу, клетки схлопываются в порядке волны,
-   жёлтая точка — фронт; красные вспышки — релаксация (пересборка уже
-   схлопнутых тайлов; классического бэктрекинга нет: правила мягкие,
-   GRASS — запасной тайл, противоречия невозможны по построению). */
-function wfcReplay(){
-  WFC_DEBUG=true;
-  restart(S.seedStr);
-  WFC_DEBUG=false;
+/* ---------- просмотрщик генерации (главный экран режима «генератор») ----------
+   Проигрывает трейс S.wfcTrace по стадиям: 1) вороной-патчи (пастель),
+   2) роли патчей, 3) высоты (серым), 4) террейн, 5) реки. Красная вспышка —
+   откат бэктрекинга (uncollapse). Скорость подчиняется кнопкам скорости
+   (1x/2x/4x/×8). Фейл генерации — красный баннер с причиной, новая
+   попытка — кнопка «Запуск». Клик по канве — закрыть. */
+let GENV=null; // текущая канва просмотрщика
+function genViewer(){
+  if(GENV){GENV.stop=true;GENV.cv.remove();GENV=null}
   const tr=S.wfcTrace;
-  if(!tr){log('WFC-трейс пуст');return}
+  if(!tr){log('трейс генерации пуст');return}
   const SC=Math.max(4,Math.floor(Math.min(innerWidth,innerHeight-60)/S.W));
   const cv=document.createElement('canvas');
   cv.width=S.W*SC;cv.height=S.H*SC;
@@ -53,48 +52,81 @@ function wfcReplay(){
     'z-index:60;image-rendering:pixelated;border:2px solid var(--edge);box-shadow:0 6px 0 rgba(0,0,0,.5)';
   document.body.appendChild(cv);
   const ctx=cv.getContext('2d');
-  const cols={};cols[T.WATER]='#2a6f92';cols[T.GRASS]='#4c8a3f';cols[T.FOREST]='#1f4526';cols[T.ROCK]='#73717c';cols[T.MTN]='#e8e8f0';
-  const cell=(i,c)=>{ctx.fillStyle=c;ctx.fillRect((i%S.W)*SC,((i/S.W)|0)*SC,SC,SC)};
+  const v={cv,stop:false};GENV=v;
+  const W=S.W,N=W*S.H;
+  // цвета: тайлы террейна, роли патчей, пастель патчей
+  const tc=[];tc[T.WATER]='#2a6f92';tc[T.SAND]='#c4af74';tc[T.SWAMP]='#3a5f50';tc[T.GRASS]='#4c8a3f';
+  tc[T.SCRUB]='#6f8c43';tc[T.FOREST]='#1f4526';tc[T.ROCK]='#73717c';tc[T.MTN]='#e8e8f0';tc[8]='#ffffff';
+  const rc=['#2a6f92','#4c8a3f','#3a5f50','#8b7f4a','#dadde6','#4899b0'];
+  const patchCells=[]; // патч -> клетки (для стадий 1-2)
+  if(S.patchOf){
+    for(let p=0;p<S.patchN;p++)patchCells.push([]);
+    for(let i=0;i<N;i++)patchCells[S.patchOf[i]].push(i);
+  }
+  const cell=(i,c)=>{ctx.fillStyle=c;ctx.fillRect((i%W)*SC,((i/W)|0)*SC,SC,SC)};
+  const flash=(i)=>{cell(i,'#d05a4e');setTimeout(()=>{if(!v.stop)cell(i,'#221c28')},200)};
   ctx.fillStyle='#15101a';ctx.fillRect(0,0,cv.width,cv.height);
-  for(const i of tr.fixed)cell(i,S.waterKind&&S.waterKind[i]===1?'#4899b0':cols[S.terr[i]===T.MTN?T.MTN:T.WATER]);
-  let si=0,ri=0,stage=0,stop=false;
-  const speed=Math.max(6,Math.round(tr.steps.length/240)); // ~4 сек на волну
+  // стадия 0: вороной-разбиение целиком (пастель по id патча)
+  if(S.patchOf)for(let i=0;i<N;i++)
+    cell(i,'hsl('+((hash2(S.patchOf[i],7,S.seed)*360)|0)+' 32% 30%)');
   const drawRivers=()=>{
     if(!S.riverEdges)return;
     ctx.strokeStyle='#7fd4ff';ctx.lineWidth=Math.max(1,SC/4);
-    const N2=S.W*S.H;
     for(const k of S.riverEdges){
-      const a=Math.floor(k/N2),b=k%N2;
+      const a=Math.floor(k/N),b=k%N;
       ctx.beginPath();
-      ctx.moveTo((a%S.W+0.5)*SC,(((a/S.W)|0)+0.5)*SC);
-      ctx.lineTo((b%S.W+0.5)*SC,(((b/S.W)|0)+0.5)*SC);
+      ctx.moveTo((a%W+0.5)*SC,(((a/W)|0)+0.5)*SC);
+      ctx.lineTo((b%W+0.5)*SC,(((b/W)|0)+0.5)*SC);
       ctx.stroke();
     }
   };
-  const frame=()=>{
-    if(stop)return;
-    if(stage===0){ // волна от контуров
-      for(let k=0;k<speed&&si<tr.steps.length;k++,si++){
-        const st=tr.steps[si];
-        cell(st.i,cols[st.t]);
+  const banner=(msg,bad)=>{
+    ctx.fillStyle=bad?'rgba(120,28,24,0.92)':'rgba(24,80,36,0.92)';
+    ctx.fillRect(0,cv.height/2-16,cv.width,32);
+    ctx.fillStyle='#fff';ctx.font='bold '+Math.max(11,SC*2.5)+'px monospace';ctx.textAlign='center';
+    ctx.fillText(msg,cv.width/2,cv.height/2+5);
+  };
+  // проигрыватель: события всех стадий подряд, темп по РЕАЛЬНОМУ времени
+  // (~9 c на всю сборку при 1x; кнопки скорости ускоряют), не по кадрам —
+  // fps под three.js плавает и не должен влиять на длительность реплея
+  const stages=tr.stages||[];
+  const evs=[];
+  for(const st of stages)for(const e of st.ev)evs.push([st.k,e]);
+  const total=evs.length||1;
+  let eIdx=0,carry=0,lastT=performance.now(),done=false;
+  const paintEv=(k,e)=>{
+    if(e.u!==undefined){
+      if(k==='roles'){for(const i of patchCells[e.u]||[])flash(i)}
+      else flash(e.u);
+      return;
+    }
+    if(e.bt)return;
+    if(k==='roles'){for(const i of patchCells[e.c]||[])cell(i,rc[e.t])}
+    else if(k==='elev'){const g=30+e.t*30;cell(e.c,'rgb('+g+' '+(g-4)+' '+(g+6)+')')}
+    else cell(e.c,tc[e.t]||'#f0f');
+  };
+  const frame=(now)=>{
+    if(v.stop)return;
+    if(!done){
+      const dt=Math.min(0.2,(now-lastT)/1000);lastT=now;
+      carry+=(total/9)*(S.speed||1)*dt;
+      let k=carry|0;carry-=k;
+      for(;k>0&&eIdx<total;k--,eIdx++)paintEv(evs[eIdx][0],evs[eIdx][1]);
+      if(eIdx>=total){
+        done=true;
+        setTimeout(()=>{
+          if(v.stop)return;
+          drawRivers();
+          if(S.genError)banner('🌀 '+S.genError,true);
+          else banner('✓ карта готова · сид '+S.seedStr,false);
+        },250);
       }
-      if(si<tr.steps.length){ // жёлтый фронт
-        const st=tr.steps[si];
-        cell(st.i,'#eec658');
-      }else stage=1;
-    }else if(stage===1){ // релаксация — «пересборка» тайлов, красная вспышка
-      for(let k=0;k<3&&ri<tr.relax.length;k++,ri++){
-        const st=tr.relax[ri];
-        cell(st.i,'#d05a4e');
-        setTimeout(((i2,t2)=>()=>{if(!stop)cell(i2,cols[t2])})(st.i,st.t),220);
-      }
-      if(ri>=tr.relax.length){stage=2;setTimeout(()=>{if(!stop){drawRivers()}},350)}
     }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
-  cv.onclick=()=>{stop=true;cv.remove()};
-  log('🌀 WFC-реплей: волна от контуров; красное — релаксация; клик — закрыть.');
+  cv.onclick=()=>{v.stop=true;cv.remove();if(GENV===v)GENV=null};
+  log('🌀 Генерация: патчи → роли → высоты → террейн → реки. Красное — откаты. Клик — закрыть.');
 }
 function updateDebug(fps){
   if(el('debug').classList.contains('hidden'))return;

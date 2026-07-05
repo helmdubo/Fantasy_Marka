@@ -136,6 +136,7 @@ function paintRiverTri(ctx,x0,y0,orr,mask,tint){
   }
   // берега: пиксели рядом с водой, тон под террейн
   const bankC={};bankC[T.GRASS]=PAL.G1;bankC[T.FOREST]=PAL.F1;bankC[T.ROCK]=PAL.R1;bankC[T.MTN]=PAL.M1;
+  bankC[T.SAND]=PAL.SA1;bankC[T.SWAMP]=PAL.SW1;bankC[T.SCRUB]=PAL.SC1;
   ctx.fillStyle=bankC[tint]||PAL.G1;
   for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
     if(lit[py2*14+px2]||!ins(px2,py2))continue;
@@ -412,11 +413,11 @@ function buildAtlas(){
     return r;
   };
   // Drop I: dual-triangle террейн (flat-top: ◀/▶). Полные (2 варианта шума) + маски 1..6.
-  for(const t of [T.WATER,T.GRASS,T.FOREST,T.ROCK,T.MTN]){
+  for(const t of [T.WATER,T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN]){
     for(const orr of ['l','r'])
       for(let v=0;v<2;v++){const p=place(TRIW,TRIH);paintTriFull(ctx,p.x,p.y,t,orr,v);reg('tri'+t+'_'+orr+'_full'+v,p.x,p.y,TRIW,TRIH)}
   }
-  for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN]){
+  for(const t of [T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN]){
     for(const orr of ['l','r'])
       for(let bits=1;bits<7;bits++){
         const p=place(TRIW,TRIH);paintTriTransition(ctx,p.x,p.y,t,orr,bits);reg('tri'+t+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
@@ -498,7 +499,7 @@ function buildAtlas(){
   p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
   p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
   for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
-  for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN])
+  for(const t of [T.SAND,T.SWAMP,T.GRASS,T.SCRUB,T.FOREST,T.ROCK,T.MTN])
     for(const orr of ['l','r'])
       for(let m=1;m<8;m++){p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,14,16)}
   p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);

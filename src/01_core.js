@@ -14,6 +14,8 @@ function terrainSpeed(u,cx,cy){
   const t=S.terr[idx(cx,cy)];
   if(t===T.ROCK)return (u.race==='dwarf'||u.race==='troll')?1:0.7;
   if(t===T.FOREST)return (u.race==='elf')?1:0.75;
+  if(t===T.SCRUB)return (u.race==='elf')?1:0.85;
+  if(t===T.SWAMP)return (u.race==='troll')?1:0.6;
   return 1;
 }
 

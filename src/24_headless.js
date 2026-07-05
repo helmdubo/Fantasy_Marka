@@ -50,7 +50,7 @@ function runHeadless(){
   newGame(hseed);
   const hexErrs=hexSelfTest();
   console.log('hexgrid:',hexErrs.length?('ISSUES '+JSON.stringify(hexErrs.slice(0,5))):'ok');
-  const cnt=[0,0,0,0,0];for(const t of S.terr)cnt[t]++;
+  const cnt=new Array(TNAME.length).fill(0);for(const t of S.terr)cnt[t]++;
   console.log('terrain:',cnt.map((n,i)=>TNAME[i]+' '+(100*n/S.terr.length).toFixed(0)+'%').join(' | '));
   {const N2=S.W*S.H;let br=0;
    for(const k of (S.riverEdges||[])){const a=Math.floor(k/N2),b=k%N2;if(S.road[a]&&S.road[b])br++}

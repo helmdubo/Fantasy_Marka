@@ -68,8 +68,11 @@ const CFG={
     libTier2:{stone:16,gems:3}},
 };
 const UTIL={oper:3.0,watch:2.4,build:2.6,repair:2.8,supply:2.7,pave:1.8,clear:1.8,ruins:1.6};
-const T={WATER:0,GRASS:1,FOREST:2,ROCK:3,MTN:4};
-const TNAME=['Вода','Луга','Лес','Скалы','Горы'];
+// Порядок T = порядок слоёв рендера (20_render: S.terr[i]>=t) — не менять произвольно!
+const T={WATER:0,SAND:1,SWAMP:2,GRASS:3,SCRUB:4,FOREST:5,ROCK:6,MTN:7};
+const TNAME=['Вода','Пляж','Болото','Луга','Кустарник','Лес','Скалы','Горы'];
+// Генератор мира v2 (WFC, docs/wfc-design.md)
+const WFC={minDist:8,maxSites:44,btRoles:150,btHeights:600,btTerrain:900};
 const F={NONE:0,BERRY:1,DEADFALL:2,RUBBLE:3,VEIN:4,FISH:5,RUINS:6,WHEAT:7,STUMP:8};
 const FNAME=['','Ягодник','Бурелом (завал)','Каменная осыпь','Самоцветная жила','Рыбное место','Древние руины','Пшеничное поле','Пеньки (вырубка)'];
 const RACES=['human','dwarf','elf','troll'];

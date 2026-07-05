@@ -39,7 +39,7 @@ function siteOk(type,x,y){
   const i=idx(x,y);
   if(S.road[i])return false; // не на дороге
   const t=S.terr[i];
-  const terrOk=(t===T.GRASS)||(type==='mine'&&t===T.ROCK);
+  const terrOk=(t===T.GRASS)||(t===T.SCRUB)||(type==='mine'&&t===T.ROCK); // опушка застраиваема
   if(!terrOk||S.feat[i]!==F.NONE||S.bld[i]>=0||S.lairAt[i]>=0)return false;
   if(NEAR_ROAD_TYPES[type]){
     let nr=false;
