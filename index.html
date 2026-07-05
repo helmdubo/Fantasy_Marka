@@ -6209,7 +6209,8 @@ function genViewer(){
   if(GENV){GENV.stop=true;GENV.cv.remove();GENV=null}
   const tr=S.wfcTrace;
   if(!tr){log('трейс генерации пуст');return}
-  const SC=Math.max(4,Math.floor(Math.min(innerWidth,innerHeight-60)/S.W));
+  // масштаб вдвое меньше экрана — чтобы канва целиком влезала на телефоне
+  const SC=Math.max(2,Math.floor(Math.min(innerWidth,innerHeight-60)/(S.W*2)));
   const cv=document.createElement('canvas');
   cv.width=S.W*SC;cv.height=S.H*SC;
   cv.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);'+
@@ -6273,7 +6274,7 @@ function genViewer(){
     if(v.stop)return;
     if(!done){
       const dt=Math.min(0.2,(now-lastT)/1000);lastT=now;
-      carry+=(total/9)*(S.speed||1)*dt;
+      carry+=(total/90)*(S.speed||1)*dt; // ~90 c на всю сборку при 1x — шаги можно рассмотреть
       let k=carry|0;carry-=k;
       for(;k>0&&eIdx<total;k--,eIdx++)paintEv(evs[eIdx][0],evs[eIdx][1]);
       if(eIdx>=total){
