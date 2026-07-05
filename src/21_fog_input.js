@@ -1,5 +1,8 @@
+const FOG_OF_WAR_ENABLED=false; // TEMP: full fog-of-war disable while WFC map generation is being tuned.
+
 function bayer4(x,y){const m=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];return (m[(y&3)*4+(x&3)]+0.5)/16}
 function fogBaseAlphaAtCell(x,y){
+  if(!FOG_OF_WAR_ENABLED)return 0;
   if(!inMap(x,y))return 1;
   const i=idx(x,y);
   if(S.revealAll)return S.visible[i]?0:0.22;
@@ -8,6 +11,7 @@ function fogBaseAlphaAtCell(x,y){
   return 1;
 }
 function fogAlphaAt(wx,wy,px,py){
+  if(!FOG_OF_WAR_ENABLED)return 0;
   // (wx,wy) — three-мировая точка; клетка через pickHex
   const c=pickHex(wx,wy);
   const cx=c.x,cy=c.y;
@@ -48,6 +52,15 @@ function ensureFogLut(){
   }
 }
 function paintFog(){
+  if(!FOG_OF_WAR_ENABLED){
+    if(R.fog)R.fog.visible=false;
+    if(R.fogCv.width!==1||R.fogCv.height!==1){R.fogCv.width=1;R.fogCv.height=1}
+    const c=R.fogCv.getContext('2d');
+    c.clearRect(0,0,R.fogCv.width,R.fogCv.height);
+    R.fogTex.needsUpdate=true;S.fogDirty=false;
+    return;
+  }
+  if(R.fog)R.fog.visible=true;
   // Оптимизация: ImageData вместо 200k fillRect; евклидово смягчение кромки
   // считается только в клетках на расстоянии <=3 гексов от видимых (BFS).
   const sc=FOG_SCALE||1;
@@ -149,7 +162,7 @@ function updateTip(mx,my,clx,cly){
     if(S.hoverLair!==-1){S.hoverLair=-1;S.fogDirty=true}return}
   const i=idx(cx,cy);
   let html='',hl=-1;
-  if(!S.explored[i]&&!S.revealAll){
+  if(FOG_OF_WAR_ENABLED&&!S.explored[i]&&!S.revealAll){
     html='<div class="t2">Неизведанные земли</div>';
   }else{
     let tn0=TNAME[S.terr[i]];
@@ -167,7 +180,7 @@ function updateTip(mx,my,clx,cly){
       html+='<div class="warn">☠ '+L.name+' · тир '+L.tier+'</div>'}
     if(S.fear[i]&&li<0)html+='<div class="warn">зона страха — здесь не работают</div>';
     for(const u of S.settlers){
-      if(u.inside<0&&(u.x|0)===cx&&(u.y|0)===cy&&(S.visible[i]||S.revealAll)){
+      if(u.inside<0&&(u.x|0)===cx&&(u.y|0)===cy&&(!FOG_OF_WAR_ENABLED||S.visible[i]||S.revealAll)){
         const act=(u.act==='work'&&u.job)?WORK_LABEL[u.job.kind]:
           (u.after==='deposit'?'несёт на склад':ACTNAME[u.act]);
         html+='<div class="t2">'+RNAME[u.race]+' — '+act+' · кошель '+u.wallet.toFixed(1)+'з</div>';
@@ -228,9 +241,9 @@ function pickPin(mx,my){
   }
   const {cx,cy}=screenToCell(mx,my);
   let pin=null;
-  if(inMap(cx,cy)&&(S.explored[idx(cx,cy)]||S.revealAll)){
+  if(inMap(cx,cy)&&(!FOG_OF_WAR_ENABLED||S.explored[idx(cx,cy)]||S.revealAll)){
     for(const u of S.settlers){
-      if(u.inside<0&&(u.x|0)===cx&&(u.y|0)===cy&&(S.visible[idx(cx,cy)]||S.revealAll)){pin={kind:'unit',id:u.id};break}
+      if(u.inside<0&&(u.x|0)===cx&&(u.y|0)===cy&&(!FOG_OF_WAR_ENABLED||S.visible[idx(cx,cy)]||S.revealAll)){pin={kind:'unit',id:u.id};break}
     }
     if(!pin&&S.bld[idx(cx,cy)]>=0)pin={kind:'bld',id:S.bld[idx(cx,cy)]};
     if(!pin)pin={kind:'cell',x:cx,y:cy};
@@ -369,7 +382,8 @@ function keysPan(dt){
 }
 function initRender(){
   const canvas=document.getElementById('gl');
-  R={canvas,zoomIdx:1,ZOOMS:[4,6,8],cam:{x:(S.th.x+0.5)*CW,y:(S.H-1-S.th.y)+0.5-zig(S.th.x)},
+  if(!FOG_OF_WAR_ENABLED){S.revealAll=true;S.fogDirty=true}
+  R={canvas,zoomIdx:3,ZOOMS:[2,3,4,6,8],cam:{x:(S.th.x+0.5)*CW,y:(S.H-1-S.th.y)+0.5-zig(S.th.x)},
      terrStaticMeshes:[],terrForestMesh:null,featMesh:null,bldMesh:null,roadMesh:null,drag:null};
   R.renderer=new THREE.WebGLRenderer({canvas,antialias:false});
   R.renderer.setPixelRatio(1);
@@ -391,6 +405,7 @@ function initRender(){
    R.fog=new THREE.Mesh(new THREE.PlaneGeometry(pw,ph),fmat);
    R.fog.position.set(-CW+pw/2,(S.H+1)-ph/2,0);}
   R.fog.renderOrder=50;
+  R.fog.visible=FOG_OF_WAR_ENABLED;
   R.scene.add(R.fog);
   makeUnitMesh();
   makeFxMesh();
@@ -405,4 +420,3 @@ function initRender(){
   resize();
   buildTerrain();buildRoads();buildStatics();buildBuildings();paintFog();
 }
-
