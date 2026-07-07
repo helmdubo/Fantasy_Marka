@@ -472,10 +472,10 @@ function worley1D(seed,u,type,f2){
    октавы. Размер элемента → базовая частота, октавы удваивают частоту и
    гасят амплитуду на «шероховатость». Чистая функция (seed,t,st) — концы
    кривой зануляются в terrainCurve, seam-инвариант сохраняется. */
-function edgeNoise1D(seed,t,st){
+function edgeNoise1D(seed,t,st,fscale){
   const oct=Math.max(1,Math.min(4,Math.round(st.oct||1)));
   const rough=st.rough!=null?st.rough:0.5;
-  const baseFreq=1/Math.max(0.04,st.elem);
+  const baseFreq=(fscale||1)/Math.max(0.04,st.elem);
   let sum=0,amp=1,freq=baseFreq,norm=0;
   for(let o=0;o<oct;o++){
     const s=(seed^Math.imul(o+1,0x9e3779b1))>>>0;
@@ -504,12 +504,17 @@ function offsetCurve(base,O1,O2){
     return [p[0]+s[0]*(1-t)+e[0]*t, p[1]+s[1]*(1-t)+e[1]*t];
   });
 }
-/* кривая кромки, стилизованная параметрами владельца owner */
-function terrainCurve(P,Q,bulgePt,owner,seed){
+/* кривая кромки, стилизованная параметрами владельца owner.
+   lenScale = |концы видимой кривой (over)| / |концы base|: число волн шума
+   масштабируется под длину ВИДИМОЙ кромки, чтобы её физическая частота не
+   «дышала» при нахлёсте (base всё равно скрыт под лентой). Концы занулены
+   sin(πt), точки пересечения рёбер не двигаются — seam-инвариант цел. */
+function terrainCurve(P,Q,bulgePt,owner,seed,lenScale){
   const st=state.terrains[owner];
-  // сэмплов — под базовую частоту и октавы, иначе мелкие детали съедаются
-  const baseFreq=1/Math.max(0.04,st.elem);
-  const N=st.strength>0?Math.min(80,Math.max(20,Math.round(baseFreq*Math.pow(2,Math.min(4,st.oct||1)-1)*4))):16;
+  const fs=lenScale>0?lenScale:1;
+  // сэмплов — под масштабированную частоту и октавы, иначе мелкие детали съедаются
+  const baseFreq=fs/Math.max(0.04,st.elem);
+  const N=st.strength>0?Math.min(96,Math.max(20,Math.round(baseFreq*Math.pow(2,Math.min(4,st.oct||1)-1)*4))):16;
   const pts=[];
   const mx=(P[0]+Q[0])/2,my=(P[1]+Q[1])/2;
   const C=bulgePt?[mx+(bulgePt[0]-mx)*0.7*st.round,my+(bulgePt[1]-my)*0.7*st.round]:[mx,my];
@@ -520,13 +525,14 @@ function terrainCurve(P,Q,bulgePt,owner,seed){
     let x=it*it*P[0]+2*it*t*C[0]+t*t*Q[0];
     let y=it*it*P[1]+2*it*t*C[1]+t*t*Q[1];
     if(st.strength>0){
-      const d=st.strength*edgeNoise1D(seed,t,st)*len*Math.sin(Math.PI*t); // на концах ноль — seam-инвариант
+      const d=st.strength*edgeNoise1D(seed,t,st,fs)*len*Math.sin(Math.PI*t); // на концах ноль — seam-инвариант
       x+=nx*d;y+=ny*d;
     }
     pts.push([x,y]);
   }
   return pts;
 }
+function segLen(A,B){return Math.hypot(B[0]-A[0],B[1]-A[1])||1;}
 /* пара на ребре: точки пересечения — чистые функции пары.
    partition-кромка при 0.5; кромка победителя при 0.5+OVER_W*|dom| в сторону проигравшего. */
 function crossBase(){return 0.5;}
@@ -555,7 +561,11 @@ function maskRegionsForTri(pp,labs,keyStr){
     const styleOwner=d>0?lo:(d<0?lp:Math.min(lo,lp));
     const B1=lerpP(pp[o],pp[pA],crossBase());
     const B2=lerpP(pp[o],pp[pB],crossBase());
-    const base=terrainCurve(B1,B2,pp[o],styleOwner,seedBase);
+    // концы видимой кромки (over) считаем заранее — задают масштаб частоты шума
+    const cO=d!==0?crossOver(lo,lp):crossBase();
+    const O1=lerpP(pp[o],pp[pA],cO),O2=lerpP(pp[o],pp[pB],cO);
+    const lenScale=d!==0?segLen(O1,O2)/segLen(B1,B2):1;
+    const base=terrainCurve(B1,B2,pp[o],styleOwner,seedBase,lenScale);
     const out={
       partition:[
         {terrain:lo,poly:[pp[o],...base]},
@@ -565,8 +575,6 @@ function maskRegionsForTri(pp,labs,keyStr){
     };
     if(d!==0){
       const w=d>0?lo:lp;
-      const O1=lerpP(pp[o],pp[pA],crossOver(lo,lp));
-      const O2=lerpP(pp[o],pp[pB],crossOver(lo,lp));
       const over=offsetCurve(base,O1,O2); // сдвиг раздела: идентичный шум, пересечение невозможно
       out.ribbons.push({winner:w,poly:[...base,...rev(over)]});
       out.seams[0].curveVis=over; // диттеринг — по видимой кромке
@@ -582,12 +590,14 @@ function maskRegionsForTri(pp,labs,keyStr){
     const d=domOf(a,b);
     const styleOwner=d>0?a:(d<0?b:Math.min(a,b));
     const Cb=lerpP(pp[i],pp[j],crossBase());
-    const base=terrainCurve(Cb,J,null,styleOwner,seedBase^(pi+1));
+    // в J кривая приколота, двигается только конец у ребра → масштаб по |·−J|
+    const Co=d!==0?lerpP(pp[i],pp[j],crossOver(a,b)):Cb;
+    const lenScale=d!==0?segLen(Co,J)/segLen(Cb,J):1;
+    const base=terrainCurve(Cb,J,null,styleOwner,seedBase^(pi+1),lenScale);
     bases.push(base);
     const seam={a,b,winner:d>0?a:(d<0?b:-1),curveVis:base};
     if(d!==0){
       const w=d>0?a:b;
-      const Co=lerpP(pp[i],pp[j],crossOver(a,b));
       const over=offsetCurve(base,Co,J); // сдвиг раздела; в J — касание
       ribbons.push({winner:w,poly:[...base,...rev(over)]});
       seam.curveVis=over;
@@ -1482,6 +1492,7 @@ $('btnJson').addEventListener('click',()=>{
         }),
         pair_order_note:'антисимметричная парная матрица; циклы допустимы — каждая граница локальна для своей пары',
         style_rule:'видимую кромку пары стилизует победитель; обе кривые пары (раздел и кромка победителя) строятся от одного профиля шума — лента нахлёста не самопересекается',
+        freq_stabilization:'число волн шума масштабируется на |концы видимой кромки over| / |концы base|, чтобы физическая частота видимой кромки не «дышала» при изменении нахлёста; скрытый base поглощает компенсацию, точки пересечения рёбер не двигаются',
         seam_invariant:`обе точки пересечения ребра (раздел 0.5 и кромка победителя 0.5±${state.overW}·|dom|) — чистые функции пары; шум/скругление/диттеринг — только в интерьере (seed=комбо), на концах кривых занулены`
       };
     }else{
