@@ -185,7 +185,9 @@
   обновляются сразу. Матрица порядков (секция 1) тоже действует мгновенно.
   Помни: видимую кромку пары стилизует <b>победитель</b> (▲ в матрице) — частота/амплитуда/острота/скругление
   проигравшего на этой границе не видны (его диттеринг — виден). В заливке «градиент» ритм
-  смотри в пробе и ч/б каналах; в «маска (силуэты)» — прямо в цвете атласа.</div>
+  смотри в пробе и ч/б каналах; в «маска (силуэты)» — прямо в цвете атласа.
+  Ячеистый шум даёт характер материала: евклид→дуги (кроны/бухты), манхэттен→зубцы, чебышев→террасы (скалы),
+  профиль F2−F1→гребни с расщелинами (хребты).</div>
   <div class="ctrl-line"><span class="seg" id="segRhyT"></span></div>
   <div id="rhySliders"></div>
   <div class="rh-row"><label>нахлёст за ▲1</label><input type="range" id="rhOverW" min="0" max="0.12" step="0.002"><span class="rh-val" id="rhOverWVal"></span></div>
@@ -451,6 +453,28 @@ function shapedNoise(seed,t,freq,sharp){
   const n=noise1D(seed,t*freq);
   return Math.sign(n)*Math.pow(Math.abs(n),1/Math.max(0.2,sharp));
 }
+/* 1D-ворли вдоль кромки: «ядра» в ячейках размером 1/freq; значение — из
+   расстояния до ближайших ядер в координатах (вдоль ребра × высота ядра).
+   Метрики: евклид → цепочка дуг (кроны леса, бухты), манхэттен → зубцы 45°,
+   чебышев → плоские террасы (скалы); профиль F2−F1 → гребни с расщелинами
+   на стыках ячеек. Чистая функция (seed,t) — seam-инвариант сохраняется. */
+function cellShape(seed,t,freq,metric,h,f2,sharp){
+  const u=t*freq;
+  const i0=Math.floor(u);
+  let d1=1e9,d2=1e9;
+  for(let i=i0-2;i<=i0+2;i++){
+    const fx=i+0.15+0.7*rnd01(seed,i*2);
+    const fh=Math.max(0.02,h)*(0.3+0.7*rnd01(seed,i*2+1));
+    const dx=Math.abs(u-fx);
+    let d;
+    if(metric==='m')d=dx+fh;
+    else if(metric==='ch')d=Math.max(dx,fh);
+    else d=Math.hypot(dx,fh);
+    if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;
+  }
+  const v=f2?1-2*Math.min(1,d2-d1):1-2*Math.min(1,d1);
+  return Math.sign(v)*Math.pow(Math.abs(v),1/Math.max(0.2,sharp));
+}
 function domOf(a,b){ // знак+ = a поверх b
   if(a===b)return 0;
   const key=Math.min(a,b)+'-'+Math.max(a,b);
@@ -472,7 +496,10 @@ function offsetCurve(base,O1,O2){
 /* кривая кромки, стилизованная параметрами владельца owner */
 function terrainCurve(P,Q,bulgePt,owner,seed){
   const st=state.terrains[owner];
-  const N=16,pts=[];
+  const cellOn=(st.cellAmp||0)>0;
+  // ворли-ячейкам нужно больше сэмплов, иначе дуги/террасы съедаются
+  const N=cellOn?Math.min(64,Math.max(24,Math.round((st.cellFreq||6)*8))):16;
+  const pts=[];
   const mx=(P[0]+Q[0])/2,my=(P[1]+Q[1])/2;
   const C=bulgePt?[mx+(bulgePt[0]-mx)*0.7*st.round,my+(bulgePt[1]-my)*0.7*st.round]:[mx,my];
   const len=Math.hypot(Q[0]-P[0],Q[1]-P[1])||1;
@@ -481,8 +508,11 @@ function terrainCurve(P,Q,bulgePt,owner,seed){
     const t=i/N,it=1-t;
     let x=it*it*P[0]+2*it*t*C[0]+t*t*Q[0];
     let y=it*it*P[1]+2*it*t*C[1]+t*t*Q[1];
-    if(st.amp>0){
-      const d=st.amp*len*shapedNoise(seed,t,st.freq,st.sharp)*Math.sin(Math.PI*t);
+    let d=0;
+    if(st.amp>0)d+=st.amp*shapedNoise(seed,t,st.freq,st.sharp);
+    if(cellOn)d+=st.cellAmp*cellShape(seed^0x51ed270b,t,st.cellFreq,st.cellMetric,st.cellH,st.cellF2,st.sharp);
+    if(d){
+      d*=len*Math.sin(Math.PI*t); // на концах ноль — seam-инвариант
       x+=nx*d;y+=ny*d;
     }
     pts.push([x,y]);
@@ -653,9 +683,11 @@ function hexToRgb(h){const n=parseInt(h.slice(1),16);return [(n>>16)&255,(n>>8)&
 const WIDTHS={thin:0.10,mid:0.16,wide:0.24};
 
 const state={
+  // cell* — ячеистый (ворли) слой кромки: cellMetric 'e'|'m'|'ch', cellF2 F2−F1,
+  // cellFreq ядер на длину ребра, cellAmp сила, cellH разброс высот ядер
   terrains:[
-    {name:'трава',color:'#5a8f3c',freq:6,amp:0.15,sharp:1.0,round:0,dither:2},
-    {name:'вода',color:'#3a6ea5',freq:3,amp:0.05,sharp:0.7,round:0.8,dither:0},
+    {name:'трава',color:'#5a8f3c',freq:6,amp:0.15,sharp:1.0,round:0,dither:2,cellMetric:'e',cellF2:false,cellFreq:6,cellAmp:0,cellH:0.5},
+    {name:'вода',color:'#3a6ea5',freq:3,amp:0.05,sharp:0.7,round:0.8,dither:0,cellMetric:'e',cellF2:false,cellFreq:5,cellAmp:0,cellH:0.5},
   ],
   dom:{'0-1':-2}, // парные нахлёсты: ключ 'a-b' (a<b), знак+ = a поверх b, |v| = ширина
 
@@ -745,7 +777,7 @@ function renderDomMatrix(){
 }
 $('btnAddTerrain').addEventListener('click',()=>{
   const presets=['#c2a25a','#7a7d85','#8f5a3c','#5a8f8a'];
-  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],freq:4,amp:0.05,sharp:1.0,round:0,dither:0});
+  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],freq:4,amp:0.05,sharp:1.0,round:0,dither:0,cellMetric:'e',cellF2:false,cellFreq:5,cellAmp:0,cellH:0.5});
   renderTerrains();renderFeatures();markStale();
 });
 
@@ -761,6 +793,13 @@ const RHY_DEFS=[
   ['round','скругление',0,1,0.02],
   ['dither','диттеринг, px',0,4,0.25],
 ];
+// ячеистый (ворли) слой кромки: даёт дуги/зубцы/террасы поверх волнового шума
+const RHY_CELL_DEFS=[
+  ['cellAmp','сила ячеек',0,0.3,0.005],
+  ['cellFreq','ячеек на ребро',2,14,0.5],
+  ['cellH','разброс высот',0,1,0.02],
+];
+const CELL_METRICS=[['e','евклид · дуги'],['m','манхэттен · зубцы'],['ch','чебышев · террасы']];
 let livePending=false,liveWantPreview=false;
 /* на драге перерисовываем только террейн-слой (кромки не трогают оверлеи)
    и вид атласа; превью карты — на отпускании ползунка (withPreview=true) */
@@ -801,6 +840,41 @@ function renderRhythm(){
       drawRhythmSample();scheduleLive(false);
     });
     inp.addEventListener('change',()=>scheduleLive(true)); // отпустили — обновить и превью
+    box.appendChild(row);
+  });
+  // --- ячеистый (ворли/манхэттен/чебышев) слой кромки ---
+  const sep=document.createElement('div');
+  sep.className='hint';sep.style.margin='10px 0 2px';
+  sep.innerHTML='<b>Ячеистый шум кромки</b> (поверх волнового): метрика задаёт характер границы.';
+  box.appendChild(sep);
+  const mrow=document.createElement('div');mrow.className='rh-row';
+  mrow.innerHTML='<label>метрика</label>';
+  const mseg=document.createElement('span');mseg.className='seg';mseg.style.flex='1';
+  CELL_METRICS.forEach(([mv,ml])=>{
+    const b=document.createElement('button');b.textContent=ml;
+    if(t.cellMetric===mv)b.classList.add('on');
+    b.addEventListener('click',()=>{t.cellMetric=mv;renderRhythm();scheduleLive(true);});
+    mseg.appendChild(b);
+  });
+  mrow.appendChild(mseg);box.appendChild(mrow);
+  const frow=document.createElement('div');frow.className='rh-row';
+  frow.innerHTML=`<label>профиль</label><span class="seg" style="flex:1">
+    <button data-f2="0"${t.cellF2?'':' class="on"'}>F1 · холмы</button>
+    <button data-f2="1"${t.cellF2?' class="on"':''}>F2−F1 · гребни/расщелины</button></span>`;
+  frow.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    t.cellF2=b.dataset.f2==='1';renderRhythm();scheduleLive(true);
+  }));
+  box.appendChild(frow);
+  RHY_CELL_DEFS.forEach(([key,label,min,max,step])=>{
+    const row=document.createElement('div');row.className='rh-row';
+    row.innerHTML=`<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${t[key]}"><span class="rh-val">${fmtV(t[key])}</span>`;
+    const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
+    inp.addEventListener('input',()=>{
+      t[key]=parseFloat(inp.value);
+      val.textContent=fmtV(t[key]);
+      drawRhythmSample();scheduleLive(false);
+    });
+    inp.addEventListener('change',()=>scheduleLive(true));
     box.appendChild(row);
   });
   $('rhOverW').value=state.overW;
@@ -1402,7 +1476,9 @@ $('btnJson').addEventListener('click',()=>{
         packing:'канал на террейн: R=0, G=1, B=2, A=3 (если террейнов меньше — A=255)',
         overlap_width_per_dom:state.overW,
         overlap_semantics:`каналы масок ПЕРЕСЕКАЮТСЯ в лентах нахлёста: маска проигравшего кончается на линии раздела (t=0.5 ребра), маска победителя продолжается за неё на ${state.overW}·|dom| длины ребра; композит кладёт победителя пары поверх`,
-        silhouettes:state.terrains.map((t,i)=>({terrain:i,freq:t.freq,amp:t.amp,sharpness:t.sharp,rounding:t.round,dither_px:t.dither})),
+        silhouettes:state.terrains.map((t,i)=>({terrain:i,freq:t.freq,amp:t.amp,sharpness:t.sharp,rounding:t.round,dither_px:t.dither,
+          cell:{metric:t.cellMetric==='m'?'manhattan':(t.cellMetric==='ch'?'chebyshev':'euclidean'),profile:t.cellF2?'F2-F1':'F1',freq:t.cellFreq,amp:t.cellAmp,height_spread:t.cellH}})),
+        cell_note:'ячеистый (ворли) слой кромки складывается с волновым: смещение по нормали ребра = amp·shapedNoise + cellAmp·cellShape, оба ×sin(πt) (0 на концах — seam-инвариант); метрика euclidean→дуги (кроны/бухты), manhattan→зубцы 45°, chebyshev→плоские террасы (скалы), профиль F2−F1→гребни с расщелинами на стыках ячеек',
         pair_order:Object.entries(state.dom).map(([key,v])=>{
           const [a,b]=key.split('-').map(Number);
           return {a,b,value:v,meaning:v>0?state.terrains[a].name+' поверх '+state.terrains[b].name:state.terrains[b].name+' поверх '+state.terrains[a].name};
