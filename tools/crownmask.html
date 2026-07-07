@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Кроновая маска — клубы/псевдошары (tileable)</title>
+<style>
+  :root{
+    --bg:#101318; --panel:#171b22; --panel2:#1d222b; --line:#2a3038;
+    --ink:#dfe3ea; --dim:#8a93a3; --faint:#5a6270; --brass:#c9a227; --brass-dim:#8a7220;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace; font-size:14px; line-height:1.45;}
+  header{position:sticky; top:0; z-index:10; background:rgba(16,19,24,.92); backdrop-filter:blur(6px);
+    border-bottom:1px solid var(--line); padding:10px 14px;}
+  header h1{margin:0; font-size:15px; font-weight:700; letter-spacing:.14em; color:var(--brass);}
+  header .sub{font-size:10px; color:var(--faint); letter-spacing:.06em;}
+  main{padding:0 12px 60px; max-width:760px; margin:0 auto;}
+  section{border-bottom:1px solid var(--line); padding:14px 0 18px;}
+  .hint{font-size:11px; color:var(--faint); margin:6px 0 10px;}
+  .canvas-wrap{background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:6px; overflow:auto; display:flex; gap:10px; flex-wrap:wrap; justify-content:center;}
+  canvas{display:block; image-rendering:pixelated; border:1px solid var(--line); background:#000;}
+  .cap{font-size:10px; color:var(--faint); text-align:center; margin-top:4px;}
+  .rh-row{display:flex; align-items:center; gap:10px; margin:7px 0;}
+  .rh-row label{width:132px; font-size:11px; color:var(--dim); flex:none;}
+  .rh-row input[type=range]{flex:1; accent-color:var(--brass); min-width:80px;}
+  .rh-val{width:52px; font-size:11px; color:var(--brass); text-align:right; flex:none;}
+  .seg{display:inline-flex; border:1px solid var(--line); border-radius:4px; overflow:hidden; flex-wrap:wrap;}
+  .seg button{border:none; background:var(--panel); color:var(--ink); font:inherit; font-size:11px; padding:7px 11px; cursor:pointer;}
+  .seg button.on{background:var(--brass-dim); color:#fff;}
+  .ctrl-line{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:8px 0;}
+  .ctrl-line label{font-size:11px; color:var(--dim);}
+  button.act{background:var(--panel2); color:var(--ink); border:1px solid var(--line); font:inherit; font-size:12px; padding:8px 12px; border-radius:4px; cursor:pointer;}
+  label.chk{font-size:11px; color:var(--dim);}
+  footer{padding:16px 14px; font-size:10px; color:var(--faint); text-align:center;}
+</style>
+</head>
+<body>
+<header>
+  <h1>КРОНОВАЯ МАСКА</h1>
+  <span class="sub">клубы / псевдошары разного размера · взвешенный Worley + smooth-max · бесшовно тайлится</span>
+</header>
+<main>
+
+<section>
+  <div class="hint">Вершины крон разбросаны по ячейкам (хэш в мировых коорд. → маска <b>тайлится</b>).
+  В каждой — радиальный купол своего радиуса; поле = <b>плавный максимум</b> куполов: при слитности 0 —
+  отдельные кроны с границами-водоразделами (как watershed из LiDAR), при росте — сливаются в клубы.
+  Порог задаёт покрытие (лес↔поляны).</div>
+  <div class="ctrl-line">
+    <label>показ</label>
+    <span class="seg" id="segView">
+      <button data-v="foliage" class="on">крона (свет)</button>
+      <button data-v="height">высота</button>
+      <button data-v="mask">маска ч/б</button>
+    </span>
+    <label class="chk"><input type="checkbox" id="chkTile"> тайлинг 2×2</label>
+    <label class="chk"><input type="checkbox" id="chkTops"> вершины</label>
+  </div>
+  <div class="canvas-wrap"><canvas id="cv" width="360" height="360"></canvas></div>
+  <div class="cap" id="cap">—</div>
+</section>
+
+<section>
+  <div id="sliders"></div>
+  <div class="ctrl-line">
+    <button class="act" id="btnSeed">новый seed</button>
+    <button class="act" id="btnPng">PNG маски</button>
+    <span class="cap" id="perf"></span>
+  </div>
+</section>
+
+<footer>купол i: Rᵢ−|p−vᵢ| · поле = smax(куполов, k) · граница = взвешенная диаграмма (Аполлония) ·
+хэш вершин по mod-ячейкам ⇒ бесшовный тайл</footer>
+</main>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const P={
+  cell:52,      // размер ячейки (шаг крон), px
+  jitter:0.55,  // джиттер вершины внутри ячейки
+  rMin:0.34,    // мин радиус кроны (в ячейках)
+  rMax:0.72,    // макс радиус кроны
+  clump:0.22,   // слитность (k у smooth-max, в ячейках)
+  density:0.9,  // доля ячеек с деревом
+  cover:0.0,    // порог поля (сдвиг покрытия)
+  grain:0.35,   // зернистость кромки
+  seed:1,
+};
+const TILE=8; // ячеек на тайл по стороне (для бесшовного wrap)
+let view='foliage';
+
+/* --- целочисленный хэш ячейки (wrap по mod TILE даёт бесшовность) --- */
+function hashi(x,y,s){let h=(Math.imul(x,374761393)^Math.imul(y,668265263)^Math.imul(s,2246822519))>>>0;
+  h=Math.imul(h^(h>>>13),1274126177)>>>0;return (h^(h>>>16))>>>0;}
+function rnd(x,y,s){return hashi(x,y,s)/4294967296;}
+/* плавный максимум (полиномиальный): k=0 → жёсткий max (раздельные кроны) */
+function smax(a,b,k){
+  if(k<=1e-4)return a>b?a:b;
+  const h=Math.max(0,1-Math.abs(a-b)/k);
+  return Math.max(a,b)+h*h*k*0.25;
+}
+/* поле крон в точке (в единицах ячейки).
+   f — плавный максимум конусов Rᵢ−dᵢ (>порога → внутри; границы — водоразделы);
+   заодно возвращаем ПОБЕДИВШИЙ купол (jx,jy,R,d) для сферической закраски. */
+function fieldFull(x,y){
+  const gx=Math.floor(x),gy=Math.floor(y);
+  let f=-1e9,hard=-1e9,wjx=0,wjy=0,wR=1,wd=0;
+  for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+    const cx=gx+dx,cy=gy+dy;
+    const wx=((cx%TILE)+TILE)%TILE, wy=((cy%TILE)+TILE)%TILE; // wrap → тайлинг
+    if(rnd(wx,wy,P.seed*7+5)>P.density)continue;             // поляна: нет дерева
+    const jx=cx+0.5+(rnd(wx,wy,P.seed*7+1)-0.5)*P.jitter;
+    const jy=cy+0.5+(rnd(wx,wy,P.seed*7+2)-0.5)*P.jitter;
+    const R=P.rMin+rnd(wx,wy,P.seed*7+3)*(P.rMax-P.rMin);
+    const d=Math.hypot(x-jx,y-jy);
+    const dome=R-d;
+    f=smax(f,dome,P.clump);
+    if(dome>hard){hard=dome;wjx=jx;wjy=jy;wR=R;wd=d;}
+  }
+  return {f,wjx,wjy,wR,wd};
+}
+function field(x,y){return fieldFull(x,y).f;} // для тестов периодичности
+/* лёгкая зернистость кромки: детерминированный шум по мировым коорд. */
+function grainAt(px,py){
+  const ix=Math.floor(px/2),iy=Math.floor(py/2);
+  return (rnd(((ix%(TILE*32))+TILE*32)%(TILE*32),((iy%(TILE*32))+TILE*32)%(TILE*32),P.seed*7+9)-0.5);
+}
+
+function render(){
+  const t0=performance.now();
+  const cv=$('cv'),W=cv.width,H=cv.height,ctx=cv.getContext('2d');
+  const img=ctx.createImageData(W,H);
+  const d=img.data;
+  const cs=P.cell;
+  const thr=P.cover;
+  // свет для «объёма» кроны
+  const Lx=-0.5,Ly=-0.6,Lz=0.62;
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++){
+    const x=px/cs,y=py/cs;
+    const F=fieldFull(x,y);
+    let f=F.f;
+    if(P.grain>0)f+=grainAt(px,py)*P.grain*0.5; // зернистость — играет только у границы
+    const inside=f>thr;
+    const p=(py*W+px)*4;
+    let r,g,b;
+    if(view==='mask'){
+      const v=inside?255:0; r=g=b=v;
+    }else if(!inside){ r=16;g=19;b=24; }
+    else{
+      // нормаль полусферы победившего купола: n=((x-jx)/R,(y-jy)/R, sqrt(1-r²))
+      const nx=(x-F.wjx)/F.wR, ny=(y-F.wjy)/F.wR;
+      const r2=Math.min(1,nx*nx+ny*ny);
+      const nz=Math.sqrt(1-r2);
+      if(view==='height'){
+        const v=Math.min(255,36+nz*F.wR*cs*1.7); r=g=b=v; // высота полусферы
+      }else{ // foliage
+        let lam=Math.max(0,nx*Lx+ny*Ly+nz*Lz);
+        const sh=0.28+0.95*lam*lam;      // мягкий объём
+        const rim=1-0.55*r2;             // тень у края кроны (впадины между шарами)
+        const tone=rnd(Math.floor(F.wjx*7)&255,Math.floor(F.wjy*7)&255,P.seed*7+11); // разнотон крон
+        const gbase=0.40+0.16*(tone-0.5);
+        r=Math.min(255,255*(0.16*rim)*sh+16);
+        g=Math.min(255,255*(gbase*rim)*sh+12);
+        b=Math.min(255,255*(0.13*rim)*sh+9);
+      }
+    }
+    d[p]=r;d[p+1]=g;d[p+2]=b;d[p+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  if($('chkTops').checked)drawTops(ctx,W,H,cs);
+  const ms=Math.round(performance.now()-t0);
+  $('perf').textContent=ms+' мс';
+  // тайлинг 2×2 (доказательство бесшовности)
+  const tc=$('cvTile');
+  if($('chkTile').checked){
+    if(tc){const t2=tc.getContext('2d');for(let a=0;a<2;a++)for(let b2=0;b2<2;b2++)t2.drawImage(cv,a*W,b2*H);}
+  }
+  const cells=(W/cs).toFixed(1);
+  $('cap').textContent=`поле ${W}×${H}px · ячейка ${cs}px (~${cells} крон/сторону) · тайл ${TILE}×${TILE} ячеек`;
+}
+function drawTops(ctx,W,H,cs){
+  ctx.fillStyle='#ff3b3b';
+  const nx=Math.ceil(W/cs)+2,ny=Math.ceil(H/cs)+2;
+  for(let gy=-1;gy<ny;gy++)for(let gx=-1;gx<nx;gx++){
+    const wx=((gx%TILE)+TILE)%TILE, wy=((gy%TILE)+TILE)%TILE;
+    if(rnd(wx,wy,P.seed*7+5)>P.density)continue;
+    const jx=(gx+0.5+(rnd(wx,wy,P.seed*7+1)-0.5)*P.jitter)*cs;
+    const jy=(gy+0.5+(rnd(wx,wy,P.seed*7+2)-0.5)*P.jitter)*cs;
+    if(jx<0||jy<0||jx>W||jy>H)continue;
+    ctx.beginPath();ctx.arc(jx,jy,2.4,0,7);ctx.fill();
+  }
+}
+
+/* --- ползунки --- */
+const DEFS=[
+  ['cell','размер кроны, px',16,90,1],
+  ['rMin','радиус мин',0.2,1.2,0.02],
+  ['rMax','радиус макс',0.4,1.8,0.02],
+  ['jitter','джиттер вершин',0,1,0.02],
+  ['clump','слитность (клубы)',0,2,0.02],
+  ['density','плотность леса',0.3,1,0.02],
+  ['cover','покрытие (порог)',-0.6,0.6,0.02],
+  ['grain','зернистость кромки',0,1,0.02],
+];
+function buildSliders(){
+  const box=$('sliders');box.innerHTML='';
+  DEFS.forEach(([k,label,mn,mx,st])=>{
+    const row=document.createElement('div');row.className='rh-row';
+    row.innerHTML=`<label>${label}</label><input type="range" min="${mn}" max="${mx}" step="${st}" value="${P[k]}"><span class="rh-val">${P[k]}</span>`;
+    const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
+    inp.addEventListener('input',()=>{
+      P[k]=parseFloat(inp.value);
+      if(k==='rMin'&&P.rMin>P.rMax){P.rMax=P.rMin;}
+      if(k==='rMax'&&P.rMax<P.rMin){P.rMin=P.rMax;}
+      val.textContent=P[k];
+      schedule();
+    });
+    box.appendChild(row);
+  });
+}
+let pend=false;
+function schedule(){if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;render();});}
+
+$('segView').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  view=b.dataset.v;
+  [...$('segView').children].forEach(x=>x.classList.toggle('on',x===b));
+  render();
+});
+$('chkTops').addEventListener('change',render);
+$('chkTile').addEventListener('change',()=>{
+  let tc=$('cvTile');
+  if($('chkTile').checked){
+    if(!tc){
+      tc=document.createElement('canvas');tc.id='cvTile';
+      tc.width=$('cv').width*2;tc.height=$('cv').height*2;
+      tc.style.maxWidth='320px';
+      const wrap=document.createElement('div');
+      wrap.innerHTML='<div class="cap">2×2 тайл — швов нет</div>';
+      wrap.prepend(tc);
+      $('cv').parentElement.appendChild(wrap);
+    }
+    tc.parentElement.style.display='';
+  }else if(tc){tc.parentElement.style.display='none';}
+  render();
+});
+$('btnSeed').addEventListener('click',()=>{P.seed=(P.seed*1103515245+12345)&0x7fffffff;render();});
+$('btnPng').addEventListener('click',()=>{
+  const cv=$('cv');const v=view;view='mask';render();
+  cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='crownmask.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);});
+  view=v;render();
+});
+
+buildSliders();
+render();
+</script>
+</body>
+</html>
