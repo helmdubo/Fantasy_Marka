@@ -728,8 +728,13 @@ function understoryOf(ti){
 function terrainSites(pp,vinfo,labs,ti,E,key){
   const st=state.terrains[ti];
   const cr=st.crownSize||0.55, dens=st.crownDens!=null?st.crownDens:0.92;
-  const cornerR=E*cr*0.62, step=E*cr*0.5;
   const sinMin=triMinSin(pp);                    // для «личной линзы» рёберных кругов
+  // угловой круг не должен пересекать ПРОТИВОПОЛОЖНОЕ (общее с соседом) ребро:
+  // клип к минимальной высоте треугольника (константа конгруэнтной решётки → одинакова
+  // у всех тайлов вокруг вершины, клип согласован). Иначе круг у 3-й вершины переливается
+  // на общее ребро, которого сосед не знает → шов.
+  const minAlt=Math.min(distToSeg(pp[0],pp[1],pp[2]),distToSeg(pp[1],pp[2],pp[0]),distToSeg(pp[2],pp[0],pp[1]));
+  const cornerR=Math.min(E*cr*0.62,minAlt-0.75), step=E*cr*0.5;
   const corner=[],edge=[],interior=[];
   for(let k=0;k<3;k++)if(labs[k]===ti)corner.push({cx:pp[k][0],cy:pp[k][1],r:cornerR});
   const E3=[[0,1],[1,2],[2,0]];
@@ -748,7 +753,7 @@ function terrainSites(pp,vinfo,labs,ti,E,key){
       const ni=bothF?Math.min(n,Ne-1-n):n;      // симметрично для лес–лес (обход не влияет)
       const t=(n+0.5)/Ne;                        // от шарового конца A
       const prob=bothF?1:smoothstep(0.62,0.24,t);// 1 у леса → 0 у X (фронт ~0.45)
-      if(rnd01(eseed,ni*3)>prob*dens)continue;
+      if(!bothF&&rnd01(eseed,ni*3)>prob*dens)continue; // лес–лес ребро всегда плотное (= сплошной интерьер)
       let r=E*cr*(0.34+0.5*rnd01(eseed,ni*3+1))*(0.5+0.5*(bothF?1:prob));
       if(!bothF&&t+r/elen>0.86)continue;         // лес не достаёт X-вершину (функция ребра)
       // «личная линза»: круг не должен доставать смежные рёбра у вершин A/B
@@ -811,12 +816,8 @@ function renderTerrainRegions(ctxColor,W,H,verts,tris,labels,E,pad,maskCtxs){
     const key=cornerKey(t.orient,labs);
     const ballHere=ballTerrs.filter(ti=>labs.includes(ti));
     if(ballHere.length===0){renderCurveTri(ctxColor,maskCtxs,pp,labs,key,E,true);continue;}
-    // весь тайл — один шаровой террейн: сплошная заливка (интерьер, силуэта нет)
-    if(labs[0]===labs[1]&&labs[1]===labs[2]){
-      if(ctxColor){ctxColor.fillStyle=state.terrains[labs[0]].color;fillPoly(ctxColor,pp);}
-      if(maskCtxs&&maskCtxs[labs[0]]){maskCtxs[labs[0]].fillStyle='#fff';fillPoly(maskCtxs[labs[0]],pp);}
-      continue;
-    }
+    // ВСЕ тайлы с шаровым террейном идут единым путём base+overlay (даже «весь лес»),
+    // иначе сплошная заливка ≠ дисковая у соседа по лес–лес ребру → шов (аудит).
     // фон: partition с заменой шаровых меток на understory (почву)
     const baseLabs=labs.map(l=>isBall(l)?understoryOf(l):l);
     renderCurveTri(ctxColor,maskCtxs,pp,baseLabs,key+'|b',E,false);
