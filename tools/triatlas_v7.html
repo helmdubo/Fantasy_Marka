@@ -79,9 +79,6 @@
   details.fold[open] summary::before{content:'▾ ';}
   details.fold[open] summary{border-bottom:1px solid var(--line);}
   details.fold .inner{padding:10px 12px;}
-  .tparams{display:none; width:100%; grid-template-columns:1fr 1fr; gap:6px; padding-top:6px; border-top:1px dashed var(--line); margin-top:6px;}
-  .tparams.open{display:grid;}
-  .tparams select{width:100%;}
   table.dommat{border-collapse:collapse; font-size:11px; margin-top:4px;}
   .dommat th,.dommat td{border:1px solid var(--line); padding:7px 9px; text-align:center; min-width:44px;}
   .dommat th{color:var(--dim); font-weight:400; background:var(--panel);}
@@ -92,6 +89,11 @@
   .dommat .zero{color:var(--faint); font-weight:400;}
   .tdot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px;}
   footer{padding:18px 14px; font-size:10px; color:var(--faint); text-align:center; letter-spacing:.06em;}
+  .rh-row{display:flex;align-items:center;gap:10px;margin:7px 0;}
+  .rh-row label{width:118px;font-size:11px;color:var(--dim);flex:none;}
+  .rh-row input[type=range]{flex:1;accent-color:var(--brass);min-width:80px;}
+  .rh-val{width:46px;font-size:11px;color:var(--brass);text-align:right;flex:none;}
+  #secRhythm .canvas-wrap{margin-top:10px;}
   .toast{
     position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
     background:var(--panel2); border:1px solid var(--brass-dim); color:var(--ink);
@@ -111,7 +113,7 @@
 
 <section id="secTerrains">
   <div class="step"><span class="num">1</span><span class="t">Террейны</span></div>
-  <div class="hint">2–4 типа. ⚙ — параметры кромки (частота, амплитуда, острота, скругление, диттеринг).</div>
+  <div class="hint">2–4 типа. Параметры кромки — живые ползунки в секции 4 «Ритм переходов».</div>
   <div id="terrainList"></div>
   <div class="btnrow"><button id="btnAddTerrain" class="small">+ террейн</button></div>
   <div class="hint" style="margin-top:14px"><b>Порядок слоёв.</b> Строка — целевой слой, тап по ячейке циклит отношение:
@@ -176,8 +178,22 @@
   </div>
 </section>
 
+<section id="secRhythm">
+  <div class="step"><span class="num">4</span><span class="t">Ритм переходов</span></div>
+  <div class="hint">Кромки террейнов и нахлёсты — вживую. Ползунки меняют только отрисовку:
+  покрытие и ключи не трогаются, пересборка не нужна — проба ниже, атлас (секция 5) и превью
+  обновляются сразу. Матрица порядков (секция 1) тоже действует мгновенно.
+  Помни: видимую кромку пары стилизует <b>победитель</b> (▲ в матрице) — частота/амплитуда/острота/скругление
+  проигравшего на этой границе не видны (его диттеринг — виден). В заливке «градиент» ритм
+  смотри в пробе и ч/б каналах; в «маска (силуэты)» — прямо в цвете атласа.</div>
+  <div class="ctrl-line"><span class="seg" id="segRhyT"></span></div>
+  <div id="rhySliders"></div>
+  <div class="rh-row"><label>нахлёст за ▲1</label><input type="range" id="rhOverW" min="0" max="0.12" step="0.002"><span class="rh-val" id="rhOverWVal"></span></div>
+  <div class="canvas-wrap"><canvas id="cvRhythm" width="10" height="10"></canvas></div>
+</section>
+
 <section id="secAtlas">
-  <div class="step"><span class="num">4</span><span class="t">Атласы и экспорт</span></div>
+  <div class="step"><span class="num">5</span><span class="t">Атласы и экспорт</span></div>
   <div class="ctrl-line">
     <label>пространство</label>
     <span class="seg" id="segSpace">
@@ -225,7 +241,7 @@
 </section>
 
 <section id="secPreview">
-  <div class="step"><span class="num">5</span><span class="t">Проверка стыковки</span></div>
+  <div class="step"><span class="num">6</span><span class="t">Проверка стыковки</span></div>
   <div class="hint">Тап по вершине — цикл террейна. Тап по середине ребра — цикл комбинаций слоёв на ребре
   (пусто → река → дорога → река+дорога, только допустимые).</div>
   <div class="ctrl-line">
@@ -441,7 +457,6 @@ function domOf(a,b){ // знак+ = a поверх b
   const v=state.dom[key]||0;
   return a<b?v:-v;
 }
-const OVER_W=0.055; // ширина нахлёста на единицу |dom|, в долях ребра
 function lerpP(P,Q,t){return [P[0]+(Q[0]-P[0])*t,P[1]+(Q[1]-P[1])*t];}
 /* кромка победителя = сдвиг кривой раздела: offset лин. интерполируется между концами.
    Шум идентичен по построению => лента не может самопересечься (в стыке J — касание). */
@@ -478,9 +493,9 @@ function terrainCurve(P,Q,bulgePt,owner,seed){
    partition-кромка при 0.5; кромка победителя при 0.5+OVER_W*|dom| в сторону проигравшего. */
 function crossBase(){return 0.5;}
 function crossOver(fromTerrain,otherTerrain){ // t от вершины fromTerrain
-  const d=domOf(fromTerrain,otherTerrain);
-  if(d>0)return 0.5+OVER_W*Math.min(3,d);       // from — победитель: заходит за середину
-  if(d<0)return 0.5-OVER_W*Math.min(3,-d);      // from — проигравший: победитель заходит к нему
+  const d=domOf(fromTerrain,otherTerrain);    // ширина нахлёста — живая (state.overW, ползунок)
+  if(d>0)return 0.5+state.overW*Math.min(3,d);  // from — победитель: заходит за середину
+  if(d<0)return 0.5-state.overW*Math.min(3,-d); // from — проигравший: победитель заходит к нему
   return 0.5;
 }
 /* результат по треугольнику:
@@ -650,6 +665,7 @@ const state={
   ],
   mode:'flat', edge:64, seed:1, renderMode:'gradient', curChannel:0,
   space:'tri', rectAspect:1, // 'tri' — равносторонняя решётка; 'rect' — свёртка сдвигом в ячейки
+  rhyT:0, overW:0.055, // ритм переходов: выбранный террейн и ширина нахлёста на единицу |dom|
   layers:null,      // [{...terrain layer},{...overlay}...] + px per layer
   imported:{},      // layerIdx -> {srcCanvas,w,h}
   stale:true,
@@ -665,34 +681,11 @@ function renderTerrains(){
     row.innerHTML=`<span class="idx">${i}</span>
       <input type="color" value="${t.color}">
       <input type="text" value="${t.name}" maxlength="24">
-      <button class="small" data-role="gear" title="параметры кромки">⚙</button>
-      <button class="small" data-role="del">✕</button>
-      <div class="tparams">
-        <select data-role="freq" title="частота волны кромки">
-          ${[2,3,4,6,8,10].map(v=>`<option value="${v}"${t.freq===v?' selected':''}>частота ${v}</option>`).join('')}
-        </select>
-        <select data-role="amp" title="амплитуда кромки (max/min)">
-          ${[[0,'амплитуда 0'],[0.05,'амплитуда слабо'],[0.10,'амплитуда средне'],[0.15,'амплитуда сильно'],[0.22,'амплитуда экстрим']].map(([v,l])=>`<option value="${v}"${t.amp===v?' selected':''}>${l}</option>`).join('')}
-        </select>
-        <select data-role="sharp" title="острота пиков (скалы ↑, дюны ↓)">
-          ${[[0.7,'мягкие пики'],[1.0,'обычные пики'],[1.8,'острые пики'],[2.6,'скальные пики']].map(([v,l])=>`<option value="${v}"${t.sharp===v?' selected':''}>${l}</option>`).join('')}
-        </select>
-        <select data-role="round" title="скругление кромки">
-          ${[[0,'без скругления'],[0.4,'скругление среднее'],[0.8,'скругление сильное']].map(([v,l])=>`<option value="${v}"${t.round===v?' selected':''}>${l}</option>`).join('')}
-        </select>
-        <select data-role="dither" title="диттеринг кромки, px">
-          ${[[0,'диттеринг 0'],[1,'диттеринг 1'],[2,'диттеринг 2'],[3,'диттеринг 3']].map(([v,l])=>`<option value="${v}"${t.dither===v?' selected':''}>${l}</option>`).join('')}
-        </select>
-      </div>`;
+      <button class="small" data-role="del">✕</button>`;
     const [colorEl,nameEl]=row.querySelectorAll('input');
-    colorEl.addEventListener('input',()=>{t.color=colorEl.value;markStale();renderDomMatrix();});
-    nameEl.addEventListener('input',()=>{t.name=nameEl.value;markStale();renderFeatures();renderDomMatrix();});
-    row.querySelector('[data-role=gear]').addEventListener('click',()=>{
-      row.querySelector('.tparams').classList.toggle('open');
-    });
-    ['freq','amp','sharp','round','dither'].forEach(rn=>{
-      row.querySelector('[data-role='+rn+']').addEventListener('change',e=>{t[rn]=parseFloat(e.target.value);markStale();});
-    });
+    // цвет и имя не влияют на покрытие — обновляем вживую, без пересборки
+    colorEl.addEventListener('input',()=>{t.color=colorEl.value;renderDomMatrix();renderRhythm();scheduleLive(true);});
+    nameEl.addEventListener('input',()=>{t.name=nameEl.value;renderFeatures();renderDomMatrix();renderRhythm();});
     row.querySelector('[data-role=del]').addEventListener('click',()=>{
       if(state.terrains.length<=2){toast('минимум 2 террейна');return;}
       state.terrains.splice(i,1);
@@ -713,6 +706,7 @@ function renderTerrains(){
   });
   $('btnAddTerrain').style.display=state.terrains.length>=4?'none':'';
   renderDomMatrix();
+  renderRhythm();
 }
 function renderDomMatrix(){
   const box=$('domList');box.innerHTML='';
@@ -744,7 +738,8 @@ function renderDomMatrix(){
     const key=Math.min(a,b)+'-'+Math.max(a,b);
     const stored=a<b?v:-v;
     if(stored===0)delete state.dom[key];else state.dom[key]=stored;
-    markStale();renderDomMatrix();
+    // порядок пары влияет только на ленты нахлёста — живая перерисовка без пересборки
+    drawRhythmSample();scheduleLive(true);renderDomMatrix();
   });
   box.appendChild(tbl);
 }
@@ -753,6 +748,90 @@ $('btnAddTerrain').addEventListener('click',()=>{
   state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],freq:4,amp:0.05,sharp:1.0,round:0,dither:0});
   renderTerrains();renderFeatures();markStale();
 });
+
+/* --- ритм переходов: живые ползунки кромок ---
+   Параметры силуэтов и нахлёстов влияют только на отрисовку (ключи/покрытие
+   не зависят от них), поэтому меняются без пересборки: проба — мгновенно,
+   атлас/превью — не чаще кадра (rAF). WebGPU не нужен: полная перерисовка
+   всех канвасов укладывается в единицы миллисекунд на Canvas 2D. */
+const RHY_DEFS=[
+  ['freq','частота волны',1,12,0.5],
+  ['amp','амплитуда',0,0.25,0.005],
+  ['sharp','острота пиков',0.2,3,0.05],
+  ['round','скругление',0,1,0.02],
+  ['dither','диттеринг, px',0,4,0.25],
+];
+let livePending=false,liveWantPreview=false;
+/* на драге перерисовываем только террейн-слой (кромки не трогают оверлеи)
+   и вид атласа; превью карты — на отпускании ползунка (withPreview=true) */
+function scheduleLive(withPreview){
+  liveWantPreview=liveWantPreview||!!withPreview;
+  if(livePending)return;
+  livePending=true;
+  requestAnimationFrame(()=>{
+    livePending=false;
+    if(state.layers){
+      state.layers.forEach((L,i)=>{if(L.kind==='terrain')renderOneLayer(L,i);});
+      drawAtlasView();
+      if(liveWantPreview)renderPreview();
+    }
+    liveWantPreview=false;
+  });
+}
+function fmtV(v){return String(Math.round(v*1000)/1000);}
+function renderRhythm(){
+  state.rhyT=Math.min(state.rhyT,state.terrains.length-1);
+  const seg=$('segRhyT');seg.innerHTML='';
+  state.terrains.forEach((t,i)=>{
+    const b=document.createElement('button');
+    b.innerHTML=`<span class="tdot" style="background:${t.color}"></span>${t.name}`;
+    if(i===state.rhyT)b.classList.add('on');
+    b.addEventListener('click',()=>{state.rhyT=i;renderRhythm();});
+    seg.appendChild(b);
+  });
+  const box=$('rhySliders');box.innerHTML='';
+  const t=state.terrains[state.rhyT];
+  RHY_DEFS.forEach(([key,label,min,max,step])=>{
+    const row=document.createElement('div');row.className='rh-row';
+    row.innerHTML=`<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${t[key]}"><span class="rh-val">${fmtV(t[key])}</span>`;
+    const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
+    inp.addEventListener('input',()=>{
+      t[key]=parseFloat(inp.value);
+      val.textContent=fmtV(t[key]);
+      drawRhythmSample();scheduleLive(false);
+    });
+    inp.addEventListener('change',()=>scheduleLive(true)); // отпустили — обновить и превью
+    box.appendChild(row);
+  });
+  $('rhOverW').value=state.overW;
+  $('rhOverWVal').textContent=fmtV(state.overW);
+  drawRhythmSample();
+}
+/* проба перехода: маленький фиксированный патч решётки, силуэтный рендер
+   в текущем вложении (tri/rect) — перерисовка < 1 мс */
+function drawRhythmSample(){
+  const cv=$('cvRhythm');if(!cv)return;
+  const wrap=document.querySelector('#secRhythm .canvas-wrap');
+  const wrapW=Math.min((wrap.clientWidth||360)-12,720);
+  const cols=8,rows=4;
+  const verts=buildLattice(cols,rows);
+  const tris=buildTriangles(cols,rows);
+  const k=state.terrains.length;
+  const rng=seededRng(97+k*17);
+  const labels=verts.map(()=>Math.floor(rng()*k));
+  const [uw,uh]=latSize(verts,1,0);
+  const E=Math.max(20,Math.min(56,Math.floor((wrapW-8)/uw))); // кап, иначе flat-решётка (4 юнита шириной) раздувается
+  const pad=Math.round(E*0.25);
+  const W=Math.ceil(uw*E+2*pad),H=Math.ceil(uh*E+2*pad);
+  cv.width=W;cv.height=H;
+  renderTerrainRegions(cv.getContext('2d'),W,H,verts,tris,labels,E,pad,null);
+}
+$('rhOverW').addEventListener('input',e=>{
+  state.overW=parseFloat(e.target.value);
+  $('rhOverWVal').textContent=fmtV(state.overW);
+  drawRhythmSample();scheduleLive(false);
+});
+$('rhOverW').addEventListener('change',()=>scheduleLive(true));
 
 /* --- слои-оверлеи --- */
 function renderFeatures(){
@@ -872,6 +951,7 @@ function onSpaceChanged(){
   state.imported={};
   $('btnSrcImported').disabled=true;
   if(state.preview.src==='imported'){state.preview.src='template';syncSrcSeg();}
+  drawRhythmSample();
   if(state.layers){
     renderAllLayers();
     drawAtlasView();
@@ -1110,49 +1190,51 @@ function renderMarkup(ctx,L,E,pad){
 }
 /* --- сборка всех слоёв --- */
 const layerCanvases=[]; // чистые шаблоны per layer
-/* перерисовка канвасов всех слоёв в текущем вложении (tri/rect);
+/* перерисовка канваса ОДНОГО слоя в текущем вложении (tri/rect);
    покрытие/ключи не пересобираются — раскладка тайлов та же */
+function renderOneLayer(L,i){
+  const E=state.edge,pad=Math.round(E*0.5);
+  const [W,H]=latSize(L.verts,E,pad);
+  L.px={E,pad,W,H};
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  let line;
+  if(L.kind==='terrain'){
+    // ч/б каналы силуэтного конвейера — всегда
+    L.maskCanvases=state.terrains.map(()=>{
+      const m=document.createElement('canvas');m.width=W;m.height=H;
+      const mc=m.getContext('2d');mc.fillStyle='#000';mc.fillRect(0,0,W,H);
+      return m;
+    });
+    const maskCtxs=L.maskCanvases.map(m=>m.getContext('2d'));
+    if(state.renderMode==='mask'){
+      renderTerrainRegions(ctx,W,H,L.verts,L.tris,L.labels,E,pad,maskCtxs);
+    }else{
+      renderTerrainFill(ctx,W,H,L.verts,L.tris,L.labels,E,pad);
+      renderTerrainRegions(null,W,H,L.verts,L.tris,L.labels,E,pad,maskCtxs);
+    }
+    line=`террейн: ${L.needed} тайлов + апрон ${L.interior.filter(x=>!x).length} · сетка ${L.cols}×${L.rows} · атлас ${W}×${H}`;
+  }else{
+    renderOverlayTemplate(ctx,W,H,L,state.features[L.featIdx],E,pad);
+    const m=document.createElement('canvas');m.width=W;m.height=H;
+    const mc=m.getContext('2d');mc.fillStyle='#000';mc.fillRect(0,0,W,H);
+    drawOverlayStrokes(mc,L.verts,L.tris,L.edges,L.eFlag,state.features[L.featIdx],E,pad,'#ffffff');
+    L.maskCanvas=m;
+    line=`${state.features[L.featIdx].name}: 16 тайлов + апрон ${L.interior.filter(x=>!x).length} (${state.features[L.featIdx].geometry==='border'?'граница гекса':'связь'}) · сетка ${L.cols}×${L.rows} · атлас ${W}×${H}`;
+  }
+  layerCanvases[i]=cv;
+  return line;
+}
 function renderAllLayers(ms){
   const layers=state.layers;
   if(!layers)return;
-  const E=state.edge,pad=Math.round(E*0.5);
-  layerCanvases.length=0;
-  let statLines=[];
-  layers.forEach(L=>{
-    const [W,H]=latSize(L.verts,E,pad);
-    L.px={E,pad,W,H};
-    const cv=document.createElement('canvas');cv.width=W;cv.height=H;
-    const ctx=cv.getContext('2d');
-    if(L.kind==='terrain'){
-      // ч/б каналы силуэтного конвейера — всегда
-      L.maskCanvases=state.terrains.map(()=>{
-        const m=document.createElement('canvas');m.width=W;m.height=H;
-        const mc=m.getContext('2d');mc.fillStyle='#000';mc.fillRect(0,0,W,H);
-        return m;
-      });
-      const maskCtxs=L.maskCanvases.map(m=>m.getContext('2d'));
-      if(state.renderMode==='mask'){
-        renderTerrainRegions(ctx,W,H,L.verts,L.tris,L.labels,E,pad,maskCtxs);
-      }else{
-        renderTerrainFill(ctx,W,H,L.verts,L.tris,L.labels,E,pad);
-        renderTerrainRegions(null,W,H,L.verts,L.tris,L.labels,E,pad,maskCtxs);
-      }
-      statLines.push(`террейн: ${L.needed} тайлов + апрон ${L.interior.filter(x=>!x).length} · сетка ${L.cols}×${L.rows} · атлас ${W}×${H}`);
-    }else{
-      renderOverlayTemplate(ctx,W,H,L,state.features[L.featIdx],E,pad);
-      const m=document.createElement('canvas');m.width=W;m.height=H;
-      const mc=m.getContext('2d');mc.fillStyle='#000';mc.fillRect(0,0,W,H);
-      drawOverlayStrokes(mc,L.verts,L.tris,L.edges,L.eFlag,state.features[L.featIdx],E,pad,'#ffffff');
-      L.maskCanvas=m;
-      statLines.push(`${state.features[L.featIdx].name}: 16 тайлов + апрон ${L.interior.filter(x=>!x).length} (${state.features[L.featIdx].geometry==='border'?'граница гекса':'связь'}) · сетка ${L.cols}×${L.rows} · атлас ${W}×${H}`);
-    }
-    layerCanvases.push(cv);
-  });
+  layerCanvases.length=layers.length;
+  const statLines=layers.map((L,i)=>renderOneLayer(L,i));
   const spTxt=state.space==='rect'
     ?`прямоугольное · ячейка ${cellPx().map(x=>Math.round(x)).join('×')} px · диагональ едина`
     :'треугольное';
   $('stats').textContent=statLines.join('\n')
-    +`\nпространство: ${spTxt} · режим ${state.mode==='flat'?'flat-top ◀▶':'pointy-top ▲▼'} · ребро ${E} px`
+    +`\nпространство: ${spTxt} · режим ${state.mode==='flat'?'flat-top ◀▶':'pointy-top ▲▼'} · ребро ${state.edge} px`
     +(ms!=null?` · сборка ${ms} мс`:' · перерисовано');
 }
 $('btnBuild').addEventListener('click',()=>{
@@ -1318,7 +1400,8 @@ $('btnJson').addEventListener('click',()=>{
       out.masks={
         packed_file:'triatlas_terrain_masks'+spaceSfx()+'.png',
         packing:'канал на террейн: R=0, G=1, B=2, A=3 (если террейнов меньше — A=255)',
-        overlap_semantics:'каналы масок ПЕРЕСЕКАЮТСЯ в лентах нахлёста: маска проигравшего кончается на линии раздела (t=0.5 ребра), маска победителя продолжается за неё на 0.055·|dom| длины ребра; композит кладёт победителя пары поверх',
+        overlap_width_per_dom:state.overW,
+        overlap_semantics:`каналы масок ПЕРЕСЕКАЮТСЯ в лентах нахлёста: маска проигравшего кончается на линии раздела (t=0.5 ребра), маска победителя продолжается за неё на ${state.overW}·|dom| длины ребра; композит кладёт победителя пары поверх`,
         silhouettes:state.terrains.map((t,i)=>({terrain:i,freq:t.freq,amp:t.amp,sharpness:t.sharp,rounding:t.round,dither_px:t.dither})),
         pair_order:Object.entries(state.dom).map(([key,v])=>{
           const [a,b]=key.split('-').map(Number);
@@ -1326,7 +1409,7 @@ $('btnJson').addEventListener('click',()=>{
         }),
         pair_order_note:'антисимметричная парная матрица; циклы допустимы — каждая граница локальна для своей пары',
         style_rule:'видимую кромку пары стилизует победитель; обе кривые пары (раздел и кромка победителя) строятся от одного профиля шума — лента нахлёста не самопересекается',
-        seam_invariant:'обе точки пересечения ребра (раздел 0.5 и кромка победителя 0.5±0.055·|dom|) — чистые функции пары; шум/скругление/диттеринг — только в интерьере (seed=комбо), на концах кривых занулены'
+        seam_invariant:`обе точки пересечения ребра (раздел 0.5 и кромка победителя 0.5±${state.overW}·|dom|) — чистые функции пары; шум/скругление/диттеринг — только в интерьере (seed=комбо), на концах кривых занулены`
       };
     }else{
       const f=state.features[L.featIdx];
@@ -1611,7 +1694,7 @@ $('btnClearMap').addEventListener('click',()=>{
   state.preview.eF=state.preview.eF.map(arr=>arr.map(()=>0));
   renderPreview();
 });
-window.addEventListener('resize',()=>{if(state.layers)renderPreview();});
+window.addEventListener('resize',()=>{drawRhythmSample();if(state.layers)renderPreview();});
 
 /* init */
 renderTerrains();
