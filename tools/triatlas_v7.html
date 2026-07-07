@@ -187,8 +187,9 @@
   размер элемента, сила, октавы, шероховатость. Характер границы: синусоида→плавные волны,
   ворли→дуги (кроны/бухты), манхэттен→зубцы, чебышев→террасы (скалы); профиль F2−F1→гребни с расщелинами (хребты).
   Ниже — <b>форма силуэта = шары (Voronoi)</b>: граница террейна становится контуром объединения кругов
-  (край радиуса шара = силуэт, как крона леса). Круги у общего ребра — чистая функция меток ребра,
-  поэтому силуэт бесшовен между тайлами. Видно в режиме «маска (силуэты)».
+  (край радиуса шара = силуэт, как крона леса). Site-грамматика: угловые круги (у вершин), рёберные
+  (центр на ребре, сид от оси решётки + пары меток) и внутренние (не касаются рёбер) — контур бесшовен
+  и тайлится. «Почва под кроной» = террейн в негативном пространстве между шарами. Видно в «маска (силуэты)».
   Помни: видимую кромку пары стилизует <b>победитель</b> (▲ в матрице) — параметры проигравшего на этой
   границе не видны (его диттеринг — виден). В «маска (силуэты)» ритм виден прямо в цвете атласа.</div>
   <div class="ctrl-line"><span class="seg" id="segRhyT"></span></div>
@@ -673,118 +674,159 @@ function drawDither(ctx,maskCtxs,pp,seam,E,seed){
     if(db>0&&maskCtxs[seam.b]){apply(maskCtxs[seam.b],'#fff');}
   }
 }
-/* ===== режим ШАРОВ (Voronoi/крона): силуэт террейна = контур объединения
-   кругов. Круги раскидываются seam-безопасно — вклад у общего ребра есть
-   чистая функция МЕТОК ребра (не координат тайла), поэтому любые два тайла с
-   ребром «лес–X» дают одинаковый контур:
-   • угловой круг у каждой лес-вершины — функция метки (общий для всех тайлов);
-   • рёберные круги — центр НА ребре, хэш от пары меток + позиции вдоль ребра
-     (оба тайла рисуют свою половину → полный круг совпадает);
-   • внутренние круги (хэш тайла) не касаются рёбер (барицентрический отступ).
-   ti — «шаровой» террейн; фон — прочие. */
+/* ===== СИЛУЭТ ШАРАМИ — tile grammar (Voronoi/крона). Силуэт террейна =
+   контур ОБЪЕДИНЕНИЯ кругов. Круги (sites) делятся на 3 класса, каждый со
+   своим правилом бесшовности в corner-Wang на треугольниках:
+   A. corner sites — круг у вершины-«шарового» террейна: функция МЕТКИ вершины
+      (одинаков у всех тайлов вокруг вершины).
+   B. edge sites — центр строго НА ребре: функция сигнатуры ребра
+      (класс оси решётки + канонич. пара меток + индекс вдоль ребра). Оба
+      соседних тайла строят те же круги и рисуют свои полукруги → полный круг.
+   C. interior sites — хэш тайла (orient+метки), радиус ≤ расстояние до
+      границы − отступ ⇒ круг рёбер НЕ касается, на швы не влияет.
+   Фон (understory) — обычный partition с заменой шаровых меток на почву;
+   негативное пространство между кронами = understory (чистый ball-силуэт). */
 function smoothstep(a,b,x){const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);}
-function ballTerrainIdx(){return state.terrains.findIndex(t=>t.crownFill);}
-function forestDiscs(pp,labs,ti,E,key){
+/* класс оси ребра (0/1/2) — топологический инвариант из (r,c) вершин,
+   не зависит от вложения (tri/rect) и от того, какой тайл смотрит на ребро */
+function axisClass(vA,vB){
+  let A=vA,B=vB;
+  if(A.r>B.r||(A.r===B.r&&A.c>B.c)){A=vB;B=vA;} // канонич. порядок вершин
+  if(A.r===B.r)return 0;                          // горизонталь
+  const uA=A.c+(A.r&1)*0.5,uB=B.c+(B.r&1)*0.5;    // «равносторонняя» u для классификации
+  return (uB-uA)>0?1:2;                            // две диагонали
+}
+function distToSeg(p,a,b){
+  const dx=b[0]-a[0],dy=b[1]-a[1],L2=dx*dx+dy*dy||1;
+  let t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2;t=Math.max(0,Math.min(1,t));
+  return Math.hypot(p[0]-(a[0]+dx*t),p[1]-(a[1]+dy*t));
+}
+function distToTriBoundary(p,pp){return Math.min(distToSeg(p,pp[0],pp[1]),distToSeg(p,pp[1],pp[2]),distToSeg(p,pp[2],pp[0]));}
+/* синус минимального угла треугольника (константа для конгруэнтной решётки в
+   текущем вложении) — ограничивает рёберные круги их «личной линзой», чтобы
+   они не доставали смежные рёбра (иначе круги с соседних рёбер, различающихся
+   у соседних тайлов, переливались бы на общее ребро и ломали бесшовность). */
+function triMinSin(pp){
+  let mn=Infinity;
+  for(let k=0;k<3;k++){
+    const A=pp[k],B=pp[(k+1)%3],C=pp[(k+2)%3];
+    const v1x=B[0]-A[0],v1y=B[1]-A[1],v2x=C[0]-A[0],v2y=C[1]-A[1];
+    const ang=Math.atan2(Math.abs(v1x*v2y-v1y*v2x),v1x*v2x+v1y*v2y);
+    if(ang<mn)mn=ang;
+  }
+  return Math.sin(mn);
+}
+function terrainList(){return state.terrains;}
+function isBall(i){return !!state.terrains[i].crownFill;}
+function understoryOf(ti){
+  const u=state.terrains[ti].under;
+  if(u!=null&&u>=0&&u<state.terrains.length&&u!==ti&&!isBall(u))return u;
+  for(let i=0;i<state.terrains.length;i++)if(i!==ti&&!isBall(i))return i;
+  return ti; // всё шаровое — вырожденно
+}
+/* сгенерировать sites (круги) шарового террейна ti для треугольника */
+function terrainSites(pp,vinfo,labs,ti,E,key){
   const st=state.terrains[ti];
-  const cr=(st.crownSize||0.55);            // множитель размера
-  const cornerR=E*cr*0.5;                   // радиус углового круга (у лес-вершины)
-  const step=E*cr*0.55;                     // шаг рёберных кругов
-  const dens=st.crownDens!=null?st.crownDens:0.92;
-  const discs=[];
-  for(let k=0;k<3;k++)if(labs[k]===ti)discs.push({cx:pp[k][0],cy:pp[k][1],r:cornerR});
+  const cr=st.crownSize||0.55, dens=st.crownDens!=null?st.crownDens:0.92;
+  const cornerR=E*cr*0.62, step=E*cr*0.5;
+  const sinMin=triMinSin(pp);                    // для «личной линзы» рёберных кругов
+  const corner=[],edge=[],interior=[];
+  for(let k=0;k<3;k++)if(labs[k]===ti)corner.push({cx:pp[k][0],cy:pp[k][1],r:cornerR});
   const E3=[[0,1],[1,2],[2,0]];
   for(const [i,j] of E3){
     const Li=labs[i],Lj=labs[j];
     if(Li!==ti&&Lj!==ti)continue;
     const bothF=Li===ti&&Lj===ti;
-    // A — лесной конец (по МЕТКЕ, не по порядку вершин) → оба тайла согласны
+    // A — «шаровой» конец по МЕТКЕ (не по порядку вершин) → оба тайла согласны
     let A,B; if(Li===ti&&Lj!==ti){A=pp[i];B=pp[j];}else if(Lj===ti&&Li!==ti){A=pp[j];B=pp[i];}else{A=pp[i];B=pp[j];}
     const other=bothF?ti:(Li===ti?Lj:Li);
+    const ax=axisClass(vinfo[i],vinfo[j]);
+    const eseed=hash32('E|'+ax+'|'+Math.min(ti,other)+'|'+Math.max(ti,other));
     const elen=Math.hypot(B[0]-A[0],B[1]-A[1])||1;
     const Ne=Math.max(2,Math.round(elen/step));
-    const eseed=hash32('E'+Math.min(ti,other)+'_'+Math.max(ti,other));
     for(let n=0;n<Ne;n++){
-      // симметричный индекс для лес–лес (направление обхода не влияет)
-      const ni=bothF?Math.min(n,Ne-1-n):n;
-      const t=(n+0.5)/Ne;                    // от лесного конца A
-      const prob=bothF?1:smoothstep(0.62,0.24,t); // 1 у леса → 0 у X (фронт ~0.45)
+      const ni=bothF?Math.min(n,Ne-1-n):n;      // симметрично для лес–лес (обход не влияет)
+      const t=(n+0.5)/Ne;                        // от шарового конца A
+      const prob=bothF?1:smoothstep(0.62,0.24,t);// 1 у леса → 0 у X (фронт ~0.45)
       if(rnd01(eseed,ni*3)>prob*dens)continue;
-      // радиус тает к фронту (мелкие кроны на опушке), не переливается к X-вершине
-      const r=E*cr*(0.34+0.5*rnd01(eseed,ni*3+1))*(0.5+0.5*(bothF?1:prob));
-      if(!bothF&&t+r/elen>0.86)continue;     // гарантия: лес не достаёт X-вершину (функция ребра)
-      const cx=A[0]+(B[0]-A[0])*t, cy=A[1]+(B[1]-A[1])*t; // ЦЕНТР НА РЕБРЕ → seam-safe
-      discs.push({cx,cy,r});
+      let r=E*cr*(0.34+0.5*rnd01(eseed,ni*3+1))*(0.5+0.5*(bothF?1:prob));
+      if(!bothF&&t+r/elen>0.86)continue;         // лес не достаёт X-вершину (функция ребра)
+      // «личная линза»: круг не должен доставать смежные рёбра у вершин A/B
+      const s=t*elen;
+      const rmax=Math.min(s,elen-s)*sinMin-0.75;
+      r=Math.min(r,rmax);
+      if(r<2)continue;                           // у самой вершины — только угловой круг
+      edge.push({cx:A[0]+(B[0]-A[0])*t,cy:A[1]+(B[1]-A[1])*t,r}); // ЦЕНТР НА РЕБРЕ
     }
   }
-  // внутренние круги: только где доминирует лес, с барицентрическим отступом
   const nF=labs.filter(l=>l===ti).length;
   if(nF>0&&nF<3){
-    const iseed=hash32(key+'_I');
-    const inr=E*0.2887;
-    for(let m=0;m<4;m++){
-      let a=0.18+0.5*rnd01(iseed,m*4+1), b=0.18+0.5*rnd01(iseed,m*4+2);
-      if(a+b>0.82){const s=0.82/(a+b);a*=s;b*=s;}
-      const c=1-a-b, bc=[a,b,c];
-      // доминирующая вершина должна быть лесной
+    const iseed=hash32(key+'|I|'+ti);
+    for(let m=0;m<5;m++){
+      let a=0.15+0.55*rnd01(iseed,m*4+1),b=0.15+0.55*rnd01(iseed,m*4+2);
+      if(a+b>0.85){const s=0.85/(a+b);a*=s;b*=s;}
+      const c=1-a-b,bc=[a,b,c];
       let dm=0;if(bc[1]>bc[dm])dm=1;if(bc[2]>bc[dm])dm=2;
-      if(labs[dm]!==ti)continue;
-      const cx=a*pp[0][0]+b*pp[1][0]+c*pp[2][0], cy=a*pp[0][1]+b*pp[1][1]+c*pp[2][1];
-      const margin=Math.min(a,b,c)*inr*1.7; // до ближайшего ребра (прибл.)
-      const r=Math.min(E*cr*(0.4+0.5*rnd01(iseed,m*4+3)),margin);
-      if(r>2)discs.push({cx,cy,r});
+      if(labs[dm]!==ti)continue;                 // только там, где доминирует лес
+      const cx=a*pp[0][0]+b*pp[1][0]+c*pp[2][0],cy=a*pp[0][1]+b*pp[1][1]+c*pp[2][1];
+      const r=Math.min(E*cr*(0.35+0.45*rnd01(iseed,m*4+3)),distToTriBoundary([cx,cy],pp)-2);
+      if(r>3)interior.push({cx,cy,r});           // радиус < отступ ⇒ рёбер не касается
     }
   }
-  return discs;
+  return {corner,edge,interior};
 }
 function fillDiscs(ctx,pp,discs,fill){
+  if(!discs.length)return;
   ctx.save();
   ctx.beginPath();ctx.moveTo(pp[0][0],pp[0][1]);ctx.lineTo(pp[1][0],pp[1][1]);ctx.lineTo(pp[2][0],pp[2][1]);ctx.closePath();ctx.clip();
   ctx.fillStyle=fill;
   for(const d of discs){ctx.beginPath();ctx.arc(d.cx,d.cy,d.r,0,7);ctx.fill();}
   ctx.restore();
 }
-/* масочный рендер: partition -> ленты нахлёста -> диттеринг.
-   Треугольник с «шаровым» террейном и единым фоном рендерится кругами. */
+/* обычный (кривой) рендер одного треугольника: partition → ленты → диттеринг */
+function renderCurveTri(ctxColor,maskCtxs,pp,labs,key,E,doDither){
+  const res=maskRegionsForTri(pp,labs,key);
+  for(const r of res.partition){
+    if(ctxColor){ctxColor.fillStyle=state.terrains[r.terrain].color;fillPoly(ctxColor,r.poly);}
+    if(maskCtxs&&maskCtxs[r.terrain]){maskCtxs[r.terrain].fillStyle='#fff';fillPoly(maskCtxs[r.terrain],r.poly);}
+  }
+  for(const rb of res.ribbons){
+    if(ctxColor){ctxColor.fillStyle=state.terrains[rb.winner].color;fillPoly(ctxColor,rb.poly);}
+    if(maskCtxs&&maskCtxs[rb.winner]){maskCtxs[rb.winner].fillStyle='#fff';fillPoly(maskCtxs[rb.winner],rb.poly);}
+  }
+  if(doDither){
+    const seedD=hash32(key)^0x5f3759df;
+    for(const sm of res.seams)drawDither(ctxColor,maskCtxs,pp,sm,E,seedD^hash32(sm.a+'_'+sm.b));
+  }
+}
+/* рендер решётки: тайлы с шаровыми террейнами → фон (understory) + overlay кругов;
+   прочие → обычный кривой partition */
 function renderTerrainRegions(ctxColor,W,H,verts,tris,labels,E,pad,maskCtxs){
   const pts=latPts(verts,E,pad);
   if(ctxColor){ctxColor.fillStyle='#101318';ctxColor.fillRect(0,0,W,H);}
-  const ballT=ballTerrainIdx();
+  const ballTerrs=state.terrains.map((t,i)=>t.crownFill?i:-1).filter(i=>i>=0);
   for(const t of tris){
     const pp=t.verts.map(i=>pts[i]);
     const labs=t.verts.map(i=>labels[i]);
     const key=cornerKey(t.orient,labs);
-    // --- режим шаров: лес + единый фон (или весь лес) ---
-    if(ballT>=0){
-      const others=[...new Set(labs.filter(l=>l!==ballT))];
-      const hasBall=labs.includes(ballT);
-      if(hasBall&&others.length<=1){
-        if(others.length===0){ // весь лес — сплошная заливка (интерьер)
-          if(ctxColor){ctxColor.fillStyle=state.terrains[ballT].color;fillPoly(ctxColor,pp);}
-          if(maskCtxs&&maskCtxs[ballT]){maskCtxs[ballT].fillStyle='#fff';fillPoly(maskCtxs[ballT],pp);}
-        }else{
-          const bg=others[0];
-          if(ctxColor){ctxColor.fillStyle=state.terrains[bg].color;fillPoly(ctxColor,pp);}
-          if(maskCtxs&&maskCtxs[bg]){maskCtxs[bg].fillStyle='#fff';fillPoly(maskCtxs[bg],pp);}
-          const discs=forestDiscs(pp,labs,ballT,E,key);
-          if(ctxColor)fillDiscs(ctxColor,pp,discs,state.terrains[ballT].color);
-          if(maskCtxs&&maskCtxs[ballT])fillDiscs(maskCtxs[ballT],pp,discs,'#fff');
-        }
-        continue;
-      }
-      // сложный тайл (лес + 2 разных фона) — пока обычный partition
+    const ballHere=ballTerrs.filter(ti=>labs.includes(ti));
+    if(ballHere.length===0){renderCurveTri(ctxColor,maskCtxs,pp,labs,key,E,true);continue;}
+    // весь тайл — один шаровой террейн: сплошная заливка (интерьер, силуэта нет)
+    if(labs[0]===labs[1]&&labs[1]===labs[2]){
+      if(ctxColor){ctxColor.fillStyle=state.terrains[labs[0]].color;fillPoly(ctxColor,pp);}
+      if(maskCtxs&&maskCtxs[labs[0]]){maskCtxs[labs[0]].fillStyle='#fff';fillPoly(maskCtxs[labs[0]],pp);}
+      continue;
     }
-    const res=maskRegionsForTri(pp,labs,key);
-    for(const r of res.partition){
-      if(ctxColor){ctxColor.fillStyle=state.terrains[r.terrain].color;fillPoly(ctxColor,r.poly);}
-      if(maskCtxs&&maskCtxs[r.terrain]){maskCtxs[r.terrain].fillStyle='#fff';fillPoly(maskCtxs[r.terrain],r.poly);}
-    }
-    for(const rb of res.ribbons){
-      if(ctxColor){ctxColor.fillStyle=state.terrains[rb.winner].color;fillPoly(ctxColor,rb.poly);}
-      if(maskCtxs&&maskCtxs[rb.winner]){maskCtxs[rb.winner].fillStyle='#fff';fillPoly(maskCtxs[rb.winner],rb.poly);}
-    }
-    const seedD=hash32(key)^0x5f3759df;
-    for(const sm of res.seams){
-      drawDither(ctxColor,maskCtxs,pp,sm,E,seedD^hash32(sm.a+'_'+sm.b));
+    // фон: partition с заменой шаровых меток на understory (почву)
+    const baseLabs=labs.map(l=>isBall(l)?understoryOf(l):l);
+    renderCurveTri(ctxColor,maskCtxs,pp,baseLabs,key+'|b',E,false);
+    // overlay кругов каждого присутствующего шарового террейна (по индексу → выше сверху)
+    const vinfo=t.verts.map(i=>verts[i]);
+    for(const ti of ballHere){
+      const S=terrainSites(pp,vinfo,labs,ti,E,key);
+      const all=S.corner.concat(S.edge,S.interior);
+      if(ctxColor)fillDiscs(ctxColor,pp,all,state.terrains[ti].color);
+      if(maskCtxs&&maskCtxs[ti])fillDiscs(maskCtxs[ti],pp,all,'#fff');
     }
   }
 }
@@ -803,11 +845,12 @@ const state={
   // f2 — профиль F2−F1 (ворли), elem — размер элемента (1/частота), strength —
   // сила, oct — октавы (1..4), rough — шероховатость (спад октав); round/dither —
   // геометрический финиш (скругление вздутия / пиксельный диттеринг кромки)
-  // crownFill — залить интерьер псевдокронами; crownSize — размер шаров (доля E);
-  // crownDens — плотность деревьев
+  // crownFill — силуэт шарами (Voronoi/крона); crownSize — размер шаров (доля E);
+  // crownDens — плотность/резкость фронта; under — «почва» под кроной (индекс террейна,
+  // = негативное пространство между шарами)
   terrains:[
-    {name:'трава',color:'#5a8f3c',noiseType:'sin',f2:false,elem:0.16,strength:0.15,oct:2,rough:0.5,sharp:1.0,round:0,dither:2,crownFill:false,crownSize:0.55,crownDens:0.92},
-    {name:'вода',color:'#3a6ea5',noiseType:'sin',f2:false,elem:0.33,strength:0.06,oct:1,rough:0.5,sharp:0.7,round:0.8,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92},
+    {name:'трава',color:'#5a8f3c',noiseType:'sin',f2:false,elem:0.16,strength:0.15,oct:2,rough:0.5,sharp:1.0,round:0,dither:2,crownFill:false,crownSize:0.55,crownDens:0.92,under:1},
+    {name:'вода',color:'#3a6ea5',noiseType:'sin',f2:false,elem:0.33,strength:0.06,oct:1,rough:0.5,sharp:0.7,round:0.8,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92,under:0},
   ],
   dom:{'0-1':-2}, // парные нахлёсты: ключ 'a-b' (a<b), знак+ = a поверх b, |v| = ширина
 
@@ -852,6 +895,11 @@ function renderTerrains(){
         if(a<b)nd[a+'-'+b]=v;else nd[b+'-'+a]=-v;
       });
       state.dom=nd;
+      // переиндексация understory-ссылок под удалённый индекс
+      state.terrains.forEach(tt=>{
+        if(tt.under==null)return;
+        if(tt.under===i)tt.under=-1; else if(tt.under>i)tt.under--;
+      });
       renderTerrains();renderFeatures();markStale();
     });
     box.appendChild(row);
@@ -897,7 +945,7 @@ function renderDomMatrix(){
 }
 $('btnAddTerrain').addEventListener('click',()=>{
   const presets=['#c2a25a','#7a7d85','#8f5a3c','#5a8f8a'];
-  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],noiseType:'sin',f2:false,elem:0.2,strength:0.08,oct:2,rough:0.5,sharp:1.0,round:0,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92});
+  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],noiseType:'sin',f2:false,elem:0.2,strength:0.08,oct:2,rough:0.5,sharp:1.0,round:0,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92,under:0});
   renderTerrains();renderFeatures();markStale();
 });
 
@@ -987,12 +1035,24 @@ function renderRhythm(){
     <button data-cf="0"${t.crownFill?'':' class="on"'}>кривая (шум)</button>
     <button data-cf="1"${t.crownFill?' class="on"':''}>шары (Voronoi)</button></span>`;
   crow.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
-    const on=b.dataset.cf==='1';
-    if(on)state.terrains.forEach((x,xi)=>{if(xi!==state.rhyT)x.crownFill=false;}); // один шаровой террейн
-    t.crownFill=on;renderRhythm();scheduleLive(true);
+    t.crownFill=b.dataset.cf==='1';
+    // почва по умолчанию — первый не-шаровой террейн
+    if(t.crownFill&&(t.under==null||t.under<0||t.under===state.rhyT||isBall(t.under)))t.under=understoryOf(state.rhyT);
+    renderRhythm();scheduleLive(true);
   }));
   box.appendChild(crow);
   if(t.crownFill){
+    // почва под кроной = негативное пространство между шарами
+    const urow=document.createElement('div');urow.className='rh-row';
+    urow.innerHTML='<label>почва под кроной</label>';
+    const usel=document.createElement('select');usel.style.flex='1';
+    state.terrains.forEach((tt,ui)=>{
+      if(ui===state.rhyT||tt.crownFill)return; // почва — не-шаровой террейн
+      const o=document.createElement('option');o.value=ui;o.textContent=tt.name;
+      if(understoryOf(state.rhyT)===ui)o.selected=true;usel.appendChild(o);
+    });
+    usel.addEventListener('change',()=>{t.under=parseInt(usel.value,10);scheduleLive(true);});
+    urow.appendChild(usel);box.appendChild(urow);
     [['crownSize','размер шаров',0.25,1.4,0.05],['crownDens','плотность крон',0.5,1,0.02]].forEach(([key,label,mn,mx,st2])=>{
       const row=document.createElement('div');row.className='rh-row';
       row.innerHTML=`<label>${label}</label><input type="range" min="${mn}" max="${mx}" step="${st2}" value="${t[key]}"><span class="rh-val">${fmtV(t[key])}</span>`;
@@ -1607,9 +1667,14 @@ $('btnJson').addEventListener('click',()=>{
           profile:t.noiseType==='sin'?'—':(t.f2?'F2-F1':'F1'),
           element_size:t.elem,strength:t.strength,octaves:t.oct,roughness:t.rough,
           sharpness:t.sharp,rounding:t.round,dither_px:t.dither,
-          balls:t.crownFill?{size_rel_edge:t.crownSize,density:t.crownDens}:null})),
+          balls:t.crownFill?{
+            understory:understoryOf(i),
+            corner_sites:{radius_rel_edge:+(t.crownSize*0.5).toFixed(3)},
+            edge_sites:{size_rel_edge:t.crownSize,density:t.crownDens,step_rel_edge:+(t.crownSize*0.55).toFixed(3),front:'smoothstep(0.62,0.24,t) от шаровой вершины; отсечка t+r/elen>0.86'},
+            interior_sites:{count:5,margin_px:2}
+          }:null})),
         noise_note:'кривая-силуэт: смещение по нормали ребра = strength·edgeNoise1D(type, elem, oct, rough) ×sin(πt) (0 на концах — seam-инвариант). Типы: sinusoid→волны, worley-euclidean→дуги, worley-manhattan→зубцы, worley-chebyshev→террасы; F2−F1→гребни',
-        balls_note:'silhouette=balls-voronoi: граница террейна = контур ОБЪЕДИНЕНИЯ кругов (край радиуса = силуэт). Круги: угловой у каждой лес-вершины (функция метки), рёберные с центром НА ребре (хэш от пары меток + позиции вдоль ребра → оба тайла рисуют полукруги, полный круг совпадает), внутренние (хэш тайла, не касаются рёбер). Seam-безопасно и тайлится: вклад у общего ребра — чистая функция меток ребра. size_rel_edge — радиус кругов (доля edge_px), density — плотность/резкость лесного фронта',
+        balls_note:'silhouette=balls-voronoi: граница террейна = контур ОБЪЕДИНЕНИЯ кругов (край радиуса = силуэт), tile grammar из 3 классов sites. corner_sites: круг у вершины-метки (функция метки, общий для тайлов вокруг вершины). edge_sites: центр НА ребре, сид=hash(axisClass|minLabel|maxLabel) — чистая функция сигнатуры ребра (класс оси решётки 0/1/2 + канонич. пара меток), оба тайла рисуют полукруги → полный круг совпадает; axisClass даёт 3× вариативности без потери бесшовности. interior_sites: хэш тайла (orient+метки), радиус ≤ dist(центр,∂triangle)−margin ⇒ рёбер не касается. Рендер: фон=partition с заменой шаровых меток на understory (почву=негативное пространство между кронами), сверху overlay кругов. Тайлируется: всё, что может коснуться границы тайла — функция только общих данных ребра/вершины',
         pair_order:Object.entries(state.dom).map(([key,v])=>{
           const [a,b]=key.split('-').map(Number);
           return {a,b,value:v,meaning:v>0?state.terrains[a].name+' поверх '+state.terrains[b].name:state.terrains[b].name+' поверх '+state.terrains[a].name};
