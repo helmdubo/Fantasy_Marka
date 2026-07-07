@@ -183,9 +183,12 @@
   <div class="hint">Кромки террейнов и нахлёсты — вживую. Ползунки меняют только отрисовку:
   покрытие и ключи не трогаются, пересборка не нужна — проба ниже, атлас (секция 5) и превью
   обновляются сразу. Матрица порядков (секция 1) тоже действует мгновенно.
-  Единая модель шума кромки (как в Houdini): <b>тип</b> (синусоида/ворли/манхэттен/чебышев) +
+  Единая модель шума кромки (как в Houdini): <b>тип</b> (синусоида/ворли/манхэттен/чебышев/кроны) +
   размер элемента, сила, октавы, шероховатость. Характер границы: синусоида→плавные волны,
-  ворли→дуги (кроны/бухты), манхэттен→зубцы, чебышев→террасы (скалы); профиль F2−F1→гребни с расщелинами (хребты).
+  ворли→дуги (кроны/бухты), манхэттен→зубцы, чебышев→террасы (скалы), <b>кроны</b>→силуэт леса
+  (округлые купола разного размера с перекрытием); профиль F2−F1→гребни с расщелинами (хребты).
+  Ниже — <b>интерьер кронами</b>: заполнить регион террейна псевдошарами-кронами (видно в режиме
+  «маска (силуэты)»; купола непрерывны через границы тайлов).
   Помни: видимую кромку пары стилизует <b>победитель</b> (▲ в матрице) — параметры проигравшего на этой
   границе не видны (его диттеринг — виден). В «маска (силуэты)» ритм виден прямо в цвете атласа.</div>
   <div class="ctrl-line"><span class="seg" id="segRhyT"></span></div>
@@ -448,6 +451,9 @@ function buildOverlayLayer(featIdx,rng){
    на концах кривых смещение занулено, диттеринг заклиплен внутрь треугольника с отступом. */
 function hash32(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
 function rnd01(seed,i){let x=(seed^Math.imul(i+1,2654435761))>>>0;x=Math.imul(x^(x>>>15),2246822519);x=Math.imul(x^(x>>>13),3266489917);x=(x^(x>>>16))>>>0;return x/4294967296;}
+/* 2D-хэш от целочисленной ячейки — для заливки кронами (глобален по canvas,
+   сид на террейн → купола непрерывны через границы треугольников) */
+function rnd2(ix,iy,s){let h=(Math.imul(ix|0,374761393)^Math.imul(iy|0,668265263)^Math.imul(s|0,2246822519))>>>0;h=Math.imul(h^(h>>>13),1274126177)>>>0;return ((h^(h>>>16))>>>0)/4294967296;}
 function noise1D(seed,t){const i=Math.floor(t),f=t-i;const a=rnd01(seed,i),b=rnd01(seed,i+1);const u=f*f*(3-2*f);return (a+(b-a)*u)*2-1;}
 /* 1D-ворли вдоль кромки: «ядра» в ячейках; значение — из расстояния до
    ближайших ядер в координатах (позиция вдоль ребра × высота ядра).
@@ -468,6 +474,22 @@ function worley1D(seed,u,type,f2){
   }
   return f2?1-2*Math.min(1,d2-d1):1-2*Math.min(1,d1);
 }
+/* силуэт крон вдоль ребра: округлые купола разного радиуса с эффектом высоты
+   (max-of-arcs — более высокая/крупная крона перекрывает соседнюю). Купол i:
+   дуга √(1−((u−cᵢ)/Rᵢ)²)·Rᵢ + zᵢ; между кронами провал. Чистая функция
+   (seed,u) — тайлится и seam-безопасна, как остальные типы. */
+function crownEdge1D(seed,u){
+  const i0=Math.floor(u);
+  let best=-1e9;
+  for(let i=i0-2;i<=i0+2;i++){
+    const cx=i+0.5+(rnd01(seed,i*2)-0.5)*0.8;   // центр кроны (джиттер)
+    const R=0.4+0.5*rnd01(seed,i*2+1);          // радиус варьируется
+    const z=0.35*rnd01(seed,i*2+2);             // высота: «один накрывает другой»
+    const dx=(u-cx)/R;
+    if(dx>-1&&dx<1){const arc=Math.sqrt(1-dx*dx)*R+z; if(arc>best)best=arc;}
+  }
+  return best<=-1e8?-0.6:(best*1.7-0.72); // нормировка ~[-1,1]: тоны крон +, провалы −
+}
 /* единая модель шума кромки (в стиле Houdini): один тип шума + фрактальные
    октавы. Размер элемента → базовая частота, октавы удваивают частоту и
    гасят амплитуду на «шероховатость». Чистая функция (seed,t,st) — концы
@@ -479,7 +501,9 @@ function edgeNoise1D(seed,t,st,fscale){
   let sum=0,amp=1,freq=baseFreq,norm=0;
   for(let o=0;o<oct;o++){
     const s=(seed^Math.imul(o+1,0x9e3779b1))>>>0;
-    const v=st.noiseType==='sin'?noise1D(s,t*freq):worley1D(s,t*freq,st.noiseType,st.f2);
+    const v=st.noiseType==='sin'?noise1D(s,t*freq)
+      :st.noiseType==='crown'?crownEdge1D(s,t*freq)
+      :worley1D(s,t*freq,st.noiseType,st.f2);
     sum+=v*amp;norm+=amp;
     amp*=rough;freq*=2;
   }
@@ -667,10 +691,51 @@ function drawDither(ctx,maskCtxs,pp,seam,E,seed){
     if(db>0&&maskCtxs[seam.b]){apply(maskCtxs[seam.b],'#fff');}
   }
 }
-/* масочный рендер: partition -> ленты нахлёста -> диттеринг */
+/* заливка интерьера террейна псевдокронами: радиальные блобы (светлый верх →
+   тёмный край) разного радиуса, отсортированы по «высоте» z — более высокая
+   крона рисуется позже и перекрывает соседнюю (эффект объёма). Ядра — хэш от
+   ГЛОБАЛЬНОЙ ячейки (сид на террейн), поэтому купола непрерывны через границы
+   треугольников; клип держит их внутри региона террейна. Красит только цвет
+   (маски экспорта не трогаются). */
+function paintCrownFill(ctx,polys,ti,E){
+  const st=state.terrains[ti];
+  const cell=Math.max(8,E*(st.crownSize||0.5));
+  const seedInt=(Math.imul(ti+1,0x9e3779b1)^(state.seed*2654435761))>>>0;
+  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  for(const poly of polys)for(const p of poly){
+    if(p[0]<mnx)mnx=p[0];if(p[1]<mny)mny=p[1];if(p[0]>mxx)mxx=p[0];if(p[1]>mxy)mxy=p[1];
+  }
+  ctx.save();
+  ctx.beginPath();
+  for(const poly of polys){ctx.moveTo(poly[0][0],poly[0][1]);for(let i=1;i<poly.length;i++)ctx.lineTo(poly[i][0],poly[i][1]);ctx.closePath();}
+  ctx.clip();
+  const [cr,cg,cb]=hexToRgb(st.color);
+  const lt=v=>Math.min(255,v*1.35+40)|0, dk=v=>(v*0.42)|0;
+  const light=`rgb(${lt(cr)},${lt(cg)},${lt(cb)})`, dark=`rgb(${dk(cr)},${dk(cg)},${dk(cb)})`;
+  const dens=st.crownDens!=null?st.crownDens:0.92;
+  const gx0=Math.floor(mnx/cell)-1,gx1=Math.floor(mxx/cell)+1;
+  const gy0=Math.floor(mny/cell)-1,gy1=Math.floor(mxy/cell)+1;
+  const ker=[];
+  for(let gy=gy0;gy<=gy1;gy++)for(let gx=gx0;gx<=gx1;gx++){
+    if(rnd2(gx,gy,seedInt+5)>dens)continue;
+    const jx=(gx+0.5+(rnd2(gx,gy,seedInt+1)-0.5)*0.6)*cell;
+    const jy=(gy+0.5+(rnd2(gx,gy,seedInt+2)-0.5)*0.6)*cell;
+    const R=(0.55+0.5*rnd2(gx,gy,seedInt+3))*cell;
+    ker.push({jx,jy,R,z:rnd2(gx,gy,seedInt+4)});
+  }
+  ker.sort((a,b)=>a.z-b.z); // выше — позже → перекрытие
+  for(const k of ker){
+    const g=ctx.createRadialGradient(k.jx-k.R*0.35,k.jy-k.R*0.4,k.R*0.06,k.jx,k.jy,k.R);
+    g.addColorStop(0,light);g.addColorStop(0.55,st.color);g.addColorStop(1,dark);
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(k.jx,k.jy,k.R,0,7);ctx.fill();
+  }
+  ctx.restore();
+}
+/* масочный рендер: partition -> ленты нахлёста -> кроны -> диттеринг */
 function renderTerrainRegions(ctxColor,W,H,verts,tris,labels,E,pad,maskCtxs){
   const pts=latPts(verts,E,pad);
   if(ctxColor){ctxColor.fillStyle='#101318';ctxColor.fillRect(0,0,W,H);}
+  const anyCrown=ctxColor&&state.terrains.some(t=>t.crownFill);
   for(const t of tris){
     const pp=t.verts.map(i=>pts[i]);
     const labs=t.verts.map(i=>labels[i]);
@@ -683,6 +748,12 @@ function renderTerrainRegions(ctxColor,W,H,verts,tris,labels,E,pad,maskCtxs){
     for(const rb of res.ribbons){
       if(ctxColor){ctxColor.fillStyle=state.terrains[rb.winner].color;fillPoly(ctxColor,rb.poly);}
       if(maskCtxs&&maskCtxs[rb.winner]){maskCtxs[rb.winner].fillStyle='#fff';fillPoly(maskCtxs[rb.winner],rb.poly);}
+    }
+    if(anyCrown){ // собрать регионы crownFill-террейнов этого тр-ка и залить кронами
+      const byT={};
+      for(const r of res.partition)if(state.terrains[r.terrain].crownFill)(byT[r.terrain]=byT[r.terrain]||[]).push(r.poly);
+      for(const rb of res.ribbons)if(state.terrains[rb.winner].crownFill)(byT[rb.winner]=byT[rb.winner]||[]).push(rb.poly);
+      for(const ti in byT)paintCrownFill(ctxColor,byT[ti],+ti,E);
     }
     const seedD=hash32(key)^0x5f3759df;
     for(const sm of res.seams){
@@ -705,9 +776,11 @@ const state={
   // f2 — профиль F2−F1 (ворли), elem — размер элемента (1/частота), strength —
   // сила, oct — октавы (1..4), rough — шероховатость (спад октав); round/dither —
   // геометрический финиш (скругление вздутия / пиксельный диттеринг кромки)
+  // crownFill — залить интерьер псевдокронами; crownSize — размер шаров (доля E);
+  // crownDens — плотность деревьев
   terrains:[
-    {name:'трава',color:'#5a8f3c',noiseType:'sin',f2:false,elem:0.16,strength:0.15,oct:2,rough:0.5,sharp:1.0,round:0,dither:2},
-    {name:'вода',color:'#3a6ea5',noiseType:'sin',f2:false,elem:0.33,strength:0.06,oct:1,rough:0.5,sharp:0.7,round:0.8,dither:0},
+    {name:'трава',color:'#5a8f3c',noiseType:'sin',f2:false,elem:0.16,strength:0.15,oct:2,rough:0.5,sharp:1.0,round:0,dither:2,crownFill:false,crownSize:0.55,crownDens:0.92},
+    {name:'вода',color:'#3a6ea5',noiseType:'sin',f2:false,elem:0.33,strength:0.06,oct:1,rough:0.5,sharp:0.7,round:0.8,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92},
   ],
   dom:{'0-1':-2}, // парные нахлёсты: ключ 'a-b' (a<b), знак+ = a поверх b, |v| = ширина
 
@@ -797,7 +870,7 @@ function renderDomMatrix(){
 }
 $('btnAddTerrain').addEventListener('click',()=>{
   const presets=['#c2a25a','#7a7d85','#8f5a3c','#5a8f8a'];
-  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],noiseType:'sin',f2:false,elem:0.2,strength:0.08,oct:2,rough:0.5,sharp:1.0,round:0,dither:0});
+  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],noiseType:'sin',f2:false,elem:0.2,strength:0.08,oct:2,rough:0.5,sharp:1.0,round:0,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92});
   renderTerrains();renderFeatures();markStale();
 });
 
@@ -807,7 +880,7 @@ $('btnAddTerrain').addEventListener('click',()=>{
    атлас/превью — не чаще кадра (rAF). WebGPU не нужен: полная перерисовка
    всех канвасов укладывается в единицы миллисекунд на Canvas 2D. */
 // единая панель шума кромки (Houdini-стиль): тип + фрактальные параметры
-const NOISE_TYPES=[['sin','синусоида · волны'],['wE','ворли · дуги'],['wM','манхэттен · зубцы'],['wCh','чебышев · террасы']];
+const NOISE_TYPES=[['sin','синусоида · волны'],['wE','ворли · дуги'],['wM','манхэттен · зубцы'],['wCh','чебышев · террасы'],['crown','кроны · силуэт леса']];
 const RHY_DEFS=[
   ['elem','размер элемента',0.05,0.6,0.01],
   ['strength','сила шума',0,0.3,0.005],
@@ -881,6 +954,25 @@ function renderRhythm(){
     inp.addEventListener('change',()=>scheduleLive(true)); // отпустили — обновить и превью
     box.appendChild(row);
   });
+  // --- заливка интерьера псевдокронами (видна в режиме «маска (силуэты)») ---
+  const crow=document.createElement('div');crow.className='rh-row';
+  crow.innerHTML=`<label>интерьер кронами</label><span class="seg" style="flex:1">
+    <button data-cf="0"${t.crownFill?'':' class="on"'}>плоско</button>
+    <button data-cf="1"${t.crownFill?' class="on"':''}>кроны (шары)</button></span>`;
+  crow.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    t.crownFill=b.dataset.cf==='1';renderRhythm();scheduleLive(true);
+  }));
+  box.appendChild(crow);
+  if(t.crownFill){
+    [['crownSize','размер шаров',0.25,1.4,0.05],['crownDens','плотность крон',0.5,1,0.02]].forEach(([key,label,mn,mx,st2])=>{
+      const row=document.createElement('div');row.className='rh-row';
+      row.innerHTML=`<label>${label}</label><input type="range" min="${mn}" max="${mx}" step="${st2}" value="${t[key]}"><span class="rh-val">${fmtV(t[key])}</span>`;
+      const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
+      inp.addEventListener('input',()=>{t[key]=parseFloat(inp.value);val.textContent=fmtV(t[key]);drawRhythmSample();scheduleLive(false);});
+      inp.addEventListener('change',()=>scheduleLive(true));
+      box.appendChild(row);
+    });
+  }
   $('rhOverW').value=state.overW;
   $('rhOverWVal').textContent=fmtV(state.overW);
   drawRhythmSample();
@@ -1481,11 +1573,13 @@ $('btnJson').addEventListener('click',()=>{
         overlap_width_per_dom:state.overW,
         overlap_semantics:`каналы масок ПЕРЕСЕКАЮТСЯ в лентах нахлёста: маска проигравшего кончается на линии раздела (t=0.5 ребра), маска победителя продолжается за неё на ${state.overW}·|dom| длины ребра; композит кладёт победителя пары поверх`,
         silhouettes:state.terrains.map((t,i)=>({terrain:i,
-          noise_type:({sin:'sinusoid',wE:'worley-euclidean',wM:'worley-manhattan',wCh:'worley-chebyshev'})[t.noiseType],
-          profile:t.noiseType==='sin'?'—':(t.f2?'F2-F1':'F1'),
+          noise_type:({sin:'sinusoid',wE:'worley-euclidean',wM:'worley-manhattan',wCh:'worley-chebyshev',crown:'crown-silhouette'})[t.noiseType],
+          profile:(t.noiseType==='sin'||t.noiseType==='crown')?'—':(t.f2?'F2-F1':'F1'),
           element_size:t.elem,strength:t.strength,octaves:t.oct,roughness:t.rough,
-          sharpness:t.sharp,rounding:t.round,dither_px:t.dither})),
-        noise_note:'единая модель: смещение по нормали ребра = strength·edgeNoise1D(type, elem, oct, rough) ×sin(πt) (0 на концах — seam-инвариант). element_size — базовый размер элемента (1/частота), octaves — фрактальные слои (частота ×2, амплитуда ×roughness). Типы: sinusoid→волны, worley-euclidean→дуги (кроны/бухты), worley-manhattan→зубцы 45°, worley-chebyshev→плоские террасы (скалы); профиль F2−F1→гребни с расщелинами',
+          sharpness:t.sharp,rounding:t.round,dither_px:t.dither,
+          crown_fill:t.crownFill?{size_rel_edge:t.crownSize,density:t.crownDens}:null})),
+        noise_note:'единая модель: смещение по нормали ребра = strength·edgeNoise1D(type, elem, oct, rough) ×sin(πt) (0 на концах — seam-инвариант). element_size — базовый размер элемента (1/частота), octaves — фрактальные слои (частота ×2, амплитуда ×roughness). Типы: sinusoid→волны, worley-euclidean→дуги (кроны/бухты), worley-manhattan→зубцы 45°, worley-chebyshev→плоские террасы (скалы), crown-silhouette→округлые купола крон с перекрытием; профиль F2−F1→гребни с расщелинами',
+        crown_fill_note:'crown_fill: интерьер террейна заполнен псевдокронами — радиальные купола разного радиуса (size_rel_edge·edge_px), отсортированы по высоте (перекрытие=объём); ядра хэшируются от глобальной ячейки атласа (непрерывны через границы тайлов); только цвет, маски не затронуты. Для бесшовной сборки карты сэмплить это поле в мировых координатах (рантайм-сплаттинг)',
         pair_order:Object.entries(state.dom).map(([key,v])=>{
           const [a,b]=key.split('-').map(Number);
           return {a,b,value:v,meaning:v>0?state.terrains[a].name+' поверх '+state.terrains[b].name:state.terrains[b].name+' поверх '+state.terrains[a].name};
