@@ -807,32 +807,40 @@ function renderCurveTri(ctxColor,maskCtxs,pp,labs,key,E,doDither,mtCollect){
     for(const sm of res.seams)drawDither(ctxColor,maskCtxs,pp,sm,E,seedD^hash32(sm.a+'_'+sm.b));
   }
 }
-/* ===== СЛОЙ ГОР — cellular Voronoi рельеф + карта высот. Точки Voronoi в
-   ЦЕНТРОИДАХ треугольников решётки (не на рёбрах/вершинах): центроиды образуют
-   соты, их Voronoi = сама решётка ⇒ хребты (стены ячеек) падают на рёбра, пики
-   (вершины Voronoi) на вершины треугольников. Иерархия — подточки внутри части
-   ячеек (случайный уровень). Поле сэмплится в пиксельных коорд. решётки ⇒
-   непрерывно через границы треугольников в пределах канваса. */
+/* ===== СЛОЙ ГОР — cellular Voronoi рельеф + карта высот, WANG-ТАЙЛИРУЕМЫЙ.
+   Точки Voronoi = ЦЕНТРОИДЫ треугольников решётки, БЕЗ джиттера: центроиды
+   образуют соты, их Voronoi = сама решётка ⇒ хребты (стены ячеек) точно на
+   рёбрах, пики (вершины Voronoi) на вершинах. Поле — чистая функция геометрии
+   решётки ⇒ тайлы с одинаковым ключом ИДЕНТИЧНЫ, а на общем ребре два соседних
+   центроида — отражения друг друга, их перпендикулярный биссектор = само ребро
+   ⇒ соседи сходятся. Детализация — геометрическое субразбиение (n² под-центроидов
+   на треугольник, выровнено по решётке) → тоже тайлируемо; джиттер/случайная
+   иерархия НЕ применяются (они ломают Wang: сосед не знает 3-ю метку тайла). */
 function buildMtField(verts,tris,pts,E,st){
-  const P=[]; const jit=(st.mtJitter||0)*E, hier=st.mtHier||0;
+  const n=Math.max(1,Math.min(3,Math.round(st.mtDetail||1)));
+  const P=[];
   for(let ti=0;ti<tris.length;ti++){
-    const t=tris[ti]; const p=t.verts.map(i=>pts[i]);
-    const cx=(p[0][0]+p[1][0]+p[2][0])/3, cy=(p[0][1]+p[1][1]+p[2][1])/3;
-    const a0=t.verts[0],a1=t.verts[1];
-    P.push(cx+(rnd2(a0,a1,ti*7+1)-0.5)*jit, cy+(rnd2(a0,a1,ti*7+2)-0.5)*jit);
-    const lv=Math.floor(hier*(0.5+3.2*rnd2(a0,a1,ti*7+3)));
-    for(let m=0;m<lv;m++){
-      let a=0.2+0.55*rnd2(a0,a1,ti*31+m*3+1),b=0.2+0.55*rnd2(a0,a1,ti*31+m*3+2);
-      if(a+b>0.82){const s=0.82/(a+b);a*=s;b*=s;} const cc=1-a-b;
-      P.push(a*p[0][0]+b*p[1][0]+cc*p[2][0], a*p[0][1]+b*p[1][1]+cc*p[2][1]);
+    const p=tris[ti].verts.map(i=>pts[i]);
+    if(n===1){P.push((p[0][0]+p[1][0]+p[2][0])/3,(p[0][1]+p[1][1]+p[2][1])/3);continue;}
+    // центроиды n²-субразбиения (барицентрич. сетка), геометрично → выровнено
+    const bc=(a,b,c)=>[ (a*p[0][0]+b*p[1][0]+c*p[2][0]), (a*p[0][1]+b*p[1][1]+c*p[2][1]) ];
+    for(let i=0;i<n;i++)for(let j=0;j<n-i;j++){
+      const a0=(n-i-j)/n,b0=i/n,c0=j/n;
+      // up-треугольник (i,j)-(i+1,j)-(i,j+1): центроид = среднее
+      P.push((bc(a0,b0,c0)[0]+bc(a0-1/n,b0+1/n,c0)[0]+bc(a0-1/n,b0,c0+1/n)[0])/3,
+             (bc(a0,b0,c0)[1]+bc(a0-1/n,b0+1/n,c0)[1]+bc(a0-1/n,b0,c0+1/n)[1])/3);
+      if(i+j<n-1){ // down-треугольник
+        P.push((bc(a0-1/n,b0+1/n,c0)[0]+bc(a0-1/n,b0,c0+1/n)[0]+bc(a0-2/n,b0+1/n,c0+1/n)[0])/3,
+               (bc(a0-1/n,b0+1/n,c0)[1]+bc(a0-1/n,b0,c0+1/n)[1]+bc(a0-2/n,b0+1/n,c0+1/n)[1])/3);
+      }
     }
   }
-  const G=E; let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  const G=E/n; let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
   for(let i=0;i<P.length;i+=2){if(P[i]<mnx)mnx=P[i];if(P[i]>mxx)mxx=P[i];if(P[i+1]<mny)mny=P[i+1];if(P[i+1]>mxy)mxy=P[i+1];}
   const gw=Math.max(1,Math.ceil((mxx-mnx)/G)+1),gh=Math.max(1,Math.ceil((mxy-mny)/G)+1);
   const buck=Array.from({length:gw*gh},()=>[]);
   for(let i=0;i<P.length;i+=2){const gx=Math.floor((P[i]-mnx)/G),gy=Math.floor((P[i+1]-mny)/G);if(gx>=0&&gy>=0&&gx<gw&&gy<gh)buck[gy*gw+gx].push(i);}
-  return {P:new Float64Array(P),buck,gw,gh,mnx,mny,G};
+  return {P:new Float64Array(P),buck,gw,gh,mnx,mny,G,cell:E/n};
 }
 function mtCell(F,x,y){
   let d1=1e18,d2=1e18;
@@ -844,15 +852,16 @@ function mtCell(F,x,y){
     }}
   return [Math.sqrt(d1),Math.sqrt(d2)];
 }
-function mtHeightAt(F,x,y,st,E){
-  const c=mtCell(F,x,y);
-  const basin=Math.min(1,c[0]/(E*0.62)), ridge=1-Math.min(1,(c[1]-c[0])/(E*0.34));
+function mtHeightAt(F,x,y,st){
+  const c=mtCell(F,x,y), cl=F.cell;
+  const basin=Math.min(1,c[0]/(cl*0.62)), ridge=1-Math.min(1,(c[1]-c[0])/(cl*0.34));
   return Math.max(0,Math.min(1,basin*(1-st.mtRidge)+ridge*st.mtRidge));
 }
-/* оффскрин: рельеф (grayscale hillshade, 128=нейтраль для overlay) + карта высот */
-function buildMtOffscreen(F,W,H,st,E){
+/* оффскрин: цвет-рельеф (grayscale luma по ВЫСОТЕ ×hillshade, для multiply над
+   цветом террейна — светлое=высоко, не инвертировано) + карта высот (grayscale) */
+function buildMtOffscreen(F,W,H,st){
   const HB=new Float32Array(W*H);
-  for(let py=0;py<H;py++)for(let px=0;px<W;px++)HB[py*W+px]=mtHeightAt(F,px,py,st,E);
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++)HB[py*W+px]=mtHeightAt(F,px,py,st);
   const shade=document.createElement('canvas'),hgt=document.createElement('canvas');
   shade.width=hgt.width=W;shade.height=hgt.height=H;
   const si=new ImageData(W,H),hi=new ImageData(W,H);
@@ -863,7 +872,8 @@ function buildMtOffscreen(F,W,H,st,E){
     const hx=HB[py*W+xr]-HB[py*W+xl], hy=HB[yb*W+px]-HB[yt*W+px];
     let nx=-hx*k,ny=-hy*k,nz=1;const il=1/Math.hypot(nx,ny,nz);nx*=il;ny*=il;nz*=il;
     const lam=Math.max(0,nx*Lx+ny*Ly+nz*Lz);
-    const s=Math.min(255,Math.round((0.34+1.15*lam)*128)); // 128 нейтраль
+    // luma = ВЫСОТА (0.35..1) × hillshade → светлое=высоко (multiply тонирует цветом террейна)
+    const s=Math.min(255,Math.round(255*(0.35+0.65*h)*(0.55+0.6*lam)));
     si.data[q]=si.data[q+1]=si.data[q+2]=s;si.data[q+3]=255;
     const v=(h*255)|0; hi.data[q]=hi.data[q+1]=hi.data[q+2]=v;hi.data[q+3]=255;
   }
@@ -900,16 +910,16 @@ function renderTerrainRegions(ctxColor,W,H,verts,tris,labels,E,pad,maskCtxs,mtHe
       if(maskCtxs&&maskCtxs[ti])fillDiscs(maskCtxs[ti],pp,all,'#fff');
     }
   }
-  // --- горы: рельеф (overlay) на регионах горных террейнов + карта высот ---
+  // --- горы: рельеф по карте высот на регионах горных террейнов + канал высот ---
   if(mtCollect&&Object.keys(mtCollect).length){
     const st=state.terrains[+Object.keys(mtCollect)[0]]; // параметры поля — от первого горного
     const F=buildMtField(verts,tris,pts,E,st);
-    const off=(ctxColor||mtHeightCtx)?buildMtOffscreen(F,W,H,st,E):null;
+    const off=buildMtOffscreen(F,W,H,st);
     for(const tk in mtCollect){
       const polys=mtCollect[tk];
-      if(ctxColor){ // рельеф поверх плоского цвета террейна (overlay тонирует цветом)
+      if(ctxColor){ // luma по ВЫСОТЕ ×hillshade, multiply → тонирует цветом террейна (светлое=высоко)
         ctxColor.save();clipPolys(ctxColor,polys);ctxColor.clip();
-        ctxColor.globalCompositeOperation='overlay';ctxColor.drawImage(off.shade,0,0);
+        ctxColor.globalCompositeOperation='multiply';ctxColor.drawImage(off.shade,0,0);
         ctxColor.globalCompositeOperation='source-over';ctxColor.restore();
       }
       if(mtHeightCtx){ // карта высот — только под горами
@@ -938,11 +948,11 @@ const state={
   // crownDens — плотность/резкость фронта; under — «почва» под кроной (индекс террейна,
   // = негативное пространство между шарами)
   // mountain — заливка рельефом (cellular Voronoi, точки в центроидах решётки → хребты
-  // на рёбрах, пики на вершинах); mtJitter/mtHier/mtRidge/mtRelief — параметры поля;
+  // на рёбрах, пики на вершинах); mtDetail (субразбиение) /mtRidge/mtRelief — параметры;
   // канал «карта высот» экспортируется
   terrains:[
-    {name:'трава',color:'#5a8f3c',noiseType:'sin',f2:false,elem:0.16,strength:0.15,oct:2,rough:0.5,sharp:1.0,round:0,dither:2,crownFill:false,crownSize:0.55,crownDens:0.92,under:1,mountain:false,mtJitter:0.28,mtHier:0.5,mtRidge:0.55,mtRelief:1.4},
-    {name:'вода',color:'#3a6ea5',noiseType:'sin',f2:false,elem:0.33,strength:0.06,oct:1,rough:0.5,sharp:0.7,round:0.8,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92,under:0,mountain:false,mtJitter:0.28,mtHier:0.5,mtRidge:0.55,mtRelief:1.4},
+    {name:'трава',color:'#5a8f3c',noiseType:'sin',f2:false,elem:0.16,strength:0.15,oct:2,rough:0.5,sharp:1.0,round:0,dither:2,crownFill:false,crownSize:0.55,crownDens:0.92,under:1,mountain:false,mtDetail:2,mtRidge:0.55,mtRelief:1.4},
+    {name:'вода',color:'#3a6ea5',noiseType:'sin',f2:false,elem:0.33,strength:0.06,oct:1,rough:0.5,sharp:0.7,round:0.8,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92,under:0,mountain:false,mtDetail:2,mtRidge:0.55,mtRelief:1.4},
   ],
   dom:{'0-1':-2}, // парные нахлёсты: ключ 'a-b' (a<b), знак+ = a поверх b, |v| = ширина
 
@@ -1037,7 +1047,7 @@ function renderDomMatrix(){
 }
 $('btnAddTerrain').addEventListener('click',()=>{
   const presets=['#c2a25a','#7a7d85','#8f5a3c','#5a8f8a'];
-  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],noiseType:'sin',f2:false,elem:0.2,strength:0.08,oct:2,rough:0.5,sharp:1.0,round:0,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92,under:0,mountain:false,mtJitter:0.28,mtHier:0.5,mtRidge:0.55,mtRelief:1.4});
+  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],noiseType:'sin',f2:false,elem:0.2,strength:0.08,oct:2,rough:0.5,sharp:1.0,round:0,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92,under:0,mountain:false,mtDetail:2,mtRidge:0.55,mtRelief:1.4});
   renderTerrains();renderFeatures();markStale();
 });
 
@@ -1165,9 +1175,9 @@ function renderRhythm(){
   box.appendChild(mrow);
   if(t.mountain){
     const mh=document.createElement('div');mh.className='hint';mh.style.margin='2px 0 4px';
-    mh.innerHTML='Точки Voronoi в центроидах треугольников ⇒ хребты на рёбрах, пики на вершинах. Канал «карта высот гор» в секции 5. Виден в режиме «маска (силуэты)».';
+    mh.innerHTML='Точки Voronoi в центроидах треугольников (без джиттера) ⇒ хребты на рёбрах, пики на вершинах; поле — чистая функция решётки ⇒ <b>тайлится по Wang</b> (одинаковый ключ = одинаковый узор, соседи сходятся). Детализация — геометрич. субразбиение (тоже тайлируемо). Цвет — по карте высот (светлое=высоко). Канал «карта высот гор» в секции 5.';
     box.appendChild(mh);
-    [['mtJitter','джиттер точек',0,0.6,0.02],['mtHier','иерархия (уровни)',0,1,0.05],['mtRidge','хребты F1↔F2−F1',0,1,0.05],['mtRelief','сила рельефа',0.4,3,0.1]].forEach(([key,label,mn,mx,st2])=>{
+    [['mtDetail','детализация (n²)',1,3,1],['mtRidge','хребты F1↔F2−F1',0,1,0.05],['mtRelief','сила рельефа',0.4,3,0.1]].forEach(([key,label,mn,mx,st2])=>{
       const row=document.createElement('div');row.className='rh-row';
       row.innerHTML=`<label>${label}</label><input type="range" min="${mn}" max="${mx}" step="${st2}" value="${t[key]}"><span class="rh-val">${fmtV(t[key])}</span>`;
       const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
@@ -1794,8 +1804,8 @@ $('btnJson').addEventListener('click',()=>{
             edge_sites:{size_rel_edge:t.crownSize,density:t.crownDens,step_rel_edge:+(t.crownSize*0.55).toFixed(3),front:'smoothstep(0.62,0.24,t) от шаровой вершины; отсечка t+r/elen>0.86'},
             interior_sites:{count:5,margin_px:2}
           }:null,
-          mountain:t.mountain?{jitter:t.mtJitter,hierarchy:t.mtHier,ridge_f1_f2:t.mtRidge,relief:t.mtRelief,heightmap:'triatlas_mountain_heightmap'+spaceSfx()+'.png'}:null})),
-        mountain_note:'mountain: заливка региона террейна рельефом cellular Voronoi. Точки Voronoi — в ЦЕНТРОИДАХ треугольников решётки (не на рёбрах/вершинах): центроиды образуют соты, их Voronoi = сама решётка ⇒ хребты (стены ячеек) на рёбрах, пики (вершины Voronoi) на вершинах. hierarchy — подточки внутри части ячеек (случайный уровень). ridge_f1_f2: 0=F1 (бассейны в центрах) ↔ 1=F2−F1 (острые хребты на стенах). Экспорт: канал «карта высот гор» (heightmap PNG, grayscale). Поле сэмплится в мировых координатах ⇒ непрерывно через границы тайлов (рантайм-сплаттинг)',
+          mountain:t.mountain?{detail:t.mtDetail,ridge_f1_f2:t.mtRidge,relief:t.mtRelief,heightmap:'triatlas_mountain_heightmap'+spaceSfx()+'.png'}:null})),
+        mountain_note:'mountain: заливка региона террейна рельефом cellular Voronoi, WANG-ТАЙЛИРУЕМЫЙ. Точки Voronoi — в ЦЕНТРОИДАХ треугольников решётки (без джиттера): соты, их Voronoi = сама решётка ⇒ хребты (стены ячеек) на рёбрах, пики (вершины Voronoi) на вершинах. Поле — чистая функция геометрии решётки ⇒ тайлы одного ключа идентичны, а на общем ребре два центроида-отражения дают перпендикулярный биссектор = само ребро ⇒ соседи сходятся. detail (1..3) — геометрич. субразбиение (n² под-центроидов, выровнено по решётке) → тоже тайлируемо. ridge_f1_f2: 0=F1 (бассейны в центрах) ↔ 1=F2−F1 (острые хребты). Цвет — по высоте (светлое=высоко, multiply). Экспорт: канал «карта высот гор» (heightmap PNG, grayscale)',
         noise_note:'кривая-силуэт: смещение по нормали ребра = strength·edgeNoise1D(type, elem, oct, rough) ×sin(πt) (0 на концах — seam-инвариант). Типы: sinusoid→волны, worley-euclidean→дуги, worley-manhattan→зубцы, worley-chebyshev→террасы; F2−F1→гребни',
         balls_note:'silhouette=balls-voronoi: граница террейна = контур ОБЪЕДИНЕНИЯ кругов (край радиуса = силуэт), tile grammar из 3 классов sites. corner_sites: круг у вершины-метки (функция метки, общий для тайлов вокруг вершины). edge_sites: центр НА ребре, сид=hash(axisClass|minLabel|maxLabel) — чистая функция сигнатуры ребра (класс оси решётки 0/1/2 + канонич. пара меток), оба тайла рисуют полукруги → полный круг совпадает; axisClass даёт 3× вариативности без потери бесшовности. interior_sites: хэш тайла (orient+метки), радиус ≤ dist(центр,∂triangle)−margin ⇒ рёбер не касается. Рендер: фон=partition с заменой шаровых меток на understory (почву=негативное пространство между кронами), сверху overlay кругов. Тайлируется: всё, что может коснуться границы тайла — функция только общих данных ребра/вершины',
         pair_order:Object.entries(state.dom).map(([key,v])=>{
