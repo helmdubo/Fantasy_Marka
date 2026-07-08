@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Слой гор — cellular Voronoi (карта высот)</title>
+<style>
+  :root{--bg:#101318;--panel:#171b22;--panel2:#1d222b;--line:#2a3038;--ink:#dfe3ea;--dim:#8a93a3;--faint:#5a6270;--brass:#c9a227;--brass-dim:#8a7220;}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:ui-monospace,'JetBrains Mono',Menlo,Consolas,monospace;font-size:14px;line-height:1.45;}
+  header{position:sticky;top:0;z-index:10;background:rgba(16,19,24,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);padding:10px 14px;}
+  header h1{margin:0;font-size:15px;font-weight:700;letter-spacing:.14em;color:var(--brass);}
+  header .sub{font-size:10px;color:var(--faint);letter-spacing:.06em;}
+  main{padding:0 12px 60px;max-width:760px;margin:0 auto;}
+  section{border-bottom:1px solid var(--line);padding:14px 0 18px;}
+  .hint{font-size:11px;color:var(--faint);margin:6px 0 10px;}
+  .canvas-wrap{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:6px;overflow:auto;display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+  canvas{display:block;image-rendering:pixelated;border:1px solid var(--line);background:#000;max-width:100%;}
+  .cap{font-size:10px;color:var(--faint);text-align:center;margin-top:4px;}
+  .rh-row{display:flex;align-items:center;gap:10px;margin:7px 0;}
+  .rh-row label{width:140px;font-size:11px;color:var(--dim);flex:none;}
+  .rh-row input[type=range]{flex:1;accent-color:var(--brass);min-width:80px;}
+  .rh-val{width:52px;font-size:11px;color:var(--brass);text-align:right;flex:none;}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden;flex-wrap:wrap;}
+  .seg button{border:none;background:var(--panel);color:var(--ink);font:inherit;font-size:11px;padding:7px 11px;cursor:pointer;}
+  .seg button.on{background:var(--brass-dim);color:#fff;}
+  .ctrl-line{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:8px 0;}
+  .ctrl-line label{font-size:11px;color:var(--dim);}
+  button.act{background:var(--panel2);color:var(--ink);border:1px solid var(--line);font:inherit;font-size:12px;padding:8px 12px;border-radius:4px;cursor:pointer;}
+  label.chk{font-size:11px;color:var(--dim);}
+  footer{padding:16px 14px;font-size:10px;color:var(--faint);text-align:center;}
+</style>
+</head>
+<body>
+<header>
+  <h1>СЛОЙ ГОР</h1>
+  <span class="sub">cellular Voronoi · точки в центроидах треугольников · карта высот · бесшовно тайлится</span>
+</header>
+<main>
+<section>
+  <div class="hint">Точки Voronoi — в <b>центроидах треугольников</b> (не на рёбрах/вершинах). Центроиды образуют
+  соты, их диаграмма Voronoi = исходная решётка ⇒ <b>хребты (стены ячеек) падают на рёбра, пики — на вершины</b>
+  треугольников. Иерархия: часть ячеек дробится на подточки (случайный уровень) — крупные и мелкие массивы,
+  как в природе. Высота = F1 (ячейки) ↔ F2−F1 (хребты). Точки хэшируются по mod-ячейкам ⇒ карта тайлится.</div>
+  <div class="ctrl-line">
+    <label>показ</label>
+    <span class="seg" id="segView">
+      <button data-v="relief" class="on">рельеф (свет)</button>
+      <button data-v="height">высота</button>
+      <button data-v="cells">ячейки/хребты</button>
+    </span>
+    <label class="chk"><input type="checkbox" id="chkTile"> тайлинг 2×2</label>
+    <label class="chk"><input type="checkbox" id="chkPts"> точки</label>
+    <label class="chk"><input type="checkbox" id="chkGrid"> решётка</label>
+  </div>
+  <div class="canvas-wrap"><canvas id="cv" width="384" height="384"></canvas></div>
+  <div class="cap" id="cap">—</div>
+</section>
+<section>
+  <div id="sliders"></div>
+  <div class="ctrl-line">
+    <button class="act" id="btnSeed">новый seed</button>
+    <button class="act" id="btnHeight">PNG карта высот</button>
+    <button class="act" id="btnRelief">PNG рельеф</button>
+    <span class="cap" id="perf"></span>
+  </div>
+</section>
+<footer>соты центроидов ↔ Voronoi = треугольная решётка · хребты на рёбрах, пики на вершинах · экспорт 16-битн. диапазона в 8-бит PNG</footer>
+</main>
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const SQ3_2=Math.sqrt(3)/2;
+const TILE=6; // ячеек решётки на период (для бесшовного wrap)
+let view='relief';
+const P={
+  cell:46,       // размер ребра решётки, px (масштаб гор)
+  jitter:0.28,   // джиттер точки в ячейке (0 = хребты точно на рёбрах)
+  hierarchy:0.5, // сила иерархии (доля дробящихся ячеек и глубина)
+  ridge:0.55,    // 0 = F1 (ячейки-бассейны) → 1 = F2−F1 (острые хребты)
+  gamma:1.0,     // контраст высоты
+  relief:1.4,    // сила рельефа (наклон света)
+  seed:1,
+};
+
+/* --- решётка (как в триатласе) --- */
+function buildLattice(cols,rows){const v=[];for(let r=0;r<=rows;r++){const off=(r%2)*0.5;for(let c=0;c<cols;c++)v.push({u:c+off,v:r*SQ3_2,r,c});}return v;}
+function vIdx(cols,r,c){return r*cols+c;}
+function buildTriangles(cols,rows){const t=[];for(let r=0;r<rows;r++){const even=r%2===0;for(let c=0;c<cols-1;c++){const A=cc=>vIdx(cols,r,cc),B=cc=>vIdx(cols,r+1,cc);if(even){t.push({verts:[B(c),A(c),A(c+1)],r,c,o:0});t.push({verts:[A(c+1),B(c),B(c+1)],r,c,o:1});}else{t.push({verts:[A(c),B(c),B(c+1)],r,c,o:0});t.push({verts:[B(c+1),A(c),A(c+1)],r,c,o:1});}}}return t;}
+
+/* --- хэш --- */
+function hashi(x,y,s){let h=(Math.imul(x|0,374761393)^Math.imul(y|0,668265263)^Math.imul(s|0,2246822519))>>>0;h=Math.imul(h^(h>>>13),1274126177)>>>0;return ((h^(h>>>16))>>>0);}
+function rnd(x,y,s){return hashi(x,y,s)/4294967296;}
+
+/* --- точки: центроиды треугольников (+ иерархические подточки), в единицах решётки.
+   Индексы ячеек берём mod TILE ⇒ НАБОР точек периодичен (период TILE по u,
+   TILE·√3/2 по v) ⇒ поле высот тайлится. Генерим на всю область канваса + запас,
+   чтобы поиск F1/F2 не нуждался в wrap-расстоянии. --- */
+let PTS=null, GX0=0,GY0=0,GW=0,GH=0,GCELL=1.0,GBUCK=null,PERIOD=0;
+function wrap(i,n){return ((i%n)+n)%n;}
+function vertUV(r,c){return [c+(r&1)*0.5, r*SQ3_2];}
+function centroidOf(r,c,o){
+  let vs;
+  if((r&1)===0){ vs = o===0 ? [[r+1,c],[r,c],[r,c+1]] : [[r,c+1],[r+1,c],[r+1,c+1]]; }
+  else          { vs = o===0 ? [[r,c],[r+1,c],[r+1,c+1]] : [[r+1,c+1],[r,c],[r,c+1]]; }
+  let u=0,v=0; for(const [rr,cc] of vs){const p=vertUV(rr,cc);u+=p[0];v+=p[1];} return [u/3,v/3,vs];
+}
+function genPoints(uMax,vMax){
+  const cmax=Math.ceil(uMax)+2, rmax=Math.ceil(vMax/SQ3_2)+2;
+  const pts=[];
+  for(let r=-2;r<=rmax;r++)for(let c=-2;c<=cmax;c++)for(let o=0;o<2;o++){
+    const [cx,cy,vs]=centroidOf(r,c,o);
+    const wc=wrap(c,TILE), wr=wrap(r,TILE), key=o+wr*4+wc*4*TILE;
+    const jx=(rnd(wc,wr,key*7+1)-0.5)*P.jitter, jy=(rnd(wc,wr,key*7+2)-0.5)*P.jitter*SQ3_2;
+    pts.push(cx+jx, cy+jy);
+    const lv=Math.floor(P.hierarchy*(0.5+3.2*rnd(wc,wr,key*7+3)));
+    for(let m=0;m<lv;m++){
+      let a=0.2+0.55*rnd(wc,wr,key*31+m*3+1), b=0.2+0.55*rnd(wc,wr,key*31+m*3+2);
+      if(a+b>0.82){const s=0.82/(a+b);a*=s;b*=s;}
+      const cc=1-a-b;
+      const p0=vertUV(vs[0][0],vs[0][1]),p1=vertUV(vs[1][0],vs[1][1]),p2=vertUV(vs[2][0],vs[2][1]);
+      pts.push(a*p0[0]+b*p1[0]+cc*p2[0], a*p0[1]+b*p1[1]+cc*p2[1]);
+    }
+  }
+  PTS=new Float64Array(pts);
+  PERIOD=TILE;
+  // плоский bucket-grid (целочисленные ключи) для скорости
+  GCELL=1.0;
+  GX0=-3;GY0=-3;GW=cmax+6;GH=rmax+6;
+  const buck=Array.from({length:GW*GH},()=>[]);
+  for(let i=0;i<PTS.length;i+=2){
+    const gx=Math.floor(PTS[i]/GCELL)-GX0, gy=Math.floor(PTS[i+1]/GCELL)-GY0;
+    if(gx>=0&&gy>=0&&gx<GW&&gy<GH)buck[gy*GW+gx].push(i);
+  }
+  GBUCK=buck;
+}
+function cellAt(u,v){
+  let d1=1e18,d2=1e18;
+  const gx0=Math.floor(u/GCELL)-GX0, gy0=Math.floor(v/GCELL)-GY0;
+  for(let gy=gy0-1;gy<=gy0+1;gy++){ if(gy<0||gy>=GH)continue;
+    for(let gx=gx0-1;gx<=gx0+1;gx++){ if(gx<0||gx>=GW)continue;
+      const arr=GBUCK[gy*GW+gx];
+      for(let a=0;a<arr.length;a++){const i=arr[a];const dx=u-PTS[i],dy=v-PTS[i+1];const d=dx*dx+dy*dy;
+        if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}
+    }
+  }
+  return {f1:Math.sqrt(d1),f2:Math.sqrt(d2)};
+}
+/* высота 0..1: смесь F1 (бассейны) и F2−F1 (хребты) */
+function heightAt(u,v){
+  const {f1,f2}=cellAt(u,v);
+  const basin=Math.min(1,f1/0.62);          // F1: 0 в центре ячейки → 1 к стене
+  const ridge=1-Math.min(1,(f2-f1)/0.34);   // F2−F1: 1 на стене (хребет) → 0 в глубине ячейки
+  let h=basin*(1-P.ridge)+ridge*P.ridge;
+  if(P.gamma!==1)h=Math.pow(Math.max(0,Math.min(1,h)),P.gamma);
+  return h;
+}
+
+/* --- рендер (два прохода: буфер высот → шейдинг из буфера) --- */
+function render(){
+  const t0=performance.now();
+  const cv=$('cv'),cs=P.cell;
+  // канвас = ровно ОДИН период: W=TILE·cs (точный wrap по горизонтали),
+  // H=round(TILE·√3/2·cs) (вертикаль — субпиксельно из-за √3). Тогда PNG и 2×2 тайлятся.
+  const W=TILE*cs, H=Math.round(TILE*SQ3_2*cs);
+  if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H;PTS=null;}
+  const ctx=cv.getContext('2d');
+  if(!PTS)genPoints(W/cs,H/cs);
+  const img=ctx.createImageData(W,H), d=img.data;
+  // проход 1: высота в буфер
+  const HB=new Float32Array(W*H);
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++)HB[py*W+px]=heightAt(px/cs,py/cs);
+  // проход 2: шейдинг
+  const Lx=-0.6,Ly=-0.55,Lz=0.58;
+  const relief=P.relief*cs*0.012; // масштаб градиента (px-высоты → наклон)
+  const lo=[42,58,40],mid=[96,90,74],hi=[214,210,205];
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++){
+    const h=HB[py*W+px], q=(py*W+px)*4;
+    let r,g,b;
+    if(view==='height'){const val=(h*255)|0;r=g=b=val;}
+    else if(view==='cells'){
+      const {f1,f2}=cellAt(px/cs,py/cs);
+      const val=(Math.min(1,f1/0.6)*255)|0; r=g=b=val;
+      if((f2-f1)<0.09){r=255;g=255;b=255;} // тонкая стена ячейки (хребет)
+    }else{ // relief
+      const xl=px>0?px-1:px, xr=px<W-1?px+1:px, yt=py>0?py-1:py, yb=py<H-1?py+1:py;
+      const hx=(HB[py*W+xr]-HB[py*W+xl]), hy=(HB[yb*W+px]-HB[yt*W+px]);
+      let nx=-hx*P.relief*8,ny=-hy*P.relief*8,nz=1;const il=1/Math.hypot(nx,ny,nz);nx*=il;ny*=il;nz*=il;
+      let lam=Math.max(0,nx*Lx+ny*Ly+nz*Lz);
+      const sh=0.25+0.9*lam, t=h;
+      let col; if(t<0.5){const k=t/0.5;col=[lo[0]+(mid[0]-lo[0])*k,lo[1]+(mid[1]-lo[1])*k,lo[2]+(mid[2]-lo[2])*k];}
+      else{const k=(t-0.5)/0.5;col=[mid[0]+(hi[0]-mid[0])*k,mid[1]+(hi[1]-mid[1])*k,mid[2]+(hi[2]-mid[2])*k];}
+      r=Math.min(255,col[0]*sh);g=Math.min(255,col[1]*sh);b=Math.min(255,col[2]*sh);
+    }
+    d[q]=r;d[q+1]=g;d[q+2]=b;d[q+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  if($('chkGrid').checked)drawGrid(ctx,W,H,cs);
+  if($('chkPts').checked)drawPts(ctx,cs);
+  const ms=Math.round(performance.now()-t0);
+  $('perf').textContent=ms+' мс · '+(PTS.length/2|0)+' точек';
+  const tc=$('cvTile');
+  if($('chkTile').checked&&tc){if(tc.width!==W*2||tc.height!==H*2){tc.width=W*2;tc.height=H*2;}const t2=tc.getContext('2d');for(let a=0;a<2;a++)for(let bb=0;bb<2;bb++)t2.drawImage(cv,a*W,bb*H);}
+  $('cap').textContent=`поле ${W}×${H}px · ребро ${cs}px · период ${TILE} ячеек · хребты на рёбрах, пики на вершинах`;
+}
+function drawGrid(ctx,W,H,cs){
+  const cols=Math.ceil(W/cs)+3,rows=Math.ceil(H/cs/SQ3_2)+3;
+  const verts=buildLattice(cols,rows),tris=buildTriangles(cols,rows);
+  ctx.strokeStyle='rgba(90,179,184,0.5)';ctx.lineWidth=1;
+  for(const t of tris){const p=t.verts.map(i=>verts[i]);ctx.beginPath();ctx.moveTo(p[0].u*cs,p[0].v*cs);ctx.lineTo(p[1].u*cs,p[1].v*cs);ctx.lineTo(p[2].u*cs,p[2].v*cs);ctx.closePath();ctx.stroke();}
+}
+function drawPts(ctx,cs){
+  ctx.fillStyle='#ff3b3b';
+  for(let i=0;i<PTS.length;i+=2){const x=PTS[i]*cs,y=PTS[i+1]*cs;if(x<-4||y<-4||x>ctx.canvas.width+4||y>ctx.canvas.height+4)continue;ctx.beginPath();ctx.arc(x,y,2.2,0,7);ctx.fill();}
+}
+
+/* --- ползунки --- */
+const DEFS=[
+  ['cell','ребро решётки, px',24,90,1],
+  ['jitter','джиттер точек',0,0.6,0.02],
+  ['hierarchy','иерархия (уровни)',0,1,0.05],
+  ['ridge','хребты F1↔F2−F1',0,1,0.05],
+  ['gamma','контраст высоты',0.5,2.2,0.05],
+  ['relief','сила рельефа',0.4,3,0.1],
+];
+const NEEDS_PTS={jitter:1,hierarchy:1}; // меняют набор точек
+function buildSliders(){
+  const box=$('sliders');box.innerHTML='';
+  DEFS.forEach(([k,label,mn,mx,st])=>{
+    const row=document.createElement('div');row.className='rh-row';
+    row.innerHTML=`<label>${label}</label><input type="range" min="${mn}" max="${mx}" step="${st}" value="${P[k]}"><span class="rh-val">${P[k]}</span>`;
+    const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
+    inp.addEventListener('input',()=>{P[k]=parseFloat(inp.value);val.textContent=P[k];if(NEEDS_PTS[k])PTS=null;schedule();});
+    box.appendChild(row);
+  });
+}
+let pend=false;
+function schedule(){if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;render();});}
+
+$('segView').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;view=b.dataset.v;[...$('segView').children].forEach(x=>x.classList.toggle('on',x===b));render();});
+$('chkPts').addEventListener('change',render);
+$('chkGrid').addEventListener('change',render);
+$('chkTile').addEventListener('change',()=>{
+  let tc=$('cvTile');
+  if($('chkTile').checked){
+    if(!tc){tc=document.createElement('canvas');tc.id='cvTile';tc.width=$('cv').width*2;tc.height=$('cv').height*2;tc.style.maxWidth='320px';
+      const wrap=document.createElement('div');wrap.innerHTML='<div class="cap">2×2 тайл — швов нет</div>';wrap.prepend(tc);$('cv').parentElement.appendChild(wrap);}
+    tc.parentElement.style.display='';
+  }else if(tc){tc.parentElement.style.display='none';}
+  render();
+});
+$('btnSeed').addEventListener('click',()=>{P.seed=(P.seed*1103515245+12345)&0x7fffffff;PTS=null;render();});
+function savePng(name,drawFn){
+  const cv=$('cv'),W=cv.width,H=cv.height;
+  const out=document.createElement('canvas');out.width=W;out.height=H;drawFn(out.getContext('2d'),W,H);
+  out.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);});
+}
+$('btnHeight').addEventListener('click',()=>{
+  savePng('mountain_heightmap.png',(ctx,W,H)=>{
+    const cs=P.cell;if(!PTS)genPoints(W/cs,H/cs);const img=ctx.createImageData(W,H),d=img.data;
+    for(let py=0;py<H;py++)for(let px=0;px<W;px++){const val=(heightAt(px/cs,py/cs)*255)|0;const q=(py*W+px)*4;d[q]=d[q+1]=d[q+2]=val;d[q+3]=255;}
+    ctx.putImageData(img,0,0);
+  });
+});
+$('btnRelief').addEventListener('click',()=>{const v=view;view='relief';render();$('cv').toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='mountain_relief.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500);});view=v;render();});
+
+buildSliders();
+render();
+</script>
+</body>
+</html>
