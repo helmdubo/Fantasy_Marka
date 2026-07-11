@@ -1,0 +1,36 @@
+{
+  "group_id": null,
+  "states": [
+    {
+      "character": {
+        "id": "6ec99d1c-7e0c-4741-905c-78ef024c357d",
+        "name": "Human Settler",
+        "prompt": "medieval human settler colonist, weathered brown tunic with hood down, simple belt with pouch, walking staff, muted dark fantasy palette, gritty frontier look",
+        "size": {
+          "width": 56,
+          "height": 56
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-07-11T17:22:40.589304+00:00"
+      },
+      "folder": "Human_Settler",
+      "frames": {
+        "rotations": {
+          "south": "Human_Settler/rotations/south.png",
+          "south-east": "Human_Settler/rotations/south-east.png",
+          "east": "Human_Settler/rotations/east.png",
+          "north-east": "Human_Settler/rotations/north-east.png",
+          "north": "Human_Settler/rotations/north.png",
+          "north-west": "Human_Settler/rotations/north-west.png",
+          "west": "Human_Settler/rotations/west.png",
+          "south-west": "Human_Settler/rotations/south-west.png"
+        },
+        "animations": {}
+      }
+    }
+  ],
+  "export_version": "3.1",
+  "export_date": "2026-07-11T17:28:46.880955"
+}

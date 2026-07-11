@@ -1,0 +1,36 @@
+{
+  "group_id": null,
+  "states": [
+    {
+      "character": {
+        "id": "9bfc97ab-d0d3-4c13-84ef-647506b61a39",
+        "name": "Dwarf Settler",
+        "prompt": "short stocky dwarf settler with thick braided ginger beard, leather work apron, small hand axe at belt, muted dark fantasy palette, gritty frontier look",
+        "size": {
+          "width": 60,
+          "height": 60
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-07-11T17:22:43.335134+00:00"
+      },
+      "folder": "Dwarf_Settler",
+      "frames": {
+        "rotations": {
+          "south": "Dwarf_Settler/rotations/south.png",
+          "south-east": "Dwarf_Settler/rotations/south-east.png",
+          "east": "Dwarf_Settler/rotations/east.png",
+          "north-east": "Dwarf_Settler/rotations/north-east.png",
+          "north": "Dwarf_Settler/rotations/north.png",
+          "north-west": "Dwarf_Settler/rotations/north-west.png",
+          "west": "Dwarf_Settler/rotations/west.png",
+          "south-west": "Dwarf_Settler/rotations/south-west.png"
+        },
+        "animations": {}
+      }
+    }
+  ],
+  "export_version": "3.1",
+  "export_date": "2026-07-11T17:27:49.685207"
+}

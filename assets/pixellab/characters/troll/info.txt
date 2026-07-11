@@ -1,0 +1,26 @@
+status: completed
+id: 632fd245-3ead-467c-b5c6-3533099c10c6
+name: Troll Settler
+directions: 8 (south, east, north, west, south-east, north-east, north-west, south-west)
+size: 60x60px
+view: low top-down
+style: -, -, -
+
+rotations:
+  south: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/632fd245-3ead-467c-b5c6-3533099c10c6/rotations/south.png?t=1783790791
+  east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/632fd245-3ead-467c-b5c6-3533099c10c6/rotations/east.png?t=1783790791
+  north: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/632fd245-3ead-467c-b5c6-3533099c10c6/rotations/north.png?t=1783790791
+  west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/632fd245-3ead-467c-b5c6-3533099c10c6/rotations/west.png?t=1783790791
+  south-east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/632fd245-3ead-467c-b5c6-3533099c10c6/rotations/south-east.png?t=1783790791
+  north-east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/632fd245-3ead-467c-b5c6-3533099c10c6/rotations/north-east.png?t=1783790791
+  north-west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/632fd245-3ead-467c-b5c6-3533099c10c6/rotations/north-west.png?t=1783790791
+  south-west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/632fd245-3ead-467c-b5c6-3533099c10c6/rotations/south-west.png?t=1783790791
+
+animations: none
+
+download: https://api.pixellab.ai/mcp/characters/632fd245-3ead-467c-b5c6-3533099c10c6/download
+
+available_animations: backflip, breathing-idle, cross-punch, crouched-walking, crouching, drinking, falling-back-death, fight-stance-idle-8-frames, fireball, flying-kick, front-flip, getting-up +37 more
+
+actions: animate_character(character_id="632fd245-3ead-467c-b5c6-3533099c10c6", ...) | create_character_state(character_id="632fd245-3ead-467c-b5c6-3533099c10c6", ...) | delete_character(character_id="632fd245-3ead-467c-b5c6-3533099c10c6")
+hint: animate_character(character_id="632fd245-3ead-467c-b5c6-3533099c10c6", template_animation_id="backflip")

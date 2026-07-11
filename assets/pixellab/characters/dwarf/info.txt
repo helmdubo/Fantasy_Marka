@@ -1,0 +1,26 @@
+status: completed
+id: 9bfc97ab-d0d3-4c13-84ef-647506b61a39
+name: Dwarf Settler
+directions: 8 (south, east, north, west, south-east, north-east, north-west, south-west)
+size: 60x60px
+view: low top-down
+style: -, -, -
+
+rotations:
+  south: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/9bfc97ab-d0d3-4c13-84ef-647506b61a39/rotations/south.png?t=1783790855
+  east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/9bfc97ab-d0d3-4c13-84ef-647506b61a39/rotations/east.png?t=1783790855
+  north: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/9bfc97ab-d0d3-4c13-84ef-647506b61a39/rotations/north.png?t=1783790855
+  west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/9bfc97ab-d0d3-4c13-84ef-647506b61a39/rotations/west.png?t=1783790855
+  south-east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/9bfc97ab-d0d3-4c13-84ef-647506b61a39/rotations/south-east.png?t=1783790855
+  north-east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/9bfc97ab-d0d3-4c13-84ef-647506b61a39/rotations/north-east.png?t=1783790855
+  north-west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/9bfc97ab-d0d3-4c13-84ef-647506b61a39/rotations/north-west.png?t=1783790855
+  south-west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/9bfc97ab-d0d3-4c13-84ef-647506b61a39/rotations/south-west.png?t=1783790855
+
+animations: none
+
+download: https://api.pixellab.ai/mcp/characters/9bfc97ab-d0d3-4c13-84ef-647506b61a39/download
+
+available_animations: backflip, breathing-idle, cross-punch, crouched-walking, crouching, drinking, falling-back-death, fight-stance-idle-8-frames, fireball, flying-kick, front-flip, getting-up +37 more
+
+actions: animate_character(character_id="9bfc97ab-d0d3-4c13-84ef-647506b61a39", ...) | create_character_state(character_id="9bfc97ab-d0d3-4c13-84ef-647506b61a39", ...) | delete_character(character_id="9bfc97ab-d0d3-4c13-84ef-647506b61a39")
+hint: animate_character(character_id="9bfc97ab-d0d3-4c13-84ef-647506b61a39", template_animation_id="backflip")

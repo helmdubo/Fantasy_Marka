@@ -1,0 +1,36 @@
+{
+  "group_id": null,
+  "states": [
+    {
+      "character": {
+        "id": "d8f90715-c83b-49ab-98e6-5158e29a70c5",
+        "name": "Raider",
+        "prompt": "menacing bandit raider in dark leather armor and red sash, curved sword in hand, face hidden by rough cloth mask, muted dark fantasy palette, gritty frontier look",
+        "size": {
+          "width": 64,
+          "height": 64
+        },
+        "template_id": "mannequin",
+        "directions": 8,
+        "view": "low top-down",
+        "created_at": "2026-07-11T17:27:49.948596+00:00"
+      },
+      "folder": "Raider",
+      "frames": {
+        "rotations": {
+          "south": "Raider/rotations/south.png",
+          "south-east": "Raider/rotations/south-east.png",
+          "east": "Raider/rotations/east.png",
+          "north-east": "Raider/rotations/north-east.png",
+          "north": "Raider/rotations/north.png",
+          "north-west": "Raider/rotations/north-west.png",
+          "west": "Raider/rotations/west.png",
+          "south-west": "Raider/rotations/south-west.png"
+        },
+        "animations": {}
+      }
+    }
+  ],
+  "export_version": "3.1",
+  "export_date": "2026-07-11T17:31:31.613163"
+}

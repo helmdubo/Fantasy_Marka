@@ -1,0 +1,26 @@
+status: completed
+id: 6ec99d1c-7e0c-4741-905c-78ef024c357d
+name: Human Settler
+directions: 8 (south, east, north, west, south-east, north-east, north-west, south-west)
+size: 56x56px
+view: low top-down
+style: -, -, -
+
+rotations:
+  south: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/6ec99d1c-7e0c-4741-905c-78ef024c357d/rotations/south.png?t=1783790920
+  east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/6ec99d1c-7e0c-4741-905c-78ef024c357d/rotations/east.png?t=1783790920
+  north: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/6ec99d1c-7e0c-4741-905c-78ef024c357d/rotations/north.png?t=1783790920
+  west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/6ec99d1c-7e0c-4741-905c-78ef024c357d/rotations/west.png?t=1783790920
+  south-east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/6ec99d1c-7e0c-4741-905c-78ef024c357d/rotations/south-east.png?t=1783790920
+  north-east: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/6ec99d1c-7e0c-4741-905c-78ef024c357d/rotations/north-east.png?t=1783790920
+  north-west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/6ec99d1c-7e0c-4741-905c-78ef024c357d/rotations/north-west.png?t=1783790920
+  south-west: https://backblaze.pixellab.ai/file/pixellab-characters/6df2aee7-3e90-41df-815c-64b2c5746180/6ec99d1c-7e0c-4741-905c-78ef024c357d/rotations/south-west.png?t=1783790920
+
+animations: none
+
+download: https://api.pixellab.ai/mcp/characters/6ec99d1c-7e0c-4741-905c-78ef024c357d/download
+
+available_animations: backflip, breathing-idle, cross-punch, crouched-walking, crouching, drinking, falling-back-death, fight-stance-idle-8-frames, fireball, flying-kick, front-flip, getting-up +37 more
+
+actions: animate_character(character_id="6ec99d1c-7e0c-4741-905c-78ef024c357d", ...) | create_character_state(character_id="6ec99d1c-7e0c-4741-905c-78ef024c357d", ...) | delete_character(character_id="6ec99d1c-7e0c-4741-905c-78ef024c357d")
+hint: animate_character(character_id="6ec99d1c-7e0c-4741-905c-78ef024c357d", template_animation_id="backflip")
