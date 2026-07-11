@@ -1,0 +1,2111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ТриАтлас v7 — прямоугольная свёртка атласа</title>
+<style>
+  :root{
+    --bg:#101318; --panel:#171b22; --panel2:#1d222b; --line:#2a3038;
+    --ink:#dfe3ea; --dim:#8a93a3; --faint:#5a6270;
+    --brass:#c9a227; --brass-dim:#8a7220;
+    --ok:#6fa86f; --warn:#c98a52; --hexline:#5ab3b8;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:ui-monospace,'JetBrains Mono','Cascadia Mono',Menlo,Consolas,monospace;
+    font-size:14px; line-height:1.45;
+  }
+  header{
+    position:sticky; top:0; z-index:10; background:rgba(16,19,24,.92);
+    backdrop-filter:blur(6px); border-bottom:1px solid var(--line);
+    padding:10px 14px; display:flex; align-items:baseline; gap:10px;
+  }
+  header h1{margin:0; font-size:15px; font-weight:700; letter-spacing:.18em; color:var(--brass);}
+  header .sub{font-size:10px; color:var(--faint); letter-spacing:.06em;}
+  main{padding:0 12px 60px; max-width:760px; margin:0 auto;}
+  section{border-bottom:1px solid var(--line); padding:16px 0 20px;}
+  .step{display:flex; align-items:baseline; gap:10px; margin-bottom:12px;}
+  .step .num{color:var(--brass); font-size:11px; border:1px solid var(--brass-dim); padding:1px 6px; border-radius:2px;}
+  .step .t{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--dim);}
+  .hint{font-size:11px; color:var(--faint); margin:6px 0 10px;}
+  .terrain-row,.feature-row{
+    display:flex; align-items:center; gap:8px; background:var(--panel);
+    border:1px solid var(--line); border-radius:4px; padding:6px 8px; margin-bottom:6px;
+    flex-wrap:wrap;
+  }
+  .terrain-row .idx,.feature-row .idx{color:var(--faint); font-size:11px; width:14px;}
+  input[type=color]{width:34px; height:30px; border:none; background:none; padding:0; cursor:pointer;}
+  input[type=text]{
+    flex:1; background:var(--panel2); border:1px solid var(--line); color:var(--ink);
+    font:inherit; font-size:13px; padding:5px 8px; border-radius:3px; min-width:80px;
+  }
+  button{
+    background:var(--panel2); color:var(--ink); border:1px solid var(--line);
+    font:inherit; font-size:12px; padding:8px 12px; border-radius:4px; cursor:pointer;
+  }
+  button:active{background:#242b36;}
+  button.primary{border-color:var(--brass-dim); color:var(--brass); font-weight:700; letter-spacing:.04em;}
+  button.small{padding:5px 9px; font-size:11px;}
+  button:disabled{opacity:.35; pointer-events:none;}
+  .btnrow{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+  .seg{display:inline-flex; border:1px solid var(--line); border-radius:4px; overflow:hidden; flex-wrap:wrap;}
+  .seg button{border:none; border-radius:0; background:var(--panel);}
+  .seg button.on{background:var(--brass-dim); color:#fff;}
+  .ctrl-line{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:8px 0;}
+  .ctrl-line label{font-size:11px; color:var(--dim);}
+  select{background:var(--panel2); color:var(--ink); border:1px solid var(--line); font:inherit; font-size:12px; padding:6px 8px; border-radius:3px;}
+  .canvas-wrap{background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:6px; overflow:auto; position:relative;}
+  .canvas-wrap canvas{display:block; width:100%; height:auto;}
+  #stats,#budget{font-size:11px; color:var(--dim); margin-top:8px; white-space:pre-wrap;}
+  .badge{font-size:10px; padding:2px 7px; border-radius:2px; border:1px solid;}
+  .badge.ok{color:var(--ok); border-color:var(--ok);}
+  .badge.stale{color:var(--warn); border-color:var(--warn);}
+  .filebtn{position:relative; overflow:hidden;}
+  .filebtn input{position:absolute; inset:0; opacity:0; cursor:pointer;}
+  #importNote{font-size:11px; color:var(--dim); margin-top:6px;}
+  .chip{
+    font-size:10px; padding:3px 8px; border-radius:10px; border:1px solid var(--line);
+    background:var(--panel2); color:var(--dim); cursor:pointer; user-select:none;
+  }
+  .chip.forbidden{border-color:var(--warn); color:var(--warn); text-decoration:line-through;}
+  .chips{display:flex; gap:5px; flex-wrap:wrap; align-items:center;}
+  .chips .lbl{font-size:10px; color:var(--faint);}
+  .bd-lbl{font-size:10px; color:var(--faint);}
+  details.fold{border:1px solid var(--line); border-radius:4px; background:var(--panel); margin:10px 0;}
+  details.fold summary{padding:9px 12px; font-size:11px; color:var(--dim); cursor:pointer; letter-spacing:.08em; text-transform:uppercase; list-style:none;}
+  details.fold summary::before{content:'▸ '; color:var(--brass);}
+  details.fold[open] summary::before{content:'▾ ';}
+  details.fold[open] summary{border-bottom:1px solid var(--line);}
+  details.fold .inner{padding:10px 12px;}
+  table.dommat{border-collapse:collapse; font-size:11px; margin-top:4px;}
+  .dommat th,.dommat td{border:1px solid var(--line); padding:7px 9px; text-align:center; min-width:44px;}
+  .dommat th{color:var(--dim); font-weight:400; background:var(--panel);}
+  .dommat td.cell{cursor:pointer; user-select:none; background:var(--panel2); font-weight:700;}
+  .dommat td.diag{background:var(--bg); color:var(--faint);}
+  .dommat .up{color:var(--ok);}
+  .dommat .down{color:var(--warn);}
+  .dommat .zero{color:var(--faint); font-weight:400;}
+  .tdot{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:-1px;}
+  footer{padding:18px 14px; font-size:10px; color:var(--faint); text-align:center; letter-spacing:.06em;}
+  .rh-row{display:flex;align-items:center;gap:10px;margin:7px 0;}
+  .rh-row label{width:118px;font-size:11px;color:var(--dim);flex:none;}
+  .rh-row input[type=range]{flex:1;accent-color:var(--brass);min-width:80px;}
+  .rh-val{width:46px;font-size:11px;color:var(--brass);text-align:right;flex:none;}
+  #secRhythm .canvas-wrap{margin-top:10px;}
+  .toast{
+    position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+    background:var(--panel2); border:1px solid var(--brass-dim); color:var(--ink);
+    padding:8px 14px; border-radius:4px; font-size:12px; opacity:0; transition:opacity .25s;
+    pointer-events:none; z-index:50; max-width:90vw;
+  }
+  .toast.show{opacity:1;}
+  @media (prefers-reduced-motion: reduce){ .toast{transition:none;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>ТРИАТЛАС</h1>
+  <span class="sub">v7 · матрица порядков · прямоугольная свёртка</span>
+</header>
+<main>
+
+<section id="secTerrains">
+  <div class="step"><span class="num">1</span><span class="t">Террейны</span></div>
+  <div class="hint">2–4 типа. Параметры кромки — живые ползунки в секции 4 «Ритм переходов».</div>
+  <div id="terrainList"></div>
+  <div class="btnrow"><button id="btnAddTerrain" class="small">+ террейн</button></div>
+  <div class="hint" style="margin-top:14px"><b>Порядок слоёв.</b> Строка — целевой слой, тап по ячейке циклит отношение:
+  ▲N — строка идёт внахлёст поверх колонки (N — ширина), ▼N — наоборот, · — вровень.
+  Отношения парные и независимые, циклы допустимы.</div>
+  <div id="domList"></div>
+</section>
+
+<section id="secFeatures">
+  <div class="step"><span class="num">2</span><span class="t">Оверлеи</span></div>
+  <details class="fold">
+    <summary>река / дорога — рёберные слои (по 16 тайлов)</summary>
+    <div class="inner">
+      <div class="hint">Флаг живёт на связи двух hex-ячеек. Геометрия: <b>связь</b> — центр→центр (дороги),
+      <b>граница</b> — вдоль ребра гекса (реки). Дорога поверх реки на одном ребре = мост.
+      Порядок в списке = порядок отрисовки снизу вверх.</div>
+      <div id="featureList"></div>
+      <div class="btnrow"><button id="btnAddFeature" class="small">+ слой (до 2)</button></div>
+    </div>
+  </details>
+</section>
+
+<section id="secParams">
+  <div class="step"><span class="num">3</span><span class="t">Сборка</span></div>
+  <div class="ctrl-line">
+    <label>заливка</label>
+    <span class="seg" id="segRender">
+      <button data-rm="gradient" class="on">градиент</button>
+      <button data-rm="mask">маска (силуэты)</button>
+    </span>
+  </div>
+  <details class="fold">
+    <summary>сетка: ориентация · ребро · seed</summary>
+    <div class="inner">
+      <div class="ctrl-line">
+        <label>ориентация</label>
+        <span class="seg" id="segMode">
+          <button data-mode="flat" class="on">flat-top hex · ◀▶</button>
+          <button data-mode="pointy">pointy-top · ▲▼</button>
+        </span>
+      </div>
+      <div class="ctrl-line">
+        <label>ребро тайла</label>
+        <select id="selEdge">
+          <option value="48">48 px</option>
+          <option value="64" selected>64 px</option>
+          <option value="96">96 px</option>
+          <option value="128">128 px</option>
+        </select>
+        <label>seed</label>
+        <select id="selSeed">
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option>
+        </select>
+      </div>
+    </div>
+  </details>
+  <div id="budget">—</div>
+  <div class="btnrow">
+    <button id="btnBuild" class="primary">Собрать все слои</button>
+    <span id="buildBadge"></span>
+  </div>
+</section>
+
+<section id="secRhythm">
+  <div class="step"><span class="num">4</span><span class="t">Ритм переходов</span></div>
+  <div class="hint">Кромки террейнов и нахлёсты — вживую. Ползунки меняют только отрисовку:
+  покрытие и ключи не трогаются, пересборка не нужна — проба ниже, атлас (секция 5) и превью
+  обновляются сразу. Матрица порядков (секция 1) тоже действует мгновенно.
+  Единая модель шума кромки (как в Houdini): <b>тип</b> (синусоида/ворли/манхэттен/чебышев) +
+  размер элемента, сила, октавы, шероховатость. Характер границы: синусоида→плавные волны,
+  ворли→дуги (кроны/бухты), манхэттен→зубцы, чебышев→террасы (скалы); профиль F2−F1→гребни с расщелинами (хребты).
+  Ниже — <b>форма силуэта = шары (Voronoi)</b>: граница террейна становится контуром объединения кругов
+  (край радиуса шара = силуэт, как крона леса). Site-грамматика: угловые круги (у вершин), рёберные
+  (центр на ребре, сид от оси решётки + пары меток) и внутренние (не касаются рёбер) — контур бесшовен
+  и тайлится. «Почва под кроной» = террейн в негативном пространстве между шарами. Видно в «маска (силуэты)».
+  Помни: видимую кромку пары стилизует <b>победитель</b> (▲ в матрице) — параметры проигравшего на этой
+  границе не видны (его диттеринг — виден). В «маска (силуэты)» ритм виден прямо в цвете атласа.</div>
+  <div class="ctrl-line"><span class="seg" id="segRhyT"></span></div>
+  <div id="rhySliders"></div>
+  <div class="rh-row"><label>нахлёст за ▲1</label><input type="range" id="rhOverW" min="0" max="0.12" step="0.002"><span class="rh-val" id="rhOverWVal"></span></div>
+  <div class="canvas-wrap"><canvas id="cvRhythm" width="10" height="10"></canvas></div>
+</section>
+
+<section id="secAtlas">
+  <div class="step"><span class="num">5</span><span class="t">Атласы и экспорт</span></div>
+  <div class="ctrl-line">
+    <label>пространство</label>
+    <span class="seg" id="segSpace">
+      <button data-sp="tri" class="on">треугольное</button>
+      <button data-sp="rect">прямоугольное</button>
+    </span>
+    <select id="selAspect">
+      <option value="1" selected>ячейка 1:1</option>
+      <option value="0.875">ячейка 7/8 (как 14×16)</option>
+    </select>
+  </div>
+  <div class="hint">Прямоугольное: решётка свёрнута аффинным сдвигом T(u,v)=(u−v/√3, v·2/√3) —
+  пара U/D-треугольников образует ячейку с единой диагональю, все позиции целочисленные
+  (нарезка и блиты без ресэмплинга). Пиксель принадлежит D-половине, если
+  (px+0.5)/W+(py+0.5)/H&lt;1. Переключение мгновенно перерисовывает слои;
+  импортированные варианты сбрасываются.</div>
+  <div class="ctrl-line">
+    <label>слой</label>
+    <span class="seg" id="segLayer"></span>
+  </div>
+  <div class="ctrl-line">
+    <label>канал</label>
+    <span class="seg" id="segChannel"></span>
+  </div>
+  <div class="ctrl-line">
+    <label><input type="checkbox" id="chkMarkup" checked> разметка</label>
+    <label><input type="checkbox" id="chkHex"> hex-сетка (dual)</label>
+  </div>
+  <div class="canvas-wrap"><canvas id="cvAtlas" width="10" height="10"></canvas></div>
+  <div id="stats">—</div>
+  <div class="btnrow">
+    <button id="btnPngMasks" disabled>PNG маски</button>
+    <button id="btnPngTemplate" disabled>PNG шаблон слоя</button>
+    <button id="btnPngMarkup" disabled>PNG разметка слоя</button>
+    <button id="btnPngHex" disabled>PNG hex-сетка</button>
+    <button id="btnJson" disabled class="primary">JSON rules (все слои)</button>
+  </div>
+  <div class="btnrow">
+    <button class="filebtn" id="btnImportWrap" disabled>
+      Загрузить дорисованный слой
+      <input type="file" id="fileImport" accept="image/*">
+    </button>
+  </div>
+  <div id="importNote"></div>
+</section>
+
+<section id="secPreview">
+  <div class="step"><span class="num">6</span><span class="t">Проверка стыковки</span></div>
+  <div class="hint">Тап по вершине — цикл террейна. Тап по середине ребра — цикл комбинаций слоёв на ребре
+  (пусто → река → дорога → река+дорога, только допустимые).</div>
+  <div class="ctrl-line">
+    <label>источник</label>
+    <span class="seg" id="segSrc">
+      <button data-src="template" class="on">шаблон</button>
+      <button data-src="imported" id="btnSrcImported" disabled>загруженные</button>
+    </span>
+    <button class="small" id="btnRandMap">случайно</button>
+    <button class="small" id="btnClearMap">очистить</button>
+  </div>
+  <div class="canvas-wrap"><canvas id="cvPreview" width="10" height="10"></canvas></div>
+</section>
+
+</main>
+<footer>углы = hex-ячейки · ребро решётки ↔ ребро гекса (dual) · слои складываются в рантайме ·
+прямоугольное вложение: U/D-пары свёрнуты в ячейки, блиты целочисленные</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ============ CORE (проверено headless в Node) ============ */
+const SQ3_2=Math.sqrt(3)/2;
+function buildLattice(cols,rows){
+  const verts=[];
+  for(let r=0;r<=rows;r++){
+    const off=(r%2)*0.5;
+    for(let c=0;c<cols;c++) verts.push({u:c+off,v:r*SQ3_2,r,c});
+  }
+  return verts;
+}
+function vIdx(cols,r,c){return r*cols+c;}
+function buildTriangles(cols,rows){
+  const tris=[];
+  for(let r=0;r<rows;r++){
+    const even=r%2===0;
+    for(let c=0;c<cols-1;c++){
+      const A=cc=>vIdx(cols,r,cc),B=cc=>vIdx(cols,r+1,cc);
+      if(even){
+        tris.push({verts:[B(c),A(c),A(c+1)],orient:'D'});
+        tris.push({verts:[A(c+1),B(c),B(c+1)],orient:'U'});
+      }else{
+        tris.push({verts:[A(c),B(c),B(c+1)],orient:'U'});
+        tris.push({verts:[B(c+1),A(c),A(c+1)],orient:'D'});
+      }
+    }
+  }
+  return tris;
+}
+function buildEdges(tris){
+  const map=new Map(); const edges=[];
+  tris.forEach((t,ti)=>{
+    const [v0,v1,v2]=t.verts;
+    t.edges=[[v0,v1],[v0,v2],[v1,v2]].map(([a,b])=>{
+      const key=Math.min(a,b)+'-'+Math.max(a,b);
+      if(!map.has(key)){map.set(key,edges.length);edges.push({a:Math.min(a,b),b:Math.max(a,b),tris:[]});}
+      const ei=map.get(key);
+      edges[ei].tris.push(ti);
+      return ei;
+    });
+  });
+  return edges;
+}
+/* апрон: тайл валиден для нарезки, только если все 3 соседа существуют */
+function interiorMask(tris,edges){
+  return tris.map(t=>t.edges.every(ei=>edges[ei].tris.length===2));
+}
+/* --- террейновый пирог: покрытие 2·k³ по углам --- */
+function cornerKey(orient,l){return orient+l[0]+','+l[1]+','+l[2];}
+function terrainSearch(tris,nVerts,k,rng,maxIter,interior){
+  maxIter=maxIter||400000;
+  const needed=2*k*k*k;
+  const adj=Array.from({length:nVerts},()=>[]);
+  tris.forEach((t,i)=>{if(interior[i])t.verts.forEach(v=>adj[v].push(i));});
+  const cand=[];for(let v=0;v<nVerts;v++)if(adj[v].length)cand.push(v);
+  const labels=new Array(nVerts);
+  for(let i=0;i<nVerts;i++)labels[i]=Math.floor(rng()*k);
+  const counts=new Map();
+  const keyOf=ti=>{const t=tris[ti];return cornerKey(t.orient,[labels[t.verts[0]],labels[t.verts[1]],labels[t.verts[2]]]);};
+  const inc=key=>counts.set(key,(counts.get(key)||0)+1);
+  const dec=key=>{const c=counts.get(key);if(c===1)counts.delete(key);else counts.set(key,c-1);};
+  for(let i=0;i<tris.length;i++)if(interior[i])inc(keyOf(i));
+  let covered=counts.size;
+  for(let iter=0;iter<maxIter&&covered<needed;iter++){
+    const v=cand[Math.floor(rng()*cand.length)];
+    const old=labels[v];
+    let bestLabel=old,bestCov=covered;
+    for(let l=0;l<k;l++){
+      if(l===old)continue;
+      for(const ti of adj[v])dec(keyOf(ti));
+      labels[v]=l;
+      for(const ti of adj[v])inc(keyOf(ti));
+      const cov=counts.size;
+      for(const ti of adj[v])dec(keyOf(ti));
+      labels[v]=old;
+      for(const ti of adj[v])inc(keyOf(ti));
+      if(cov>bestCov||(cov===bestCov&&rng()<0.15)){bestCov=cov;bestLabel=l;}
+    }
+    if(bestLabel!==old){
+      for(const ti of adj[v])dec(keyOf(ti));
+      labels[v]=bestLabel;
+      for(const ti of adj[v])inc(keyOf(ti));
+      covered=counts.size;
+    }
+  }
+  return {labels,covered,needed,ok:covered===needed};
+}
+/* --- оверлейный пирог: покрытие 2·2³ по рёберным флагам --- */
+function flagKey(orient,f){return orient+f[0]+f[1]+f[2];}
+function overlaySearch(tris,edges,rng,maxIter,interior){
+  maxIter=maxIter||150000;
+  const needed=16;
+  const eFlag=new Array(edges.length);
+  for(let i=0;i<edges.length;i++)eFlag[i]=rng()<0.5?1:0;
+  const eInt=edges.map(e=>e.tris.filter(ti=>interior[ti])); // считаем только внутренние
+  const candE=[];for(let i=0;i<edges.length;i++)if(eInt[i].length)candE.push(i);
+  const counts=new Map();
+  const keyOf=ti=>{const t=tris[ti];return flagKey(t.orient,[eFlag[t.edges[0]],eFlag[t.edges[1]],eFlag[t.edges[2]]]);};
+  const inc=key=>counts.set(key,(counts.get(key)||0)+1);
+  const dec=key=>{const c=counts.get(key);if(c===1)counts.delete(key);else counts.set(key,c-1);};
+  for(let i=0;i<tris.length;i++)if(interior[i])inc(keyOf(i));
+  let covered=counts.size;
+  for(let iter=0;iter<maxIter&&covered<needed;iter++){
+    const ei=candE[Math.floor(rng()*candE.length)];
+    const old=eFlag[ei];
+    for(const ti of eInt[ei])dec(keyOf(ti));
+    eFlag[ei]=1-old;
+    for(const ti of eInt[ei])inc(keyOf(ti));
+    const cov=counts.size;
+    if(cov>=covered||rng()<0.12){covered=counts.size;}
+    else{
+      for(const ti of eInt[ei])dec(keyOf(ti));
+      eFlag[ei]=old;
+      for(const ti of eInt[ei])inc(keyOf(ti));
+    }
+  }
+  return {eFlag,covered,needed,ok:covered===needed};
+}
+function pickGrid(needed){
+  const total=Math.ceil(needed*2.4);
+  const cols=Math.max(5,Math.ceil(Math.sqrt(total/1.7))+1);
+  const rows=Math.max(3,Math.ceil(total/(2*(cols-1))));
+  return {cols,rows};
+}
+function buildTerrainLayer(k,rng){
+  const needed=2*k*k*k;
+  let {cols,rows}=pickGrid(needed);
+  cols+=2;rows+=2; // апрон-кольцо
+  for(let grow=0;grow<5;grow++){
+    const verts=buildLattice(cols,rows);
+    const tris=buildTriangles(cols,rows);
+    const edges=buildEdges(tris);
+    const interior=interiorMask(tris,edges);
+    if(interior.filter(Boolean).length<needed*2.2){rows=Math.ceil(rows*1.2)+1;cols=Math.ceil(cols*1.1)+1;continue;}
+    for(let a=0;a<4;a++){
+      const res=terrainSearch(tris,verts.length,k,rng,undefined,interior);
+      if(res.ok){
+        const tileMap=new Map();
+        tris.forEach((t,i)=>{
+          if(!interior[i])return;
+          const key=cornerKey(t.orient,[res.labels[t.verts[0]],res.labels[t.verts[1]],res.labels[t.verts[2]]]);
+          if(!tileMap.has(key))tileMap.set(key,{canonical:i,instances:[]});
+          tileMap.get(key).instances.push(i);
+        });
+        return {kind:'terrain',cols,rows,verts,tris,edges,labels:res.labels,tileMap,needed,interior};
+      }
+    }
+    rows=Math.ceil(rows*1.25);cols=Math.ceil(cols*1.12);
+  }
+  return null;
+}
+function buildOverlayLayer(featIdx,rng){
+  const needed=16;
+  let {cols,rows}=pickGrid(needed);
+  cols+=2;rows+=2; // апрон-кольцо
+  for(let grow=0;grow<5;grow++){
+    const verts=buildLattice(cols,rows);
+    const tris=buildTriangles(cols,rows);
+    const edges=buildEdges(tris);
+    const interior=interiorMask(tris,edges);
+    if(interior.filter(Boolean).length<needed*2.2){rows=Math.ceil(rows*1.2)+1;cols=Math.ceil(cols*1.1)+1;continue;}
+    for(let a=0;a<4;a++){
+      const res=overlaySearch(tris,edges,rng,undefined,interior);
+      if(res.ok){
+        const tileMap=new Map();
+        tris.forEach((t,i)=>{
+          if(!interior[i])return;
+          const key=flagKey(t.orient,[res.eFlag[t.edges[0]],res.eFlag[t.edges[1]],res.eFlag[t.edges[2]]]);
+          if(!tileMap.has(key))tileMap.set(key,{canonical:i,instances:[]});
+          tileMap.get(key).instances.push(i);
+        });
+        return {kind:'overlay',featIdx,cols,rows,verts,tris,edges,eFlag:res.eFlag,tileMap,needed,interior};
+      }
+    }
+    rows=Math.ceil(rows*1.25);cols=Math.ceil(cols*1.12);
+  }
+  return null;
+}
+/* --- силуэтный конвейер v5: парные нахлёсты ---
+   ИНВАРИАНТ БЕСШОВНОСТИ: обе точки пересечения ребра (раздел и кромка победителя) —
+   чистые функции пары террейнов; шум/скругление/диттеринг — только в интерьере (seed=комбо),
+   на концах кривых смещение занулено, диттеринг заклиплен внутрь треугольника с отступом. */
+function hash32(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function rnd01(seed,i){let x=(seed^Math.imul(i+1,2654435761))>>>0;x=Math.imul(x^(x>>>15),2246822519);x=Math.imul(x^(x>>>13),3266489917);x=(x^(x>>>16))>>>0;return x/4294967296;}
+/* 2D-хэш от целочисленной ячейки — для заливки кронами (глобален по canvas,
+   сид на террейн → купола непрерывны через границы треугольников) */
+function rnd2(ix,iy,s){let h=(Math.imul(ix|0,374761393)^Math.imul(iy|0,668265263)^Math.imul(s|0,2246822519))>>>0;h=Math.imul(h^(h>>>13),1274126177)>>>0;return ((h^(h>>>16))>>>0)/4294967296;}
+function noise1D(seed,t){const i=Math.floor(t),f=t-i;const a=rnd01(seed,i),b=rnd01(seed,i+1);const u=f*f*(3-2*f);return (a+(b-a)*u)*2-1;}
+/* 1D-ворли вдоль кромки: «ядра» в ячейках; значение — из расстояния до
+   ближайших ядер в координатах (позиция вдоль ребра × высота ядра).
+   Метрики: евклид → цепочка дуг (кроны/бухты), манхэттен → зубцы 45°,
+   чебышев → плоские террасы (скалы); профиль F2−F1 → гребни с расщелинами. */
+function worley1D(seed,u,type,f2){
+  const i0=Math.floor(u);
+  let d1=1e9,d2=1e9;
+  for(let i=i0-2;i<=i0+2;i++){
+    const fx=i+0.15+0.7*rnd01(seed,i*2);
+    const fh=0.5*(0.3+0.7*rnd01(seed,i*2+1));
+    const dx=Math.abs(u-fx);
+    let d;
+    if(type==='wM')d=dx+fh;
+    else if(type==='wCh')d=Math.max(dx,fh);
+    else d=Math.hypot(dx,fh);
+    if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;
+  }
+  return f2?1-2*Math.min(1,d2-d1):1-2*Math.min(1,d1);
+}
+/* единая модель шума кромки (в стиле Houdini): один тип шума + фрактальные
+   октавы. Размер элемента → базовая частота, октавы удваивают частоту и
+   гасят амплитуду на «шероховатость». Чистая функция (seed,t,st) — концы
+   кривой зануляются в terrainCurve, seam-инвариант сохраняется. */
+function edgeNoise1D(seed,t,st,fscale){
+  const oct=Math.max(1,Math.min(4,Math.round(st.oct||1)));
+  const rough=st.rough!=null?st.rough:0.5;
+  const baseFreq=(fscale||1)/Math.max(0.04,st.elem);
+  let sum=0,amp=1,freq=baseFreq,norm=0;
+  for(let o=0;o<oct;o++){
+    const s=(seed^Math.imul(o+1,0x9e3779b1))>>>0;
+    const v=st.noiseType==='sin'?noise1D(s,t*freq):worley1D(s,t*freq,st.noiseType,st.f2);
+    sum+=v*amp;norm+=amp;
+    amp*=rough;freq*=2;
+  }
+  const v=sum/(norm||1);
+  return Math.sign(v)*Math.pow(Math.abs(v),1/Math.max(0.2,st.sharp));
+}
+function domOf(a,b){ // знак+ = a поверх b
+  if(a===b)return 0;
+  const key=Math.min(a,b)+'-'+Math.max(a,b);
+  const v=state.dom[key]||0;
+  return a<b?v:-v;
+}
+function lerpP(P,Q,t){return [P[0]+(Q[0]-P[0])*t,P[1]+(Q[1]-P[1])*t];}
+/* кромка победителя = сдвиг кривой раздела: offset лин. интерполируется между концами.
+   Шум идентичен по построению => лента не может самопересечься (в стыке J — касание). */
+function offsetCurve(base,O1,O2){
+  const n=base.length-1;
+  const s=[O1[0]-base[0][0],O1[1]-base[0][1]];
+  const e=[O2[0]-base[n][0],O2[1]-base[n][1]];
+  return base.map((p,i)=>{
+    const t=i/n;
+    return [p[0]+s[0]*(1-t)+e[0]*t, p[1]+s[1]*(1-t)+e[1]*t];
+  });
+}
+/* кривая кромки, стилизованная параметрами владельца owner.
+   lenScale = |концы видимой кривой (over)| / |концы base|: число волн шума
+   масштабируется под длину ВИДИМОЙ кромки, чтобы её физическая частота не
+   «дышала» при нахлёсте (base всё равно скрыт под лентой). Концы занулены
+   sin(πt), точки пересечения рёбер не двигаются — seam-инвариант цел. */
+function terrainCurve(P,Q,bulgePt,owner,seed,lenScale){
+  const st=state.terrains[owner];
+  const fs=lenScale>0?lenScale:1;
+  // сэмплов — под масштабированную частоту и октавы, иначе мелкие детали съедаются
+  const baseFreq=fs/Math.max(0.04,st.elem);
+  const N=st.strength>0?Math.min(96,Math.max(20,Math.round(baseFreq*Math.pow(2,Math.min(4,st.oct||1)-1)*4))):16;
+  const pts=[];
+  const mx=(P[0]+Q[0])/2,my=(P[1]+Q[1])/2;
+  const C=bulgePt?[mx+(bulgePt[0]-mx)*0.7*st.round,my+(bulgePt[1]-my)*0.7*st.round]:[mx,my];
+  const len=Math.hypot(Q[0]-P[0],Q[1]-P[1])||1;
+  const nx=-(Q[1]-P[1])/len,ny=(Q[0]-P[0])/len;
+  for(let i=0;i<=N;i++){
+    const t=i/N,it=1-t;
+    let x=it*it*P[0]+2*it*t*C[0]+t*t*Q[0];
+    let y=it*it*P[1]+2*it*t*C[1]+t*t*Q[1];
+    if(st.strength>0){
+      const d=st.strength*edgeNoise1D(seed,t,st,fs)*len*Math.sin(Math.PI*t); // на концах ноль — seam-инвариант
+      x+=nx*d;y+=ny*d;
+    }
+    pts.push([x,y]);
+  }
+  return pts;
+}
+function segLen(A,B){return Math.hypot(B[0]-A[0],B[1]-A[1])||1;}
+/* пара на ребре: точки пересечения — чистые функции пары.
+   partition-кромка при 0.5; кромка победителя при 0.5+OVER_W*|dom| в сторону проигравшего. */
+function crossBase(){return 0.5;}
+function crossOver(fromTerrain,otherTerrain){ // t от вершины fromTerrain
+  const d=domOf(fromTerrain,otherTerrain);    // ширина нахлёста — живая (state.overW, ползунок)
+  if(d>0)return 0.5+state.overW*Math.min(3,d);  // from — победитель: заходит за середину
+  if(d<0)return 0.5-state.overW*Math.min(3,-d); // from — проигравший: победитель заходит к нему
+  return 0.5;
+}
+/* результат по треугольнику:
+   partition:[{terrain,poly}] — разбиение без дыр;
+   ribbons:[{winner,poly}] — ленты нахлёста победителей;
+   seams:[{a,b,winner,curveBase,owner}] — для диттеринга */
+function maskRegionsForTri(pp,labs,keyStr){
+  const [l0,l1,l2]=labs;
+  if(l0===l1&&l1===l2)return {partition:[{terrain:l0,poly:[pp[0],pp[1],pp[2]]}],ribbons:[],seams:[]};
+  const seedBase=hash32(keyStr);
+  const rev=a=>a.slice().reverse();
+  if(l0===l1||l0===l2||l1===l2){
+    let o,pA,pB;
+    if(l1===l2){o=0;pA=1;pB=2;}else if(l0===l2){o=1;pA=0;pB=2;}else{o=2;pA=0;pB=1;}
+    const lo=labs[o],lp=labs[pA];
+    const d=domOf(lo,lp);
+    // видимая кромка — победителя, поэтому стиль обеих кривых = победитель;
+    // ОДИН сид на пару кривых => полоса нахлёста параллельна и не самопересекается
+    const styleOwner=d>0?lo:(d<0?lp:Math.min(lo,lp));
+    const B1=lerpP(pp[o],pp[pA],crossBase());
+    const B2=lerpP(pp[o],pp[pB],crossBase());
+    // концы видимой кромки (over) считаем заранее — задают масштаб частоты шума
+    const cO=d!==0?crossOver(lo,lp):crossBase();
+    const O1=lerpP(pp[o],pp[pA],cO),O2=lerpP(pp[o],pp[pB],cO);
+    const lenScale=d!==0?segLen(O1,O2)/segLen(B1,B2):1;
+    const base=terrainCurve(B1,B2,pp[o],styleOwner,seedBase,lenScale);
+    const out={
+      partition:[
+        {terrain:lo,poly:[pp[o],...base]},
+        {terrain:lp,poly:[...rev(base),pp[pA],pp[pB]]},
+      ],
+      ribbons:[],seams:[{a:lo,b:lp,winner:d>0?lo:(d<0?lp:-1),curveVis:base}]
+    };
+    if(d!==0){
+      const w=d>0?lo:lp;
+      const over=offsetCurve(base,O1,O2); // сдвиг раздела: идентичный шум, пересечение невозможно
+      out.ribbons.push({winner:w,poly:[...base,...rev(over)]});
+      out.seams[0].curveVis=over; // диттеринг — по видимой кромке
+    }
+    return out;
+  }
+  // три разных: Y-стык
+  const J=[(pp[0][0]+pp[1][0]+pp[2][0])/3,(pp[0][1]+pp[1][1]+pp[2][1])/3];
+  const pairs=[[0,1],[0,2],[1,2]];
+  const bases=[],overs=[],ribbons=[],seams=[];
+  pairs.forEach(([i,j],pi)=>{
+    const a=labs[i],b=labs[j];
+    const d=domOf(a,b);
+    const styleOwner=d>0?a:(d<0?b:Math.min(a,b));
+    const Cb=lerpP(pp[i],pp[j],crossBase());
+    // в J кривая приколота, двигается только конец у ребра → масштаб по |·−J|
+    const Co=d!==0?lerpP(pp[i],pp[j],crossOver(a,b)):Cb;
+    const lenScale=d!==0?segLen(Co,J)/segLen(Cb,J):1;
+    const base=terrainCurve(Cb,J,null,styleOwner,seedBase^(pi+1),lenScale);
+    bases.push(base);
+    const seam={a,b,winner:d>0?a:(d<0?b:-1),curveVis:base};
+    if(d!==0){
+      const w=d>0?a:b;
+      const over=offsetCurve(base,Co,J); // сдвиг раздела; в J — касание
+      ribbons.push({winner:w,poly:[...base,...rev(over)]});
+      seam.curveVis=over;
+    }
+    seams.push(seam);
+  });
+  const partition=[
+    {terrain:l0,poly:[pp[0],...bases[0],...rev(bases[1])]},
+    {terrain:l1,poly:[pp[1],...bases[2],...rev(bases[0])]},
+    {terrain:l2,poly:[pp[2],...bases[1],...rev(bases[2])]},
+  ];
+  return {partition,ribbons,seams};
+}
+function fillPoly(ctx,poly){
+  ctx.beginPath();
+  ctx.moveTo(poly[0][0],poly[0][1]);
+  for(let i=1;i<poly.length;i++)ctx.lineTo(poly[i][0],poly[i][1]);
+  ctx.closePath();ctx.fill();
+}
+/* диттеринг вдоль кромки: точки обоих террейнов пары, клип внутрь треугольника с отступом */
+function drawDither(ctx,maskCtxs,pp,seam,E,seed){
+  const dp=t=>Math.max(state.terrains[t].dither,0);
+  const da=dp(seam.a),db=dp(seam.b);
+  if(da===0&&db===0)return;
+  const rad=Math.max(da,db)*E/64*2;
+  if(rad<=0)return;
+  const inset=rad+1;
+  const cx=(pp[0][0]+pp[1][0]+pp[2][0])/3,cy=(pp[0][1]+pp[1][1]+pp[2][1])/3;
+  const h=E*0.2887; // инрадиус
+  const k=Math.max(0,1-inset/h);
+  const clipPoly=pp.map(p=>[cx+(p[0]-cx)*k,cy+(p[1]-cy)*k]);
+  const curve=seam.curveVis;
+  const M=Math.round(curve.length*2.2);
+  const apply=(c2d,fill,asMask,terr)=>{
+    c2d.save();
+    c2d.beginPath();
+    c2d.moveTo(clipPoly[0][0],clipPoly[0][1]);
+    c2d.lineTo(clipPoly[1][0],clipPoly[1][1]);
+    c2d.lineTo(clipPoly[2][0],clipPoly[2][1]);
+    c2d.closePath();c2d.clip();
+    c2d.fillStyle=fill;
+    for(let i=0;i<M;i++){
+      const t=(i+0.5)/M;
+      if(t<0.06||t>0.94)continue;
+      const idx=Math.min(curve.length-2,Math.floor(t*(curve.length-1)));
+      const f=t*(curve.length-1)-idx;
+      const px=curve[idx][0]+(curve[idx+1][0]-curve[idx][0])*f;
+      const py=curve[idx][1]+(curve[idx+1][1]-curve[idx][1])*f;
+      // нормаль сегмента
+      const dx=curve[idx+1][0]-curve[idx][0],dy=curve[idx+1][1]-curve[idx][1];
+      const L=Math.hypot(dx,dy)||1;
+      const nx=-dy/L,ny=dx/L;
+      const side=rnd01(seed,i*3)<0.5?1:-1;
+      const dist=rnd01(seed,i*3+1)*rad;
+      const sz=1+rnd01(seed,i*3+2)*rad*0.5;
+      c2d.fillRect(px+nx*dist*side-sz/2,py+ny*dist*side-sz/2,sz,sz);
+    }
+    c2d.restore();
+  };
+  // цвет: точки a и b перемешаны через кромку
+  if(ctx){
+    if(da>0)apply(ctx,state.terrains[seam.a].color);
+    if(db>0)apply(ctx,state.terrains[seam.b].color);
+  }
+  if(maskCtxs){
+    if(da>0&&maskCtxs[seam.a]){apply(maskCtxs[seam.a],'#fff');}
+    if(db>0&&maskCtxs[seam.b]){apply(maskCtxs[seam.b],'#fff');}
+  }
+}
+/* ===== СИЛУЭТ ШАРАМИ — tile grammar (Voronoi/крона). Силуэт террейна =
+   контур ОБЪЕДИНЕНИЯ кругов. Круги (sites) делятся на 3 класса, каждый со
+   своим правилом бесшовности в corner-Wang на треугольниках:
+   A. corner sites — круг у вершины-«шарового» террейна: функция МЕТКИ вершины
+      (одинаков у всех тайлов вокруг вершины).
+   B. edge sites — центр строго НА ребре: функция сигнатуры ребра
+      (класс оси решётки + канонич. пара меток + индекс вдоль ребра). Оба
+      соседних тайла строят те же круги и рисуют свои полукруги → полный круг.
+   C. interior sites — хэш тайла (orient+метки), радиус ≤ расстояние до
+      границы − отступ ⇒ круг рёбер НЕ касается, на швы не влияет.
+   Фон (understory) — обычный partition с заменой шаровых меток на почву;
+   негативное пространство между кронами = understory (чистый ball-силуэт). */
+function smoothstep(a,b,x){const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t);}
+/* класс оси ребра (0/1/2) — топологический инвариант из (r,c) вершин,
+   не зависит от вложения (tri/rect) и от того, какой тайл смотрит на ребро */
+function axisClass(vA,vB){
+  let A=vA,B=vB;
+  if(A.r>B.r||(A.r===B.r&&A.c>B.c)){A=vB;B=vA;} // канонич. порядок вершин
+  if(A.r===B.r)return 0;                          // горизонталь
+  const uA=A.c+(A.r&1)*0.5,uB=B.c+(B.r&1)*0.5;    // «равносторонняя» u для классификации
+  return (uB-uA)>0?1:2;                            // две диагонали
+}
+function distToSeg(p,a,b){
+  const dx=b[0]-a[0],dy=b[1]-a[1],L2=dx*dx+dy*dy||1;
+  let t=((p[0]-a[0])*dx+(p[1]-a[1])*dy)/L2;t=Math.max(0,Math.min(1,t));
+  return Math.hypot(p[0]-(a[0]+dx*t),p[1]-(a[1]+dy*t));
+}
+function distToTriBoundary(p,pp){return Math.min(distToSeg(p,pp[0],pp[1]),distToSeg(p,pp[1],pp[2]),distToSeg(p,pp[2],pp[0]));}
+/* синус минимального угла треугольника (константа для конгруэнтной решётки в
+   текущем вложении) — ограничивает рёберные круги их «личной линзой», чтобы
+   они не доставали смежные рёбра (иначе круги с соседних рёбер, различающихся
+   у соседних тайлов, переливались бы на общее ребро и ломали бесшовность). */
+function triMinSin(pp){
+  let mn=Infinity;
+  for(let k=0;k<3;k++){
+    const A=pp[k],B=pp[(k+1)%3],C=pp[(k+2)%3];
+    const v1x=B[0]-A[0],v1y=B[1]-A[1],v2x=C[0]-A[0],v2y=C[1]-A[1];
+    const ang=Math.atan2(Math.abs(v1x*v2y-v1y*v2x),v1x*v2x+v1y*v2y);
+    if(ang<mn)mn=ang;
+  }
+  return Math.sin(mn);
+}
+function terrainList(){return state.terrains;}
+function isBall(i){return !!state.terrains[i].crownFill;}
+function understoryOf(ti){
+  const u=state.terrains[ti].under;
+  if(u!=null&&u>=0&&u<state.terrains.length&&u!==ti&&!isBall(u))return u;
+  for(let i=0;i<state.terrains.length;i++)if(i!==ti&&!isBall(i))return i;
+  return ti; // всё шаровое — вырожденно
+}
+/* сгенерировать sites (круги) шарового террейна ti для треугольника */
+function terrainSites(pp,vinfo,labs,ti,E,key){
+  const st=state.terrains[ti];
+  const cr=st.crownSize||0.55, dens=st.crownDens!=null?st.crownDens:0.92;
+  const sinMin=triMinSin(pp);                    // для «личной линзы» рёберных кругов
+  // угловой круг не должен пересекать ПРОТИВОПОЛОЖНОЕ (общее с соседом) ребро:
+  // клип к минимальной высоте треугольника (константа конгруэнтной решётки → одинакова
+  // у всех тайлов вокруг вершины, клип согласован). Иначе круг у 3-й вершины переливается
+  // на общее ребро, которого сосед не знает → шов.
+  const minAlt=Math.min(distToSeg(pp[0],pp[1],pp[2]),distToSeg(pp[1],pp[2],pp[0]),distToSeg(pp[2],pp[0],pp[1]));
+  const cornerR=Math.min(E*cr*0.62,minAlt-0.75), step=E*cr*0.5;
+  const corner=[],edge=[],interior=[];
+  for(let k=0;k<3;k++)if(labs[k]===ti)corner.push({cx:pp[k][0],cy:pp[k][1],r:cornerR});
+  const E3=[[0,1],[1,2],[2,0]];
+  for(const [i,j] of E3){
+    const Li=labs[i],Lj=labs[j];
+    if(Li!==ti&&Lj!==ti)continue;
+    const bothF=Li===ti&&Lj===ti;
+    // A — «шаровой» конец по МЕТКЕ (не по порядку вершин) → оба тайла согласны
+    let A,B; if(Li===ti&&Lj!==ti){A=pp[i];B=pp[j];}else if(Lj===ti&&Li!==ti){A=pp[j];B=pp[i];}else{A=pp[i];B=pp[j];}
+    const other=bothF?ti:(Li===ti?Lj:Li);
+    const ax=axisClass(vinfo[i],vinfo[j]);
+    const eseed=hash32('E|'+ax+'|'+Math.min(ti,other)+'|'+Math.max(ti,other));
+    const elen=Math.hypot(B[0]-A[0],B[1]-A[1])||1;
+    const Ne=Math.max(2,Math.round(elen/step));
+    for(let n=0;n<Ne;n++){
+      const ni=bothF?Math.min(n,Ne-1-n):n;      // симметрично для лес–лес (обход не влияет)
+      const t=(n+0.5)/Ne;                        // от шарового конца A
+      const prob=bothF?1:smoothstep(0.62,0.24,t);// 1 у леса → 0 у X (фронт ~0.45)
+      if(!bothF&&rnd01(eseed,ni*3)>prob*dens)continue; // лес–лес ребро всегда плотное (= сплошной интерьер)
+      let r=E*cr*(0.34+0.5*rnd01(eseed,ni*3+1))*(0.5+0.5*(bothF?1:prob));
+      if(!bothF&&t+r/elen>0.86)continue;         // лес не достаёт X-вершину (функция ребра)
+      // «личная линза»: круг не должен доставать смежные рёбра у вершин A/B
+      const s=t*elen;
+      const rmax=Math.min(s,elen-s)*sinMin-0.75;
+      r=Math.min(r,rmax);
+      if(r<2)continue;                           // у самой вершины — только угловой круг
+      edge.push({cx:A[0]+(B[0]-A[0])*t,cy:A[1]+(B[1]-A[1])*t,r}); // ЦЕНТР НА РЕБРЕ
+    }
+  }
+  const nF=labs.filter(l=>l===ti).length;
+  if(nF>0&&nF<3){
+    const iseed=hash32(key+'|I|'+ti);
+    for(let m=0;m<5;m++){
+      let a=0.15+0.55*rnd01(iseed,m*4+1),b=0.15+0.55*rnd01(iseed,m*4+2);
+      if(a+b>0.85){const s=0.85/(a+b);a*=s;b*=s;}
+      const c=1-a-b,bc=[a,b,c];
+      let dm=0;if(bc[1]>bc[dm])dm=1;if(bc[2]>bc[dm])dm=2;
+      if(labs[dm]!==ti)continue;                 // только там, где доминирует лес
+      const cx=a*pp[0][0]+b*pp[1][0]+c*pp[2][0],cy=a*pp[0][1]+b*pp[1][1]+c*pp[2][1];
+      const r=Math.min(E*cr*(0.35+0.45*rnd01(iseed,m*4+3)),distToTriBoundary([cx,cy],pp)-2);
+      if(r>3)interior.push({cx,cy,r});           // радиус < отступ ⇒ рёбер не касается
+    }
+  }
+  return {corner,edge,interior};
+}
+function fillDiscs(ctx,pp,discs,fill){
+  if(!discs.length)return;
+  ctx.save();
+  ctx.beginPath();ctx.moveTo(pp[0][0],pp[0][1]);ctx.lineTo(pp[1][0],pp[1][1]);ctx.lineTo(pp[2][0],pp[2][1]);ctx.closePath();ctx.clip();
+  ctx.fillStyle=fill;
+  for(const d of discs){ctx.beginPath();ctx.arc(d.cx,d.cy,d.r,0,7);ctx.fill();}
+  ctx.restore();
+}
+/* обычный (кривой) рендер одного треугольника: partition → ленты → диттеринг.
+   mtCollect (если задан) собирает полигоны ГОРНЫХ террейнов для рельефа/высоты. */
+function renderCurveTri(ctxColor,maskCtxs,pp,labs,key,E,doDither,mtCollect){
+  const res=maskRegionsForTri(pp,labs,key);
+  for(const r of res.partition){
+    if(ctxColor){ctxColor.fillStyle=state.terrains[r.terrain].color;fillPoly(ctxColor,r.poly);}
+    if(maskCtxs&&maskCtxs[r.terrain]){maskCtxs[r.terrain].fillStyle='#fff';fillPoly(maskCtxs[r.terrain],r.poly);}
+    if(mtCollect&&state.terrains[r.terrain].mountain)(mtCollect[r.terrain]=mtCollect[r.terrain]||[]).push(r.poly);
+  }
+  for(const rb of res.ribbons){
+    if(ctxColor){ctxColor.fillStyle=state.terrains[rb.winner].color;fillPoly(ctxColor,rb.poly);}
+    if(maskCtxs&&maskCtxs[rb.winner]){maskCtxs[rb.winner].fillStyle='#fff';fillPoly(maskCtxs[rb.winner],rb.poly);}
+    if(mtCollect&&state.terrains[rb.winner].mountain)(mtCollect[rb.winner]=mtCollect[rb.winner]||[]).push(rb.poly);
+  }
+  if(doDither){
+    const seedD=hash32(key)^0x5f3759df;
+    for(const sm of res.seams)drawDither(ctxColor,maskCtxs,pp,sm,E,seedD^hash32(sm.a+'_'+sm.b));
+  }
+}
+/* ===== СЛОЙ ГОР — cellular Voronoi рельеф + карта высот, WANG-ТАЙЛИРУЕМЫЙ.
+   Точки Voronoi = ЦЕНТРОИДЫ треугольников решётки, БЕЗ джиттера: центроиды
+   образуют соты, их Voronoi = сама решётка ⇒ хребты (стены ячеек) точно на
+   рёбрах, пики (вершины Voronoi) на вершинах. Поле — чистая функция геометрии
+   решётки ⇒ тайлы с одинаковым ключом ИДЕНТИЧНЫ, а на общем ребре два соседних
+   центроида — отражения друг друга, их перпендикулярный биссектор = само ребро
+   ⇒ соседи сходятся. Детализация — геометрическое субразбиение (n² под-центроидов
+   на треугольник, выровнено по решётке) → тоже тайлируемо; джиттер/случайная
+   иерархия НЕ применяются (они ломают Wang: сосед не знает 3-ю метку тайла). */
+function buildMtField(verts,tris,pts,E,st){
+  const n=Math.max(1,Math.min(3,Math.round(st.mtDetail||1)));
+  const P=[];
+  for(let ti=0;ti<tris.length;ti++){
+    const p=tris[ti].verts.map(i=>pts[i]);
+    if(n===1){P.push((p[0][0]+p[1][0]+p[2][0])/3,(p[0][1]+p[1][1]+p[2][1])/3);continue;}
+    // центроиды n²-субразбиения (барицентрич. сетка), геометрично → выровнено
+    const bc=(a,b,c)=>[ (a*p[0][0]+b*p[1][0]+c*p[2][0]), (a*p[0][1]+b*p[1][1]+c*p[2][1]) ];
+    for(let i=0;i<n;i++)for(let j=0;j<n-i;j++){
+      const a0=(n-i-j)/n,b0=i/n,c0=j/n;
+      // up-треугольник (i,j)-(i+1,j)-(i,j+1): центроид = среднее
+      P.push((bc(a0,b0,c0)[0]+bc(a0-1/n,b0+1/n,c0)[0]+bc(a0-1/n,b0,c0+1/n)[0])/3,
+             (bc(a0,b0,c0)[1]+bc(a0-1/n,b0+1/n,c0)[1]+bc(a0-1/n,b0,c0+1/n)[1])/3);
+      if(i+j<n-1){ // down-треугольник
+        P.push((bc(a0-1/n,b0+1/n,c0)[0]+bc(a0-1/n,b0,c0+1/n)[0]+bc(a0-2/n,b0+1/n,c0+1/n)[0])/3,
+               (bc(a0-1/n,b0+1/n,c0)[1]+bc(a0-1/n,b0,c0+1/n)[1]+bc(a0-2/n,b0+1/n,c0+1/n)[1])/3);
+      }
+    }
+  }
+  const G=E/n; let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;
+  for(let i=0;i<P.length;i+=2){if(P[i]<mnx)mnx=P[i];if(P[i]>mxx)mxx=P[i];if(P[i+1]<mny)mny=P[i+1];if(P[i+1]>mxy)mxy=P[i+1];}
+  const gw=Math.max(1,Math.ceil((mxx-mnx)/G)+1),gh=Math.max(1,Math.ceil((mxy-mny)/G)+1);
+  const buck=Array.from({length:gw*gh},()=>[]);
+  for(let i=0;i<P.length;i+=2){const gx=Math.floor((P[i]-mnx)/G),gy=Math.floor((P[i+1]-mny)/G);if(gx>=0&&gy>=0&&gx<gw&&gy<gh)buck[gy*gw+gx].push(i);}
+  return {P:new Float64Array(P),buck,gw,gh,mnx,mny,G,cell:E/n};
+}
+function mtCell(F,x,y){
+  let d1=1e18,d2=1e18;
+  const gx0=Math.floor((x-F.mnx)/F.G),gy0=Math.floor((y-F.mny)/F.G);
+  for(let gy=gy0-1;gy<=gy0+1;gy++){if(gy<0||gy>=F.gh)continue;
+    for(let gx=gx0-1;gx<=gx0+1;gx++){if(gx<0||gx>=F.gw)continue;
+      const arr=F.buck[gy*F.gw+gx];
+      for(let a=0;a<arr.length;a++){const i=arr[a];const dx=x-F.P[i],dy=y-F.P[i+1];const d=dx*dx+dy*dy;if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}
+    }}
+  return [Math.sqrt(d1),Math.sqrt(d2)];
+}
+function mtHeightAt(F,x,y,st){
+  const c=mtCell(F,x,y), cl=F.cell;
+  const basin=Math.min(1,c[0]/(cl*0.62)), ridge=1-Math.min(1,(c[1]-c[0])/(cl*0.34));
+  return Math.max(0,Math.min(1,basin*(1-st.mtRidge)+ridge*st.mtRidge));
+}
+/* оффскрин: цвет-рельеф (grayscale luma по ВЫСОТЕ ×hillshade, для multiply над
+   цветом террейна — светлое=высоко, не инвертировано) + карта высот (grayscale) */
+function buildMtOffscreen(F,W,H,st){
+  const HB=new Float32Array(W*H);
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++)HB[py*W+px]=mtHeightAt(F,px,py,st);
+  const shade=document.createElement('canvas'),hgt=document.createElement('canvas');
+  shade.width=hgt.width=W;shade.height=hgt.height=H;
+  const si=new ImageData(W,H),hi=new ImageData(W,H);
+  const Lx=-0.6,Ly=-0.55,Lz=0.58, k=st.mtRelief*40;
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++){
+    const q=(py*W+px)*4, h=HB[py*W+px];
+    const xl=px>0?px-1:px,xr=px<W-1?px+1:px,yt=py>0?py-1:py,yb=py<H-1?py+1:py;
+    const hx=HB[py*W+xr]-HB[py*W+xl], hy=HB[yb*W+px]-HB[yt*W+px];
+    let nx=-hx*k,ny=-hy*k,nz=1;const il=1/Math.hypot(nx,ny,nz);nx*=il;ny*=il;nz*=il;
+    const lam=Math.max(0,nx*Lx+ny*Ly+nz*Lz);
+    // luma = ВЫСОТА (0.35..1) × hillshade → светлое=высоко (multiply тонирует цветом террейна)
+    const s=Math.min(255,Math.round(255*(0.35+0.65*h)*(0.55+0.6*lam)));
+    si.data[q]=si.data[q+1]=si.data[q+2]=s;si.data[q+3]=255;
+    const v=(h*255)|0; hi.data[q]=hi.data[q+1]=hi.data[q+2]=v;hi.data[q+3]=255;
+  }
+  shade.getContext('2d').putImageData(si,0,0);
+  hgt.getContext('2d').putImageData(hi,0,0);
+  return {shade,hgt};
+}
+function clipPolys(ctx,polys){ctx.beginPath();for(const poly of polys){ctx.moveTo(poly[0][0],poly[0][1]);for(let i=1;i<poly.length;i++)ctx.lineTo(poly[i][0],poly[i][1]);ctx.closePath();}}
+/* рендер решётки: тайлы с шаровыми террейнами → фон (understory) + overlay кругов;
+   прочие → обычный кривой partition. mtHeightCtx — канвас карты высот (или null). */
+function renderTerrainRegions(ctxColor,W,H,verts,tris,labels,E,pad,maskCtxs,mtHeightCtx){
+  const pts=latPts(verts,E,pad);
+  if(ctxColor){ctxColor.fillStyle='#101318';ctxColor.fillRect(0,0,W,H);}
+  const ballTerrs=state.terrains.map((t,i)=>t.crownFill?i:-1).filter(i=>i>=0);
+  const mtTerrs=state.terrains.map((t,i)=>t.mountain?i:-1).filter(i=>i>=0);
+  const mtCollect=mtTerrs.length?{}:null; // террейн → полигоны регионов (для рельефа/высоты)
+  for(const t of tris){
+    const pp=t.verts.map(i=>pts[i]);
+    const labs=t.verts.map(i=>labels[i]);
+    const key=cornerKey(t.orient,labs);
+    const ballHere=ballTerrs.filter(ti=>labs.includes(ti));
+    if(ballHere.length===0){renderCurveTri(ctxColor,maskCtxs,pp,labs,key,E,true,mtCollect);continue;}
+    // ВСЕ тайлы с шаровым террейном идут единым путём base+overlay (даже «весь лес»),
+    // иначе сплошная заливка ≠ дисковая у соседа по лес–лес ребру → шов (аудит).
+    // фон: partition с заменой шаровых меток на understory (почву)
+    const baseLabs=labs.map(l=>isBall(l)?understoryOf(l):l);
+    renderCurveTri(ctxColor,maskCtxs,pp,baseLabs,key+'|b',E,false,mtCollect);
+    // overlay кругов каждого присутствующего шарового террейна (по индексу → выше сверху)
+    const vinfo=t.verts.map(i=>verts[i]);
+    for(const ti of ballHere){
+      const S=terrainSites(pp,vinfo,labs,ti,E,key);
+      const all=S.corner.concat(S.edge,S.interior);
+      if(ctxColor)fillDiscs(ctxColor,pp,all,state.terrains[ti].color);
+      if(maskCtxs&&maskCtxs[ti])fillDiscs(maskCtxs[ti],pp,all,'#fff');
+    }
+  }
+  // --- горы: рельеф по карте высот на регионах горных террейнов + канал высот ---
+  if(mtCollect&&Object.keys(mtCollect).length){
+    const st=state.terrains[+Object.keys(mtCollect)[0]]; // параметры поля — от первого горного
+    const F=buildMtField(verts,tris,pts,E,st);
+    const off=buildMtOffscreen(F,W,H,st);
+    for(const tk in mtCollect){
+      const polys=mtCollect[tk];
+      if(ctxColor){ // luma по ВЫСОТЕ ×hillshade, multiply → тонирует цветом террейна (светлое=высоко)
+        ctxColor.save();clipPolys(ctxColor,polys);ctxColor.clip();
+        ctxColor.globalCompositeOperation='multiply';ctxColor.drawImage(off.shade,0,0);
+        ctxColor.globalCompositeOperation='source-over';ctxColor.restore();
+      }
+      if(mtHeightCtx){ // карта высот — только под горами
+        mtHeightCtx.save();clipPolys(mtHeightCtx,polys);mtHeightCtx.clip();
+        mtHeightCtx.drawImage(off.hgt,0,0);mtHeightCtx.restore();
+      }
+    }
+  }
+}
+/* ============ APP ============ */
+const $=id=>document.getElementById(id);
+function toast(msg){
+  const t=$('toast');t.textContent=msg;t.classList.add('show');
+  clearTimeout(toast._h);toast._h=setTimeout(()=>t.classList.remove('show'),2400);
+}
+function seededRng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
+function hexToRgb(h){const n=parseInt(h.slice(1),16);return [(n>>16)&255,(n>>8)&255,n&255];}
+const WIDTHS={thin:0.10,mid:0.16,wide:0.24};
+
+const state={
+  // единая модель шума кромки (Houdini-стиль): noiseType 'sin'|'wE'|'wM'|'wCh',
+  // f2 — профиль F2−F1 (ворли), elem — размер элемента (1/частота), strength —
+  // сила, oct — октавы (1..4), rough — шероховатость (спад октав); round/dither —
+  // геометрический финиш (скругление вздутия / пиксельный диттеринг кромки)
+  // crownFill — силуэт шарами (Voronoi/крона); crownSize — размер шаров (доля E);
+  // crownDens — плотность/резкость фронта; under — «почва» под кроной (индекс террейна,
+  // = негативное пространство между шарами)
+  // mountain — заливка рельефом (cellular Voronoi, точки в центроидах решётки → хребты
+  // на рёбрах, пики на вершинах); mtDetail (субразбиение) /mtRidge/mtRelief — параметры;
+  // канал «карта высот» экспортируется
+  terrains:[
+    {name:'трава',color:'#5a8f3c',noiseType:'sin',f2:false,elem:0.16,strength:0.15,oct:2,rough:0.5,sharp:1.0,round:0,dither:2,crownFill:false,crownSize:0.55,crownDens:0.92,under:1,mountain:false,mtDetail:2,mtRidge:0.55,mtRelief:1.4},
+    {name:'вода',color:'#3a6ea5',noiseType:'sin',f2:false,elem:0.33,strength:0.06,oct:1,rough:0.5,sharp:0.7,round:0.8,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92,under:0,mountain:false,mtDetail:2,mtRidge:0.55,mtRelief:1.4},
+  ],
+  dom:{'0-1':-2}, // парные нахлёсты: ключ 'a-b' (a<b), знак+ = a поверх b, |v| = ширина
+
+  features:[ // порядок = порядок отрисовки снизу вверх
+    {name:'река',color:'#7ec8e3',width:'wide',geometry:'border',backdrop:'#262b33',forbidden:new Set([1]),corners:'round'},
+    {name:'дорога',color:'#b0a184',width:'thin',geometry:'link',backdrop:'#262b33',forbidden:new Set([1]),corners:'sharp'},
+  ],
+  mode:'flat', edge:64, seed:1, renderMode:'gradient', curChannel:0,
+  space:'tri', rectAspect:1, // 'tri' — равносторонняя решётка; 'rect' — свёртка сдвигом в ячейки
+  rhyT:0, overW:0.055, // ритм переходов: выбранный террейн и ширина нахлёста на единицу |dom|
+  layers:null,      // [{...terrain layer},{...overlay}...] + px per layer
+  imported:{},      // layerIdx -> {srcCanvas,w,h}
+  stale:true,
+  curLayer:0,
+  preview:{cols:8,rows:6,labels:null,eF:null,src:'template'},
+};
+
+/* --- террейны --- */
+function renderTerrains(){
+  const box=$('terrainList');box.innerHTML='';
+  state.terrains.forEach((t,i)=>{
+    const row=document.createElement('div');row.className='terrain-row';
+    row.innerHTML=`<span class="idx">${i}</span>
+      <input type="color" value="${t.color}">
+      <input type="text" value="${t.name}" maxlength="24">
+      <button class="small" data-role="del">✕</button>`;
+    const [colorEl,nameEl]=row.querySelectorAll('input');
+    // цвет и имя не влияют на покрытие — обновляем вживую, без пересборки
+    colorEl.addEventListener('input',()=>{t.color=colorEl.value;renderDomMatrix();renderRhythm();scheduleLive(true);});
+    nameEl.addEventListener('input',()=>{t.name=nameEl.value;renderFeatures();renderDomMatrix();renderRhythm();});
+    row.querySelector('[data-role=del]').addEventListener('click',()=>{
+      if(state.terrains.length<=2){toast('минимум 2 террейна');return;}
+      state.terrains.splice(i,1);
+      state.features.forEach(f=>{
+        f.forbidden=new Set([...f.forbidden].filter(x=>x!==i).map(x=>x>i?x-1:x));
+      });
+      const nd={};
+      Object.entries(state.dom).forEach(([key,v])=>{
+        let [a,b]=key.split('-').map(Number);
+        if(a===i||b===i)return;
+        if(a>i)a--;if(b>i)b--;
+        if(a<b)nd[a+'-'+b]=v;else nd[b+'-'+a]=-v;
+      });
+      state.dom=nd;
+      // переиндексация understory-ссылок под удалённый индекс
+      state.terrains.forEach(tt=>{
+        if(tt.under==null)return;
+        if(tt.under===i)tt.under=-1; else if(tt.under>i)tt.under--;
+      });
+      renderTerrains();renderFeatures();markStale();
+    });
+    box.appendChild(row);
+  });
+  $('btnAddTerrain').style.display=state.terrains.length>=4?'none':'';
+  renderDomMatrix();
+  renderRhythm();
+}
+function renderDomMatrix(){
+  const box=$('domList');box.innerHTML='';
+  const k=state.terrains.length;
+  const tbl=document.createElement('table');tbl.className='dommat';
+  const hdr=document.createElement('tr');
+  hdr.innerHTML='<th>слой \\ над</th>'+state.terrains.map(t=>
+    `<th><span class="tdot" style="background:${t.color}"></span>${t.name}</th>`).join('');
+  tbl.appendChild(hdr);
+  for(let a=0;a<k;a++){
+    const tr=document.createElement('tr');
+    const ta=state.terrains[a];
+    let cells=`<th><span class="tdot" style="background:${ta.color}"></span>${ta.name}</th>`;
+    for(let b=0;b<k;b++){
+      if(a===b){cells+='<td class="diag">—</td>';continue;}
+      const v=domOf(a,b); // + = a поверх b
+      const txt=v>0?('▲'+v):(v<0?('▼'+(-v)):'·');
+      const cls=v>0?'up':(v<0?'down':'zero');
+      cells+=`<td class="cell ${cls}" data-a="${a}" data-b="${b}">${txt}</td>`;
+    }
+    tr.innerHTML=cells;
+    tbl.appendChild(tr);
+  }
+  tbl.addEventListener('click',e=>{
+    const td=e.target.closest('td.cell');if(!td)return;
+    const a=parseInt(td.dataset.a,10),b=parseInt(td.dataset.b,10);
+    let v=domOf(a,b);
+    v=v>=3?-3:v+1; // цикл: · → ▲1..▲3 → ▼3..▼1 → ·
+    const key=Math.min(a,b)+'-'+Math.max(a,b);
+    const stored=a<b?v:-v;
+    if(stored===0)delete state.dom[key];else state.dom[key]=stored;
+    // порядок пары влияет только на ленты нахлёста — живая перерисовка без пересборки
+    drawRhythmSample();scheduleLive(true);renderDomMatrix();
+  });
+  box.appendChild(tbl);
+}
+$('btnAddTerrain').addEventListener('click',()=>{
+  const presets=['#c2a25a','#7a7d85','#8f5a3c','#5a8f8a'];
+  state.terrains.push({name:'террейн '+state.terrains.length,color:presets[state.terrains.length%presets.length],noiseType:'sin',f2:false,elem:0.2,strength:0.08,oct:2,rough:0.5,sharp:1.0,round:0,dither:0,crownFill:false,crownSize:0.55,crownDens:0.92,under:0,mountain:false,mtDetail:2,mtRidge:0.55,mtRelief:1.4});
+  renderTerrains();renderFeatures();markStale();
+});
+
+/* --- ритм переходов: живые ползунки кромок ---
+   Параметры силуэтов и нахлёстов влияют только на отрисовку (ключи/покрытие
+   не зависят от них), поэтому меняются без пересборки: проба — мгновенно,
+   атлас/превью — не чаще кадра (rAF). WebGPU не нужен: полная перерисовка
+   всех канвасов укладывается в единицы миллисекунд на Canvas 2D. */
+// единая панель шума кромки (Houdini-стиль): тип + фрактальные параметры
+const NOISE_TYPES=[['sin','синусоида · волны'],['wE','ворли · дуги'],['wM','манхэттен · зубцы'],['wCh','чебышев · террасы']];
+const RHY_DEFS=[
+  ['elem','размер элемента',0.05,0.6,0.01],
+  ['strength','сила шума',0,0.3,0.005],
+  ['oct','октавы',1,4,1],
+  ['rough','шероховатость',0,0.9,0.05],
+  ['sharp','острота пиков',0.2,3,0.05],
+  ['round','скругление',0,1,0.02],
+  ['dither','диттеринг, px',0,4,0.25],
+];
+let livePending=false,liveWantPreview=false;
+/* на драге перерисовываем только террейн-слой (кромки не трогают оверлеи)
+   и вид атласа; превью карты — на отпускании ползунка (withPreview=true) */
+function scheduleLive(withPreview){
+  liveWantPreview=liveWantPreview||!!withPreview;
+  if(livePending)return;
+  livePending=true;
+  requestAnimationFrame(()=>{
+    livePending=false;
+    if(state.layers){
+      state.layers.forEach((L,i)=>{if(L.kind==='terrain')renderOneLayer(L,i);});
+      drawAtlasView();
+      if(liveWantPreview)renderPreview();
+    }
+    liveWantPreview=false;
+  });
+}
+function fmtV(v){return String(Math.round(v*1000)/1000);}
+function renderRhythm(){
+  state.rhyT=Math.min(state.rhyT,state.terrains.length-1);
+  const seg=$('segRhyT');seg.innerHTML='';
+  state.terrains.forEach((t,i)=>{
+    const b=document.createElement('button');
+    b.innerHTML=`<span class="tdot" style="background:${t.color}"></span>${t.name}`;
+    if(i===state.rhyT)b.classList.add('on');
+    b.addEventListener('click',()=>{state.rhyT=i;renderRhythm();});
+    seg.appendChild(b);
+  });
+  const box=$('rhySliders');box.innerHTML='';
+  const t=state.terrains[state.rhyT];
+  const worley=t.noiseType!=='sin';
+  // тип шума (dropdown) — как Noise Type в Houdini
+  const trow=document.createElement('div');trow.className='rh-row';
+  trow.innerHTML='<label>тип шума</label>';
+  const sel=document.createElement('select');sel.style.flex='1';
+  NOISE_TYPES.forEach(([v,l])=>{
+    const o=document.createElement('option');o.value=v;o.textContent=l;
+    if(t.noiseType===v)o.selected=true;sel.appendChild(o);
+  });
+  sel.addEventListener('change',()=>{t.noiseType=sel.value;renderRhythm();scheduleLive(true);});
+  trow.appendChild(sel);box.appendChild(trow);
+  // профиль F1 / F2−F1 — только для ворли-метрик
+  if(worley){
+    const frow=document.createElement('div');frow.className='rh-row';
+    frow.innerHTML=`<label>профиль</label><span class="seg" style="flex:1">
+      <button data-f2="0"${t.f2?'':' class="on"'}>F1 · холмы</button>
+      <button data-f2="1"${t.f2?' class="on"':''}>F2−F1 · гребни/расщелины</button></span>`;
+    frow.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+      t.f2=b.dataset.f2==='1';renderRhythm();scheduleLive(true);
+    }));
+    box.appendChild(frow);
+  }
+  RHY_DEFS.forEach(([key,label,min,max,step])=>{
+    const row=document.createElement('div');row.className='rh-row';
+    row.innerHTML=`<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${t[key]}"><span class="rh-val">${fmtV(t[key])}</span>`;
+    const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
+    inp.addEventListener('input',()=>{
+      t[key]=parseFloat(inp.value);
+      val.textContent=fmtV(t[key]);
+      drawRhythmSample();scheduleLive(false);
+    });
+    inp.addEventListener('change',()=>scheduleLive(true)); // отпустили — обновить и превью
+    box.appendChild(row);
+  });
+  // --- силуэт шарами (Voronoi/крона): граница = контур объединения кругов ---
+  const crow=document.createElement('div');crow.className='rh-row';
+  crow.innerHTML=`<label>форма силуэта</label><span class="seg" style="flex:1">
+    <button data-cf="0"${t.crownFill?'':' class="on"'}>кривая (шум)</button>
+    <button data-cf="1"${t.crownFill?' class="on"':''}>шары (Voronoi)</button></span>`;
+  crow.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    t.crownFill=b.dataset.cf==='1';
+    // почва по умолчанию — первый не-шаровой террейн
+    if(t.crownFill&&(t.under==null||t.under<0||t.under===state.rhyT||isBall(t.under)))t.under=understoryOf(state.rhyT);
+    renderRhythm();scheduleLive(true);
+  }));
+  box.appendChild(crow);
+  if(t.crownFill){
+    // почва под кроной = негативное пространство между шарами
+    const urow=document.createElement('div');urow.className='rh-row';
+    urow.innerHTML='<label>почва под кроной</label>';
+    const usel=document.createElement('select');usel.style.flex='1';
+    state.terrains.forEach((tt,ui)=>{
+      if(ui===state.rhyT||tt.crownFill)return; // почва — не-шаровой террейн
+      const o=document.createElement('option');o.value=ui;o.textContent=tt.name;
+      if(understoryOf(state.rhyT)===ui)o.selected=true;usel.appendChild(o);
+    });
+    usel.addEventListener('change',()=>{t.under=parseInt(usel.value,10);scheduleLive(true);});
+    urow.appendChild(usel);box.appendChild(urow);
+    [['crownSize','размер шаров',0.25,1.4,0.05],['crownDens','плотность крон',0.5,1,0.02]].forEach(([key,label,mn,mx,st2])=>{
+      const row=document.createElement('div');row.className='rh-row';
+      row.innerHTML=`<label>${label}</label><input type="range" min="${mn}" max="${mx}" step="${st2}" value="${t[key]}"><span class="rh-val">${fmtV(t[key])}</span>`;
+      const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
+      inp.addEventListener('input',()=>{t[key]=parseFloat(inp.value);val.textContent=fmtV(t[key]);drawRhythmSample();scheduleLive(false);});
+      inp.addEventListener('change',()=>scheduleLive(true));
+      box.appendChild(row);
+    });
+  }
+  // --- слой гор: заливка рельефом (cellular Voronoi) + карта высот ---
+  const mrow=document.createElement('div');mrow.className='rh-row';
+  mrow.innerHTML=`<label>горы (рельеф)</label><span class="seg" style="flex:1">
+    <button data-mt="0"${t.mountain?'':' class="on"'}>нет</button>
+    <button data-mt="1"${t.mountain?' class="on"':''}>Voronoi рельеф</button></span>`;
+  mrow.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{
+    t.mountain=b.dataset.mt==='1';renderRhythm();scheduleLive(true);
+  }));
+  box.appendChild(mrow);
+  if(t.mountain){
+    const mh=document.createElement('div');mh.className='hint';mh.style.margin='2px 0 4px';
+    mh.innerHTML='Точки Voronoi в центроидах треугольников (без джиттера) ⇒ хребты на рёбрах, пики на вершинах; поле — чистая функция решётки ⇒ <b>тайлится по Wang</b> (одинаковый ключ = одинаковый узор, соседи сходятся). Детализация — геометрич. субразбиение (тоже тайлируемо). Цвет — по карте высот (светлое=высоко). Канал «карта высот гор» в секции 5.';
+    box.appendChild(mh);
+    [['mtDetail','детализация (n²)',1,3,1],['mtRidge','хребты F1↔F2−F1',0,1,0.05],['mtRelief','сила рельефа',0.4,3,0.1]].forEach(([key,label,mn,mx,st2])=>{
+      const row=document.createElement('div');row.className='rh-row';
+      row.innerHTML=`<label>${label}</label><input type="range" min="${mn}" max="${mx}" step="${st2}" value="${t[key]}"><span class="rh-val">${fmtV(t[key])}</span>`;
+      const inp=row.querySelector('input'),val=row.querySelector('.rh-val');
+      inp.addEventListener('input',()=>{t[key]=parseFloat(inp.value);val.textContent=fmtV(t[key]);scheduleLive(false);});
+      inp.addEventListener('change',()=>scheduleLive(true));
+      box.appendChild(row);
+    });
+  }
+  $('rhOverW').value=state.overW;
+  $('rhOverWVal').textContent=fmtV(state.overW);
+  drawRhythmSample();
+}
+/* проба перехода: маленький фиксированный патч решётки, силуэтный рендер
+   в текущем вложении (tri/rect) — перерисовка < 1 мс */
+function drawRhythmSample(){
+  const cv=$('cvRhythm');if(!cv)return;
+  const wrap=document.querySelector('#secRhythm .canvas-wrap');
+  const wrapW=Math.min((wrap.clientWidth||360)-12,720);
+  const cols=8,rows=4;
+  const verts=buildLattice(cols,rows);
+  const tris=buildTriangles(cols,rows);
+  const k=state.terrains.length;
+  const rng=seededRng(97+k*17);
+  const labels=verts.map(()=>Math.floor(rng()*k));
+  const [uw,uh]=latSize(verts,1,0);
+  const E=Math.max(20,Math.min(56,Math.floor((wrapW-8)/uw))); // кап, иначе flat-решётка (4 юнита шириной) раздувается
+  const pad=Math.round(E*0.25);
+  const W=Math.ceil(uw*E+2*pad),H=Math.ceil(uh*E+2*pad);
+  cv.width=W;cv.height=H;
+  renderTerrainRegions(cv.getContext('2d'),W,H,verts,tris,labels,E,pad,null);
+}
+$('rhOverW').addEventListener('input',e=>{
+  state.overW=parseFloat(e.target.value);
+  $('rhOverWVal').textContent=fmtV(state.overW);
+  drawRhythmSample();scheduleLive(false);
+});
+$('rhOverW').addEventListener('change',()=>scheduleLive(true));
+
+/* --- слои-оверлеи --- */
+function renderFeatures(){
+  const box=$('featureList');box.innerHTML='';
+  state.features.forEach((f,fi)=>{
+    const row=document.createElement('div');row.className='feature-row';
+    row.innerHTML=`<span class="idx">${fi+1}</span>
+      <input type="color" value="${f.color}" title="цвет фичи">
+      <input type="text" value="${f.name}" maxlength="24">
+      <select data-role="geom">
+        <option value="link"${f.geometry==='link'?' selected':''}>связь (центр→центр)</option>
+        <option value="border"${f.geometry==='border'?' selected':''}>граница (ребро гекса)</option>
+      </select>
+      <select data-role="width">
+        <option value="thin"${f.width==='thin'?' selected':''}>тонкая</option>
+        <option value="mid"${f.width==='mid'?' selected':''}>средняя</option>
+        <option value="wide"${f.width==='wide'?' selected':''}>широкая</option>
+      </select>
+      <select data-role="corners" title="изгибы в узлах (для геометрии 'граница')">
+        <option value="sharp"${f.corners==='sharp'?' selected':''}>углы резкие</option>
+        <option value="round"${f.corners==='round'?' selected':''}>углы плавные</option>
+      </select>
+      <span class="bd-lbl">подложка</span><input type="color" value="${f.backdrop}" data-role="bd" title="цвет подложки (для chroma key при импорте)">
+      <button class="small">✕</button>
+      <span class="chips"><span class="lbl">запреты:</span></span>`;
+    const inputs=row.querySelectorAll('input');
+    inputs[0].addEventListener('input',()=>{f.color=inputs[0].value;markStale();});
+    inputs[1].addEventListener('input',()=>{f.name=inputs[1].value;markStale();});
+    inputs[2].addEventListener('input',()=>{f.backdrop=inputs[2].value;markStale();});
+    row.querySelector('[data-role=geom]').addEventListener('change',e=>{f.geometry=e.target.value;markStale();});
+    row.querySelector('[data-role=corners]').addEventListener('change',e=>{f.corners=e.target.value;markStale();});
+    row.querySelector('[data-role=width]').addEventListener('change',e=>{f.width=e.target.value;markStale();});
+    row.querySelector('button').addEventListener('click',()=>{
+      state.features.splice(fi,1);renderFeatures();markStale();
+    });
+    const chips=row.querySelector('.chips');
+    state.terrains.forEach((t,ti)=>{
+      const c=document.createElement('span');
+      c.className='chip'+(f.forbidden.has(ti)?' forbidden':'');
+      c.textContent=t.name;
+      c.addEventListener('click',()=>{
+        if(f.forbidden.has(ti))f.forbidden.delete(ti);
+        else{
+          if(f.forbidden.size>=state.terrains.length-1){toast('нельзя запретить все террейны');return;}
+          f.forbidden.add(ti);
+        }
+        renderFeatures();markStale();
+      });
+      chips.appendChild(c);
+    });
+    box.appendChild(row);
+  });
+  $('btnAddFeature').style.display=state.features.length>=2?'none':'';
+  updateBudget();
+}
+$('btnAddFeature').addEventListener('click',()=>{
+  const presets=[
+    {name:'река',color:'#7ec8e3',width:'wide',geometry:'border',backdrop:'#262b33'},
+    {name:'дорога',color:'#b0a184',width:'thin',geometry:'link',backdrop:'#262b33'},
+  ];
+  const p=presets[state.features.length%2];
+  state.features.push({...p,forbidden:new Set(),corners:p.geometry==='border'?'round':'sharp'});
+  renderFeatures();markStale();
+});
+
+function markStale(){
+  state.stale=true;
+  $('buildBadge').innerHTML='<span class="badge stale">слои устарели — пересоберите</span>';
+  updateBudget();
+}
+function updateBudget(){
+  const k=state.terrains.length;
+  const terrainN=2*k**3;
+  const total=terrainN+state.features.length*16;
+  const parts=[`террейн ${terrainN}`].concat(state.features.map(f=>`${f.name} 16`));
+  $('budget').textContent=`бюджет: ${parts.join(' + ')} = ${total} тайлов · ${1+state.features.length} атлас(а) — сумма вместо произведения`;
+}
+$('selEdge').addEventListener('change',updateBudget);
+
+/* --- сегменты --- */
+$('segRender').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  state.renderMode=b.dataset.rm;
+  [...$('segRender').children].forEach(x=>x.classList.toggle('on',x===b));
+  markStale();
+});
+$('segMode').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  state.mode=b.dataset.mode;
+  [...$('segMode').children].forEach(x=>x.classList.toggle('on',x===b));
+  markStale();
+});
+$('segSrc').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b||b.disabled)return;
+  state.preview.src=b.dataset.src;
+  [...$('segSrc').children].forEach(x=>x.classList.toggle('on',x===b));
+  renderPreview();
+});
+$('segLayer').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  state.curLayer=parseInt(b.dataset.layer,10);
+  state.curChannel=0;
+  [...$('segLayer').children].forEach(x=>x.classList.toggle('on',x===b));
+  renderChannelTabs();
+  drawAtlasView();updateImportNote();
+});
+$('segChannel').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  state.curChannel=parseInt(b.dataset.ch,10);
+  [...$('segChannel').children].forEach(x=>x.classList.toggle('on',x===b));
+  drawAtlasView();
+});
+/* переключение вложения: покрытие не пересобирается, канвасы перерисовываются;
+   импортированные растры привязаны к прежнему вложению — сбрасываем */
+function onSpaceChanged(){
+  if(Object.keys(state.imported).length)toast('импортированные слои сброшены — они были нарисованы в другом пространстве');
+  state.imported={};
+  $('btnSrcImported').disabled=true;
+  if(state.preview.src==='imported'){state.preview.src='template';syncSrcSeg();}
+  drawRhythmSample();
+  if(state.layers){
+    renderAllLayers();
+    drawAtlasView();
+    updateImportNote();
+    renderPreview();
+  }
+}
+$('segSpace').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(state.space===b.dataset.sp)return;
+  state.space=b.dataset.sp;
+  [...$('segSpace').children].forEach(x=>x.classList.toggle('on',x===b));
+  onSpaceChanged();
+});
+$('selAspect').addEventListener('change',e=>{
+  state.rectAspect=parseFloat(e.target.value);
+  if(state.space==='rect')onSpaceChanged();
+});
+function renderChannelTabs(){
+  const seg=$('segChannel');seg.innerHTML='';
+  if(!state.layers)return;
+  const L=state.layers[state.curLayer];
+  const names=L.kind==='terrain'
+    ? ['цвет'].concat(state.terrains.map(t=>t.name+' ч/б')).concat(L.heightCanvas?['карта высот гор']:[])
+    : ['цвет','маска ч/б'];
+  names.forEach((n,i)=>{
+    const b=document.createElement('button');
+    b.dataset.ch=i;b.textContent=n;
+    if(i===state.curChannel)b.classList.add('on');
+    seg.appendChild(b);
+  });
+}
+function renderLayerTabs(){
+  const seg=$('segLayer');seg.innerHTML='';
+  if(!state.layers)return;
+  state.layers.forEach((L,i)=>{
+    const b=document.createElement('button');
+    b.dataset.layer=i;
+    b.textContent=L.kind==='terrain'?'террейн':state.features[L.featIdx].name;
+    if(i===state.curLayer)b.classList.add('on');
+    seg.appendChild(b);
+  });
+}
+
+/* --- координаты: два вложения одной решётки ---
+   tri  — равносторонняя (как в v6): вершина (r,c) → (c+(r%2)/2, r·√3/2);
+   rect — свёртка аффинным сдвигом T(u,v)=(u−v/√3, v·2/√3): вершина (r,c) →
+          (c−⌊r/2⌋, r) — целые узлы; пара U/D = ячейка E×(aspect·E) с единой
+          диагональю, все блиты/нарезка целочисленные (см. docs/tileset-pipeline.md).
+   Комбинаторика (ключи, поиск покрытия, tileMap) от вложения не зависит. */
+function latUnits(verts){
+  const a=state.rectAspect;
+  return verts.map(vt=>{
+    let x,y;
+    if(state.space==='rect'){x=vt.c-((vt.r-(vt.r%2))/2);y=vt.r*a;}
+    else{x=vt.u;y=vt.v;}
+    return state.mode==='pointy'?[x,y]:[y,x];
+  });
+}
+function latPts(verts,E,pad){
+  const raw=latUnits(verts);
+  let mnx=Infinity,mny=Infinity;
+  for(const p of raw){if(p[0]<mnx)mnx=p[0];if(p[1]<mny)mny=p[1];}
+  return raw.map(p=>[pad+(p[0]-mnx)*E,pad+(p[1]-mny)*E]);
+}
+function latSize(verts,E,pad){
+  const raw=latUnits(verts);
+  let mnx=Infinity,mny=Infinity,mxx=-Infinity,mxy=-Infinity;
+  for(const p of raw){
+    if(p[0]<mnx)mnx=p[0];if(p[1]<mny)mny=p[1];
+    if(p[0]>mxx)mxx=p[0];if(p[1]>mxy)mxy=p[1];
+  }
+  return [Math.ceil((mxx-mnx)*E+2*pad),Math.ceil((mxy-mny)*E+2*pad)];
+}
+function cellPx(){ // пиксельный размер ячейки rect-режима [w,h] с учётом свопа осей
+  const E=state.edge,a=state.rectAspect;
+  return state.mode==='pointy'?[E,a*E]:[a*E,E];
+}
+function spaceSfx(){return state.space==='rect'?'_rect':''}
+
+/* --- рендер: террейн (барицентрика) --- */
+function renderTerrainFill(ctx,W,H,verts,tris,labels,E,pad,bg){
+  const img=ctx.createImageData(W,H);
+  const d=img.data;
+  const bgc=bg||[16,19,24];
+  for(let i=0;i<d.length;i+=4){d[i]=bgc[0];d[i+1]=bgc[1];d[i+2]=bgc[2];d[i+3]=255;}
+  const cols=state.terrains.map(t=>hexToRgb(t.color));
+  const pts=latPts(verts,E,pad);
+  for(const t of tris){
+    const [i0,i1,i2]=t.verts;
+    const [x0,y0]=pts[i0],[x1,y1]=pts[i1],[x2,y2]=pts[i2];
+    const c0=cols[labels[i0]],c1=cols[labels[i1]],c2=cols[labels[i2]];
+    const minX=Math.max(0,Math.floor(Math.min(x0,x1,x2))),
+          maxX=Math.min(W-1,Math.ceil(Math.max(x0,x1,x2))),
+          minY=Math.max(0,Math.floor(Math.min(y0,y1,y2))),
+          maxY=Math.min(H-1,Math.ceil(Math.max(y0,y1,y2)));
+    const denom=(y1-y2)*(x0-x2)+(x2-x1)*(y0-y2);
+    if(Math.abs(denom)<1e-9)continue;
+    const eps=-0.02;
+    for(let y=minY;y<=maxY;y++){
+      for(let x=minX;x<=maxX;x++){
+        const w0=((y1-y2)*(x-x2)+(x2-x1)*(y-y2))/denom;
+        const w1=((y2-y0)*(x-x2)+(x0-x2)*(y-y2))/denom;
+        const w2=1-w0-w1;
+        if(w0<eps||w1<eps||w2<eps)continue;
+        const p=(y*W+x)*4;
+        d[p]  =w0*c0[0]+w1*c1[0]+w2*c2[0];
+        d[p+1]=w0*c0[1]+w1*c1[1]+w2*c2[1];
+        d[p+2]=w0*c0[2]+w1*c1[2]+w2*c2[2];
+        d[p+3]=255;
+      }
+    }
+  }
+  ctx.putImageData(img,0,0);
+}
+/* --- рендер: штрихи оверлея на решётке (по флагам рёбер) --- */
+function triCentroid(pts,t){
+  const p=t.verts.map(i=>pts[i]);
+  return [(p[0][0]+p[1][0]+p[2][0])/3,(p[0][1]+p[1][1]+p[2][1])/3];
+}
+function drawOverlayStrokes(ctx,verts,tris,edges,eFlag,feat,E,pad,color){
+  const pts=latPts(verts,E,pad);
+  ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.strokeStyle=color||feat.color;
+  ctx.lineWidth=E*WIDTHS[feat.width];
+  if(feat.geometry==='link'){
+    edges.forEach((e,i)=>{
+      if(!eFlag[i])return;
+      const [x1,y1]=pts[e.a],[x2,y2]=pts[e.b];
+      ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    });
+  }else{
+    // граница гекса: путь строится per-tile (полутрассы центроид↔середина ребра)
+    const roundC=feat.corners==='round';
+    for(const t of tris){
+      const mids=[];
+      t.edges.forEach(ei=>{
+        if(!eFlag[ei])return;
+        const e=edges[ei];
+        mids.push([(pts[e.a][0]+pts[e.b][0])/2,(pts[e.a][1]+pts[e.b][1])/2]);
+      });
+      if(!mids.length)continue;
+      const c=triCentroid(pts,t);
+      ctx.beginPath();
+      if(mids.length===2&&roundC){
+        ctx.moveTo(mids[0][0],mids[0][1]);
+        ctx.quadraticCurveTo(c[0],c[1],mids[1][0],mids[1][1]);
+      }else{
+        for(const m of mids){ctx.moveTo(c[0],c[1]);ctx.lineTo(m[0],m[1]);}
+      }
+      ctx.stroke();
+    }
+  }
+}
+/* --- рендер: шаблон оверлейного слоя (подложка + штрихи) --- */
+function renderOverlayTemplate(ctx,W,H,L,feat,E,pad){
+  ctx.fillStyle='#101318';ctx.fillRect(0,0,W,H);
+  const pts=latPts(L.verts,E,pad);
+  ctx.fillStyle=feat.backdrop;
+  for(const t of L.tris){
+    const p=t.verts.map(i=>pts[i]);
+    ctx.beginPath();ctx.moveTo(p[0][0],p[0][1]);ctx.lineTo(p[1][0],p[1][1]);ctx.lineTo(p[2][0],p[2][1]);ctx.closePath();ctx.fill();
+  }
+  drawOverlayStrokes(ctx,L.verts,L.tris,L.edges,L.eFlag,feat,E,pad);
+}
+/* --- hex-сетка (dual) --- */
+function drawHexGrid(ctx,verts,tris,E,pad){
+  const pts=latPts(verts,E,pad);
+  const adj=Array.from({length:verts.length},()=>[]);
+  tris.forEach((t,ti)=>t.verts.forEach(v=>adj[v].push(ti)));
+  const cent=tris.map(t=>triCentroid(pts,t));
+  ctx.strokeStyle='rgba(90,179,184,0.65)';
+  ctx.lineWidth=1;
+  ctx.setLineDash([4,3]);
+  for(let v=0;v<verts.length;v++){
+    const c=pts[v];
+    const ring=adj[v].map(ti=>({p:cent[ti],a:Math.atan2(cent[ti][1]-c[1],cent[ti][0]-c[0])}))
+      .sort((q,w)=>q.a-w.a);
+    if(ring.length<2)continue;
+    ctx.beginPath();
+    ctx.moveTo(ring[0].p[0],ring[0].p[1]);
+    for(let i=1;i<ring.length;i++)ctx.lineTo(ring[i].p[0],ring[i].p[1]);
+    if(ring.length===6)ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+/* --- разметка --- */
+function layerTileShortId(L,key){
+  if(L.kind==='terrain'){
+    return key[0]+'·'+key.slice(1).split(',').join('');
+  }
+  return key[0]+'/'+[...key.slice(1)].map(ch=>ch==='0'?'·':'x').join('');
+}
+function renderMarkup(ctx,L,E,pad){
+  const pts=latPts(L.verts,E,pad);
+  // апрон: затемняем фейковые тайлы
+  ctx.fillStyle='rgba(20,23,30,0.55)';
+  L.tris.forEach((t,i)=>{
+    if(L.interior[i])return;
+    const [a,b,c]=t.verts.map(j=>pts[j]);
+    ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.lineTo(c[0],c[1]);ctx.closePath();ctx.fill();
+  });
+  ctx.lineWidth=1;
+  ctx.strokeStyle='rgba(255,255,255,0.30)';
+  for(const t of L.tris){
+    const [a,b,c]=t.verts.map(i=>pts[i]);
+    ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.lineTo(c[0],c[1]);ctx.closePath();ctx.stroke();
+  }
+  const fs=Math.max(7,Math.round(E*0.13));
+  ctx.font=fs+'px ui-monospace,monospace';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(const [key,rec] of L.tileMap){
+    rec.instances.forEach(ti=>{
+      const t=L.tris[ti];
+      const [a,b,c]=t.verts.map(i=>pts[i]);
+      const cx=(a[0]+b[0]+c[0])/3,cy=(a[1]+b[1]+c[1])/3;
+      const canon=ti===rec.canonical;
+      if(canon){
+        ctx.strokeStyle='rgba(201,162,39,0.9)';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.lineTo(c[0],c[1]);ctx.closePath();ctx.stroke();
+        ctx.lineWidth=1;
+      }
+      ctx.fillStyle=canon?'rgba(255,240,200,0.95)':'rgba(255,255,255,0.35)';
+      ctx.fillText(layerTileShortId(L,key),cx,cy);
+    });
+  }
+  if(L.kind==='terrain'){
+    for(let i=0;i<L.verts.length;i++){
+      const [x,y]=pts[i];
+      ctx.fillStyle=state.terrains[L.labels[i]].color;
+      ctx.beginPath();ctx.arc(x,y,Math.max(2.5,E*0.055),0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,0.6)';ctx.stroke();
+    }
+  }
+}
+/* --- сборка всех слоёв --- */
+const layerCanvases=[]; // чистые шаблоны per layer
+/* перерисовка канваса ОДНОГО слоя в текущем вложении (tri/rect);
+   покрытие/ключи не пересобираются — раскладка тайлов та же */
+function renderOneLayer(L,i){
+  const E=state.edge,pad=Math.round(E*0.5);
+  const [W,H]=latSize(L.verts,E,pad);
+  L.px={E,pad,W,H};
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  let line;
+  if(L.kind==='terrain'){
+    // ч/б каналы силуэтного конвейера — всегда
+    L.maskCanvases=state.terrains.map(()=>{
+      const m=document.createElement('canvas');m.width=W;m.height=H;
+      const mc=m.getContext('2d');mc.fillStyle='#000';mc.fillRect(0,0,W,H);
+      return m;
+    });
+    const maskCtxs=L.maskCanvases.map(m=>m.getContext('2d'));
+    // канвас карты высот гор (если есть горные террейны)
+    const hasMt=state.terrains.some(t=>t.mountain);
+    let mtHCtx=null;
+    if(hasMt){L.heightCanvas=document.createElement('canvas');L.heightCanvas.width=W;L.heightCanvas.height=H;mtHCtx=L.heightCanvas.getContext('2d');mtHCtx.fillStyle='#000';mtHCtx.fillRect(0,0,W,H);}
+    else L.heightCanvas=null;
+    if(state.renderMode==='mask'){
+      renderTerrainRegions(ctx,W,H,L.verts,L.tris,L.labels,E,pad,maskCtxs,mtHCtx);
+    }else{
+      renderTerrainFill(ctx,W,H,L.verts,L.tris,L.labels,E,pad);
+      renderTerrainRegions(null,W,H,L.verts,L.tris,L.labels,E,pad,maskCtxs,mtHCtx);
+    }
+    line=`террейн: ${L.needed} тайлов + апрон ${L.interior.filter(x=>!x).length} · сетка ${L.cols}×${L.rows} · атлас ${W}×${H}`;
+  }else{
+    renderOverlayTemplate(ctx,W,H,L,state.features[L.featIdx],E,pad);
+    const m=document.createElement('canvas');m.width=W;m.height=H;
+    const mc=m.getContext('2d');mc.fillStyle='#000';mc.fillRect(0,0,W,H);
+    drawOverlayStrokes(mc,L.verts,L.tris,L.edges,L.eFlag,state.features[L.featIdx],E,pad,'#ffffff');
+    L.maskCanvas=m;
+    line=`${state.features[L.featIdx].name}: 16 тайлов + апрон ${L.interior.filter(x=>!x).length} (${state.features[L.featIdx].geometry==='border'?'граница гекса':'связь'}) · сетка ${L.cols}×${L.rows} · атлас ${W}×${H}`;
+  }
+  layerCanvases[i]=cv;
+  return line;
+}
+function renderAllLayers(ms){
+  const layers=state.layers;
+  if(!layers)return;
+  layerCanvases.length=layers.length;
+  const statLines=layers.map((L,i)=>renderOneLayer(L,i));
+  const spTxt=state.space==='rect'
+    ?`прямоугольное · ячейка ${cellPx().map(x=>Math.round(x)).join('×')} px · диагональ едина`
+    :'треугольное';
+  $('stats').textContent=statLines.join('\n')
+    +`\nпространство: ${spTxt} · режим ${state.mode==='flat'?'flat-top ◀▶':'pointy-top ▲▼'} · ребро ${state.edge} px`
+    +(ms!=null?` · сборка ${ms} мс`:' · перерисовано');
+}
+$('btnBuild').addEventListener('click',()=>{
+  const k=state.terrains.length;
+  state.edge=parseInt($('selEdge').value,10);
+  state.seed=parseInt($('selSeed').value,10);
+  $('btnBuild').disabled=true;
+  setTimeout(()=>{
+    try{
+      const t0=performance.now();
+      const rng=seededRng(state.seed*7919+k*131);
+      const layers=[];
+      const T=buildTerrainLayer(k,rng);
+      if(!T){toast('покрытие террейна не сошлось — смените seed');return;}
+      layers.push(T);
+      for(let fi=0;fi<state.features.length;fi++){
+        const O=buildOverlayLayer(fi,seededRng(state.seed*7919+1000+fi*337));
+        if(!O){toast('покрытие оверлея не сошлось — смените seed');return;}
+        layers.push(O);
+      }
+      state.layers=layers;
+      state.stale=false;
+      state.imported={};
+      state.curLayer=0;
+      $('btnSrcImported').disabled=true;
+      if(state.preview.src==='imported'){state.preview.src='template';syncSrcSeg();}
+      const ms=Math.round(performance.now()-t0);
+      renderAllLayers(ms);
+      renderLayerTabs();
+      state.curChannel=0;
+      renderChannelTabs();
+      drawAtlasView();
+      updateImportNote();
+      $('buildBadge').innerHTML='<span class="badge ok">актуальны</span>';
+      ['btnPngTemplate','btnPngMarkup','btnPngHex','btnPngMasks','btnJson','btnImportWrap'].forEach(id=>$(id).disabled=false);
+      initPreview(true);
+      toast('слои собраны: '+layers.length+' атлас(а)');
+    }finally{$('btnBuild').disabled=false;}
+  },30);
+});
+function drawAtlasView(){
+  if(!state.layers)return;
+  const L=state.layers[state.curLayer];
+  const {W,H,E,pad}=L.px;
+  const cv=$('cvAtlas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  if(state.curChannel===0){
+    ctx.drawImage(layerCanvases[state.curLayer],0,0);
+  }else if(L.kind==='terrain'){
+    const hi=L.heightCanvas&&state.curChannel===state.terrains.length+1;
+    ctx.drawImage(hi?L.heightCanvas:L.maskCanvases[state.curChannel-1],0,0);
+  }else{
+    ctx.drawImage(L.maskCanvas,0,0);
+  }
+  if($('chkHex').checked)drawHexGrid(ctx,L.verts,L.tris,E,pad);
+  if($('chkMarkup').checked)renderMarkup(ctx,L,E,pad);
+}
+$('chkMarkup').addEventListener('change',drawAtlasView);
+$('chkHex').addEventListener('change',drawAtlasView);
+
+/* --- экспорт --- */
+function layerSlug(i){
+  const L=state.layers[i];
+  return L.kind==='terrain'?'terrain':('overlay'+(L.featIdx+1));
+}
+function download(blob,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+}
+$('btnPngMasks').addEventListener('click',()=>{
+  const L=state.layers[state.curLayer];
+  const {W,H}=L.px;
+  if(L.kind==='terrain'){
+    // RGBA-пак: R,G,B,A = террейны 0..3 (как channel packing в UE)
+    const out=document.createElement('canvas');out.width=W;out.height=H;
+    const octx=out.getContext('2d');
+    const oid=octx.createImageData(W,H);
+    const chans=L.maskCanvases.map(m=>m.getContext('2d').getImageData(0,0,W,H).data);
+    const k=chans.length;
+    for(let p=0;p<oid.data.length;p+=4){
+      oid.data[p]  =chans[0]?chans[0][p]:0;
+      oid.data[p+1]=chans[1]?chans[1][p]:0;
+      oid.data[p+2]=chans[2]?chans[2][p]:0;
+      oid.data[p+3]=k>3?chans[3][p]:255;
+    }
+    octx.putImageData(oid,0,0);
+    out.toBlob(b=>download(b,'triatlas_terrain_masks'+spaceSfx()+'.png'),'image/png');
+    if(L.heightCanvas)L.heightCanvas.toBlob(b=>download(b,'triatlas_mountain_heightmap'+spaceSfx()+'.png'),'image/png');
+  }else{
+    L.maskCanvas.toBlob(b=>download(b,'triatlas_'+layerSlug(state.curLayer)+'_mask'+spaceSfx()+'.png'),'image/png');
+  }
+});
+$('btnPngTemplate').addEventListener('click',()=>{
+  layerCanvases[state.curLayer].toBlob(b=>download(b,'triatlas_'+layerSlug(state.curLayer)+'_template'+spaceSfx()+'.png'),'image/png');
+});
+$('btnPngMarkup').addEventListener('click',()=>{
+  const L=state.layers[state.curLayer];
+  const {W,H,E,pad}=L.px;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.globalAlpha=0.45;ctx.drawImage(layerCanvases[state.curLayer],0,0);ctx.globalAlpha=1;
+  renderMarkup(ctx,L,E,pad);
+  cv.toBlob(b=>download(b,'triatlas_'+layerSlug(state.curLayer)+'_markup'+spaceSfx()+'.png'),'image/png');
+});
+$('btnPngHex').addEventListener('click',()=>{
+  const L=state.layers[state.curLayer];
+  const {W,H,E,pad}=L.px;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.globalAlpha=0.45;ctx.drawImage(layerCanvases[state.curLayer],0,0);ctx.globalAlpha=1;
+  drawHexGrid(ctx,L.verts,L.tris,E,pad);
+  const pts=latPts(L.verts,E,pad);
+  for(let i=0;i<pts.length;i++){
+    if(L.kind==='terrain')ctx.fillStyle=state.terrains[L.labels[i]].color;
+    else ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.beginPath();ctx.arc(pts[i][0],pts[i][1],Math.max(2.5,E*0.055),0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.6)';ctx.stroke();
+  }
+  cv.toBlob(b=>download(b,'triatlas_'+layerSlug(state.curLayer)+'_hexgrid'+spaceSfx()+'.png'),'image/png');
+});
+$('btnJson').addEventListener('click',()=>{
+  const layersJson=state.layers.map((L,li)=>{
+    const {E,pad,W,H}=L.px;
+    const pts=latPts(L.verts,E,pad).map(p=>p.map(x=>+x.toFixed(2)));
+    const [cw,ch]=cellPx();
+    const triGeom=ti=>{
+      const t=L.tris[ti];
+      const p=t.verts.map(i=>pts[i]);
+      const xs=p.map(q=>q[0]),ys=p.map(q=>q[1]);
+      const bx=Math.min(...xs),by=Math.min(...ys);
+      const g={
+        tri_index:ti,points:p,
+        bbox:[+bx.toFixed(2),+by.toFixed(2),+(Math.max(...xs)-bx).toFixed(2),+(Math.max(...ys)-by).toFixed(2)],
+        centroid:[+(xs.reduce((s,x)=>s+x)/3).toFixed(2),+(ys.reduce((s,y)=>s+y)/3).toFixed(2)]
+      };
+      // в rect-вложении bbox половинки = вся её ячейка → целочисленный адрес
+      if(state.space==='rect')g.cell=[Math.round((bx-pad)/cw),Math.round((by-pad)/ch)];
+      return g;
+    };
+    const tiles=[];
+    for(const [key,rec] of L.tileMap){
+      const t=L.tris[rec.canonical];
+      const base={id:key,orientation:t.orient,canonical:triGeom(rec.canonical),instances:rec.instances.map(triGeom)};
+      if(L.kind==='terrain'){
+        base.corners=t.verts.map(i=>L.labels[i]);
+      }else{
+        base.edge_flags=t.edges.map(ei=>L.eFlag[ei]); // [apex-base_left, apex-base_right, base]
+      }
+      tiles.push(base);
+    }
+    const out={
+      layer_index:li,
+      kind:L.kind,
+      atlas:{file:'triatlas_'+layerSlug(li)+'_template'+spaceSfx()+'.png',width:W,height:H},
+      edge_px:E,padding_px:pad,
+      grid:{cols:L.cols,rows:L.rows,triangles:L.tris.length,interior_triangles:L.interior.filter(Boolean).length},
+      apron_note:'граничные треугольники — апрон: рисуются в шаблоне для непрерывности контекста, но не входят в tiles и не нарезаются',
+      tiles
+    };
+    if(L.kind==='terrain'){
+      out.lookup='(orientation, corners[3]) -> tile id; corners = террейны hex-ячеек в углах';
+      out.vertices=L.verts.map((vt,i)=>({i,xy:pts[i],terrain:L.labels[i]}));
+      out.masks={
+        packed_file:'triatlas_terrain_masks'+spaceSfx()+'.png',
+        packing:'канал на террейн: R=0, G=1, B=2, A=3 (если террейнов меньше — A=255)',
+        overlap_width_per_dom:state.overW,
+        overlap_semantics:`каналы масок ПЕРЕСЕКАЮТСЯ в лентах нахлёста: маска проигравшего кончается на линии раздела (t=0.5 ребра), маска победителя продолжается за неё на ${state.overW}·|dom| длины ребра; композит кладёт победителя пары поверх`,
+        silhouettes:state.terrains.map((t,i)=>({terrain:i,
+          silhouette:t.crownFill?'balls-voronoi':'noise-curve',
+          noise_type:({sin:'sinusoid',wE:'worley-euclidean',wM:'worley-manhattan',wCh:'worley-chebyshev'})[t.noiseType],
+          profile:t.noiseType==='sin'?'—':(t.f2?'F2-F1':'F1'),
+          element_size:t.elem,strength:t.strength,octaves:t.oct,roughness:t.rough,
+          sharpness:t.sharp,rounding:t.round,dither_px:t.dither,
+          balls:t.crownFill?{
+            understory:understoryOf(i),
+            corner_sites:{radius_rel_edge:+(t.crownSize*0.5).toFixed(3)},
+            edge_sites:{size_rel_edge:t.crownSize,density:t.crownDens,step_rel_edge:+(t.crownSize*0.55).toFixed(3),front:'smoothstep(0.62,0.24,t) от шаровой вершины; отсечка t+r/elen>0.86'},
+            interior_sites:{count:5,margin_px:2}
+          }:null,
+          mountain:t.mountain?{detail:t.mtDetail,ridge_f1_f2:t.mtRidge,relief:t.mtRelief,heightmap:'triatlas_mountain_heightmap'+spaceSfx()+'.png'}:null})),
+        mountain_note:'mountain: заливка региона террейна рельефом cellular Voronoi, WANG-ТАЙЛИРУЕМЫЙ. Точки Voronoi — в ЦЕНТРОИДАХ треугольников решётки (без джиттера): соты, их Voronoi = сама решётка ⇒ хребты (стены ячеек) на рёбрах, пики (вершины Voronoi) на вершинах. Поле — чистая функция геометрии решётки ⇒ тайлы одного ключа идентичны, а на общем ребре два центроида-отражения дают перпендикулярный биссектор = само ребро ⇒ соседи сходятся. detail (1..3) — геометрич. субразбиение (n² под-центроидов, выровнено по решётке) → тоже тайлируемо. ridge_f1_f2: 0=F1 (бассейны в центрах) ↔ 1=F2−F1 (острые хребты). Цвет — по высоте (светлое=высоко, multiply). Экспорт: канал «карта высот гор» (heightmap PNG, grayscale)',
+        noise_note:'кривая-силуэт: смещение по нормали ребра = strength·edgeNoise1D(type, elem, oct, rough) ×sin(πt) (0 на концах — seam-инвариант). Типы: sinusoid→волны, worley-euclidean→дуги, worley-manhattan→зубцы, worley-chebyshev→террасы; F2−F1→гребни',
+        balls_note:'silhouette=balls-voronoi: граница террейна = контур ОБЪЕДИНЕНИЯ кругов (край радиуса = силуэт), tile grammar из 3 классов sites. corner_sites: круг у вершины-метки (функция метки, общий для тайлов вокруг вершины). edge_sites: центр НА ребре, сид=hash(axisClass|minLabel|maxLabel) — чистая функция сигнатуры ребра (класс оси решётки 0/1/2 + канонич. пара меток), оба тайла рисуют полукруги → полный круг совпадает; axisClass даёт 3× вариативности без потери бесшовности. interior_sites: хэш тайла (orient+метки), радиус ≤ dist(центр,∂triangle)−margin ⇒ рёбер не касается. Рендер: фон=partition с заменой шаровых меток на understory (почву=негативное пространство между кронами), сверху overlay кругов. Тайлируется: всё, что может коснуться границы тайла — функция только общих данных ребра/вершины',
+        pair_order:Object.entries(state.dom).map(([key,v])=>{
+          const [a,b]=key.split('-').map(Number);
+          return {a,b,value:v,meaning:v>0?state.terrains[a].name+' поверх '+state.terrains[b].name:state.terrains[b].name+' поверх '+state.terrains[a].name};
+        }),
+        pair_order_note:'антисимметричная парная матрица; циклы допустимы — каждая граница локальна для своей пары',
+        style_rule:'видимую кромку пары стилизует победитель; обе кривые пары (раздел и кромка победителя) строятся от одного профиля шума — лента нахлёста не самопересекается',
+        freq_stabilization:'число волн шума масштабируется на |концы видимой кромки over| / |концы base|, чтобы физическая частота видимой кромки не «дышала» при изменении нахлёста; скрытый base поглощает компенсацию, точки пересечения рёбер не двигаются',
+        seam_invariant:`обе точки пересечения ребра (раздел 0.5 и кромка победителя 0.5±${state.overW}·|dom|) — чистые функции пары; шум/скругление/диттеринг — только в интерьере (seed=комбо), на концах кривых занулены`
+      };
+    }else{
+      const f=state.features[L.featIdx];
+      out.feature={
+        id:L.featIdx+1,name:f.name,color:f.color,
+        geometry:f.geometry,
+        geometry_note:f.geometry==='border'
+          ?'вдоль границы гекса: центроид T1 → середина ребра → центроид T2 (dual: ребро решётки ↔ ребро гекса между теми же ячейками)'
+          :'по связи: от центра hex-ячейки к центру соседней (вдоль ребра решётки)',
+        stroke_px:+(E*WIDTHS[f.width]).toFixed(1),
+        backdrop:f.backdrop,
+        forbidden_terrains:[...f.forbidden],
+        runtime_rule:'флаг допустим, если террейны обеих hex-ячеек ребра не входят в forbidden_terrains'
+      };
+      out.lookup='(orientation, edge_flags[3]) -> tile id; флаги независимы от террейна';
+      out.mask_file='triatlas_'+layerSlug(li)+'_mask'+spaceSfx()+'.png';
+      out.feature.corners=state.features[L.featIdx].corners;
+    }
+    return out;
+  });
+  const rules={
+    format:'triatlas-rules',
+    version:4,
+    generated:new Date().toISOString(),
+    mode:state.mode,
+    render_mode:state.renderMode,
+    atlas_space:state.space,
+    rect_space:state.space==='rect'?{
+      shear:'T(u,v)=(u−v/√3, v·2/√3); вершина (r,c) → (c−⌊r/2⌋, r) — целые узлы квадратной сетки',
+      cell_px:cellPx().map(x=>Math.round(x)),
+      halves:'пара U/D-треугольников = одна ячейка; диагональ едина для всей решётки; bbox тайла = его ячейка, поле cell — целочисленный адрес [col,row] от угла атласа (после padding)',
+      pixel_rule:'внутри ячейки W×H пиксель (px,py) принадлежит половине с прямым углом, если (px+0.5)/W+(py+0.5)/H < 1, иначе второй; предикат один для всех ячеек — разбиение точное, без дыр и перекрытий',
+      note:'позиции тайлов целочисленны: нарезка и сборка карты — блиты без ресэмплинга; движок должен собирать карту в этом же свёрнутом пространстве (hex-ячейка = блок 2×2 без двух противоположных углов); ряды решётки в атласе смещены лесенкой — пустые углы вне апрона'
+    }:undefined,
+    orientation_semantics:{
+      U:state.mode==='pointy'?'apex up ▲':'apex left ◀',
+      D:state.mode==='pointy'?'apex down ▽':'apex right ▶'
+    },
+    corner_order:['apex','base_left','base_right'],
+    edge_order:['apex-base_left','apex-base_right','base_left-base_right'],
+    dual_note:'Вершины треугольной решётки = ячейки hex-сетки. Ребро решётки ↔ ребро гекса между теми же двумя ячейками (dual), поэтому оба типа геометрии фич ключуются одним и тем же флагом ребра.',
+    composition:'рантайм: террейн-тайл по углам, затем оверлеи в порядке layer_index (каждый — по своим рёберным флагам). Совпадение флагов разных слоёв на одном ребре допустимо (мост = дорога поверх реки).',
+    matching_rule:'Стыковка соседних треугольников автоматична: террейны — по общим вершинам, флаги слоёв — по общим рёбрам (corner Wang + edge Wang, раздельно по слоям).',
+    terrains:state.terrains.map((t,i)=>({id:i,name:t.name,color:t.color})),
+    layers:layersJson
+  };
+  download(new Blob([JSON.stringify(rules,null,1)],{type:'application/json'}),'triatlas_rules'+spaceSfx()+'.json');
+});
+
+/* --- импорт дорисованного слоя (с chroma key подложки для оверлеев) --- */
+function updateImportNote(){
+  const li=state.curLayer;
+  const imp=state.imported[li];
+  const L=state.layers&&state.layers[li];
+  if(!L){$('importNote').textContent='';return;}
+  const name=L.kind==='terrain'?'террейн':state.features[L.featIdx].name;
+  $('importNote').textContent=imp
+    ?`слой «${name}»: загружено ${imp.w}×${imp.h}`+(L.kind!=='terrain'?' · подложка вырезана (chroma key)':'')
+    :`слой «${name}»: дорисованный вариант не загружен`;
+}
+$('fileImport').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;
+  const li=state.curLayer;
+  const L=state.layers[li];
+  const img=new Image();
+  img.onload=()=>{
+    let src=document.createElement('canvas');
+    src.width=img.width;src.height=img.height;
+    const sctx=src.getContext('2d');
+    sctx.drawImage(img,0,0);
+    if(L.kind!=='terrain'){
+      // chroma key: подложка -> прозрачность
+      const bd=hexToRgb(state.features[L.featIdx].backdrop);
+      const id=sctx.getImageData(0,0,src.width,src.height);
+      const d=id.data;
+      for(let i=0;i<d.length;i+=4){
+        const dr=d[i]-bd[0],dg=d[i+1]-bd[1],db=d[i+2]-bd[2];
+        if(dr*dr+dg*dg+db*db<45*45)d[i+3]=0;
+      }
+      sctx.putImageData(id,0,0);
+    }
+    state.imported[li]={srcCanvas:src,w:img.width,h:img.height};
+    $('btnSrcImported').disabled=false;
+    state.preview.src='imported';syncSrcSeg();
+    updateImportNote();renderPreview();
+    toast('слой загружен — проверьте стыковку внизу');
+  };
+  img.onerror=()=>toast('не удалось прочитать изображение');
+  img.src=URL.createObjectURL(f);
+  e.target.value='';
+});
+function syncSrcSeg(){
+  [...$('segSrc').children].forEach(x=>{
+    if(x.dataset.src)x.classList.toggle('on',x.dataset.src===state.preview.src);
+  });
+}
+
+/* --- превью-карта --- */
+let pv=null;
+function ensurePv(){
+  const p=state.preview;
+  if(!pv){
+    const verts=buildLattice(p.cols,p.rows);
+    const tris=buildTriangles(p.cols,p.rows);
+    const edges=buildEdges(tris);
+    pv={verts,tris,edges};
+  }
+  return pv;
+}
+function edgeValid(fi,la,lb){
+  const fb=state.features[fi].forbidden;
+  return !fb.has(la)&&!fb.has(lb);
+}
+function initPreview(randomize){
+  const p=state.preview;
+  const g=ensurePv();
+  const n=g.verts.length;
+  if(!p.labels||p.labels.length!==n||randomize){
+    const rng=seededRng(42+state.seed);
+    p.labels=Array.from({length:n},()=>Math.floor(rng()*state.terrains.length));
+    p.eF=state.features.map(()=>new Array(g.edges.length).fill(0));
+    state.features.forEach((f,fi)=>{
+      for(let i=0;i<g.edges.length;i++){
+        const e=g.edges[i];
+        if(rng()<0.14&&edgeValid(fi,p.labels[e.a],p.labels[e.b]))p.eF[fi][i]=1;
+      }
+    });
+  }
+  p.labels=p.labels.map(l=>Math.min(l,state.terrains.length-1));
+  if(!p.eF||p.eF.length!==state.features.length)p.eF=state.features.map(()=>new Array(g.edges.length).fill(0));
+  renderPreview();
+}
+function previewGeom(){
+  const wrapW=Math.min(document.querySelector('#secPreview .canvas-wrap').clientWidth-12,720);
+  const g=ensurePv();
+  const [uw,uh]=latSize(g.verts,1,0); // bbox решётки в единицах ребра
+  const E=Math.max(24,Math.floor((wrapW-20)/uw));
+  const pad=Math.round(E*0.4);
+  return {E,pad,W:Math.ceil(uw*E+2*pad),H:Math.ceil(uh*E+2*pad)};
+}
+function drawImportedLayerOnPreview(ctx,L,li,keys,g,pts,E){
+  const imp=state.imported[li];
+  const aE=L.px.E;
+  const s=E/aE;
+  const aPts=latPts(L.verts,aE,L.px.pad);
+  const imgSX=imp.w/L.px.W,imgSY=imp.h/L.px.H;
+  g.tris.forEach((t,ti)=>{
+    const key=keys[ti];
+    if(key===null)return;
+    const rec=L.tileMap.get(key);
+    if(!rec)return;
+    const ct=L.tris[rec.canonical];
+    const cp=ct.verts.map(i=>aPts[i]);
+    const tp=t.verts.map(i=>pts[i]);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(tp[0][0],tp[0][1]);ctx.lineTo(tp[1][0],tp[1][1]);ctx.lineTo(tp[2][0],tp[2][1]);
+    ctx.closePath();ctx.clip();
+    const ox=tp[0][0]-s*cp[0][0],oy=tp[0][1]-s*cp[0][1];
+    ctx.setTransform(s/imgSX,0,0,s/imgSY,ox,oy);
+    ctx.drawImage(imp.srcCanvas,0,0);
+    ctx.restore();
+    ctx.setTransform(1,0,0,1,0,0);
+  });
+}
+function renderPreview(){
+  if(!state.layers)return;
+  const p=state.preview;
+  const g=ensurePv();
+  const {E,pad,W,H}=previewGeom();
+  const cv=$('cvPreview');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#101318';ctx.fillRect(0,0,W,H);
+  const pts=latPts(g.verts,E,pad);
+  const useImported=p.src==='imported';
+
+  // слой террейна
+  const TL=state.layers[0];
+  if(useImported&&state.imported[0]){
+    const keys=g.tris.map(t=>cornerKey(t.orient,[p.labels[t.verts[0]],p.labels[t.verts[1]],p.labels[t.verts[2]]]));
+    drawImportedLayerOnPreview(ctx,TL,0,keys,g,pts,E);
+  }else if(state.renderMode==='mask'){
+    renderTerrainRegions(ctx,W,H,g.verts,g.tris,p.labels,E,pad,null);
+  }else{
+    renderTerrainFill(ctx,W,H,g.verts,g.tris,p.labels,E,pad);
+  }
+  // оверлеи в порядке списка
+  state.features.forEach((f,fi)=>{
+    const li=1+fi;
+    const L=state.layers[li];
+    if(useImported&&state.imported[li]){
+      const keys=g.tris.map(t=>{
+        const flags=[p.eF[fi][t.edges[0]],p.eF[fi][t.edges[1]],p.eF[fi][t.edges[2]]];
+        if(flags[0]===0&&flags[1]===0&&flags[2]===0)return null; // пустой тайл не рисуем
+        return flagKey(t.orient,flags);
+      });
+      drawImportedLayerOnPreview(ctx,L,li,keys,g,pts,E);
+    }else{
+      drawOverlayStrokes(ctx,g.verts,g.tris,g.edges,p.eF[fi],f,E,pad);
+    }
+  });
+  // ручки
+  for(let i=0;i<g.verts.length;i++){
+    const [x,y]=pts[i];
+    ctx.fillStyle=state.terrains[p.labels[i]].color;
+    ctx.beginPath();ctx.arc(x,y,Math.max(4,E*0.10),0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.65)';ctx.lineWidth=1.5;ctx.stroke();
+  }
+  if(state.features.length){
+    g.edges.forEach((e,i)=>{
+      const [x1,y1]=pts[e.a],[x2,y2]=pts[e.b];
+      const mx=(x1+x2)/2,my=(y1+y2)/2;
+      const R=Math.max(3,E*0.06);
+      const on=state.features.map((f,fi)=>p.eF[fi][i]);
+      if(on.every(v=>!v)){
+        ctx.beginPath();ctx.arc(mx,my,R,0,Math.PI*2);
+        ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.lineWidth=1;ctx.stroke();
+      }else if(state.features.length===1||on.filter(v=>v).length===1){
+        const fi=on.findIndex(v=>v);
+        ctx.beginPath();ctx.arc(mx,my,R,0,Math.PI*2);
+        ctx.fillStyle=state.features[fi].color;ctx.fill();
+      }else{
+        ctx.beginPath();ctx.arc(mx,my,R,-Math.PI/2,Math.PI/2);
+        ctx.fillStyle=state.features[0].color;ctx.fill();
+        ctx.beginPath();ctx.arc(mx,my,R,Math.PI/2,-Math.PI/2);
+        ctx.fillStyle=state.features[1].color;ctx.fill();
+      }
+    });
+  }
+}
+$('cvPreview').addEventListener('pointerdown',e=>{
+  if(!state.layers)return;
+  const p=state.preview;
+  const g=ensurePv();
+  const cv=$('cvPreview');
+  const r=cv.getBoundingClientRect();
+  const sx=cv.width/r.width,sy=cv.height/r.height;
+  const mx=(e.clientX-r.left)*sx,my=(e.clientY-r.top)*sy;
+  const {E,pad}=previewGeom();
+  const pts=latPts(g.verts,E,pad);
+  let bv=-1,bvd=1e18;
+  pts.forEach((q,i)=>{const d=(q[0]-mx)**2+(q[1]-my)**2;if(d<bvd){bvd=d;bv=i;}});
+  let be=-1,bed=1e18;
+  if(state.features.length){
+    g.edges.forEach((ed,i)=>{
+      const q1=pts[ed.a],q2=pts[ed.b];
+      const qx=(q1[0]+q2[0])/2,qy=(q1[1]+q2[1])/2;
+      const d=(qx-mx)**2+(qy-my)**2;
+      if(d<bed){bed=d;be=i;}
+    });
+  }
+  const vHit=bvd<(E*0.30)**2, eHit=be>=0&&bed<(E*0.28)**2;
+  if(eHit&&(!vHit||bed<bvd)){
+    const ed=g.edges[be];
+    const la=p.labels[ed.a],lb=p.labels[ed.b];
+    // валидные комбинации подмножеств фич на ребре
+    const combos=[[]];
+    const validF=state.features.map((f,fi)=>edgeValid(fi,la,lb)?fi:-1).filter(x=>x>=0);
+    validF.forEach(fi=>combos.push([fi]));
+    if(validF.length===2)combos.push([...validF]);
+    const cur=state.features.map((f,fi)=>p.eF[fi][be]);
+    const curSet=cur.map((v,fi)=>v?fi:-1).filter(x=>x>=0).join(',');
+    let idx=combos.findIndex(c=>c.join(',')===curSet);
+    idx=(idx+1)%combos.length;
+    state.features.forEach((f,fi)=>{p.eF[fi][be]=combos[idx].includes(fi)?1:0;});
+    renderPreview();
+  }else if(vHit){
+    p.labels[bv]=(p.labels[bv]+1)%state.terrains.length;
+    state.features.forEach((f,fi)=>{
+      g.edges.forEach((ed,i)=>{
+        if(p.eF[fi][i]&&(ed.a===bv||ed.b===bv)){
+          if(!edgeValid(fi,p.labels[ed.a],p.labels[ed.b]))p.eF[fi][i]=0;
+        }
+      });
+    });
+    renderPreview();
+  }
+});
+$('btnRandMap').addEventListener('click',()=>initPreview(true));
+$('btnClearMap').addEventListener('click',()=>{
+  state.preview.labels=state.preview.labels.map(()=>0);
+  state.preview.eF=state.preview.eF.map(arr=>arr.map(()=>0));
+  renderPreview();
+});
+window.addEventListener('resize',()=>{drawRhythmSample();if(state.layers)renderPreview();});
+
+/* init */
+renderTerrains();
+renderFeatures();
+markStale();
+</script>
+</body>
+</html>
