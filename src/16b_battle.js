@@ -23,6 +23,8 @@ const BATTLE_COMPS={
   graves:[['skeleton','skeleton'],['skeleton','skeleton','necromancer'],['necromancer','skeleton','skeleton']],
   necro:[['skeleton','skeleton','necromancer'],['skeleton','necromancer','necromancer'],['necromancer','skeleton','skeleton','skeleton']],
   delve:[['goblin','goblin','goblin'],['magmaatr','goblin','goblin'],['fireatr','magmaatr']],
+  ruins:[['skeleton','skeleton'],['skeleton','skeleton','necromancer']], // древние руины (v2.2)
+  bld:[['bandit','goblin','goblin']], // мародёры в развалинах зданий (v2.2)
 };
 function battleComp(lairId,stageIdx){
   const arr=BATTLE_COMPS[lairId]||BATTLE_COMPS.camp;
@@ -34,10 +36,14 @@ function makeBattle(opts){
   const hs=partyHeroes();
   const mul=opts.mul||1;
   const stageIdx=opts.stageIdx||0;
+  // кулдауны (v2.2): интерактивный бой в браузере — герой бьёт по клику,
+  // когда заряд полон; враги бьют сами по своему кулдауну (заряд виден игроку)
+  const CD_CLS={tank:3.0,bruiser:2.3,mage:3.4,support:2.9};
   const party=hs.map(u=>({side:'party',name:u.hero.name,cls:u.hero.cls,
     row:(u.hero.cls==='tank'||u.hero.cls==='bruiser')?'front':'back',
     hp:u.hero.hp,maxHp:u.hero.maxHp,
     atk:(u.hero.atk+itemAtk(u)+skillAtkBonus(u,stageIdx))*(u.hero.cls==='mage'?1.3:1),
+    cd:0,cdMax:CD_CLS[u.hero.cls]||2.8,
     caster:u.hero.cls==='mage',healer:u.hero.cls==='support',uref:u}));
   const comp=battleComp(L.id,stageIdx);
   const ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
@@ -46,7 +52,8 @@ function makeBattle(opts){
   const enemies=comp.map(k=>{const d=ENEMY_DEFS[k];
     const hp=Math.max(3,Math.round(ehp*d.hpW/hpW));
     return {side:'enemy',name:d.nm,key:k,row:d.row,hp,maxHp:hp,
-      atk:eatk*d.atkW/atkW,caster:!!d.caster,def:d};
+      atk:eatk*d.atkW/atkW,cd:0,cdMax:(d.caster?4.0:3.1)+(S.rng()*0.6-0.3),
+      caster:!!d.caster,def:d};
   });
   return {party,enemies,round:0,over:false,win:false,retreat:false,
     ambushed:!!opts.ambushed,thief:hs.some(u=>u.hero.thief),

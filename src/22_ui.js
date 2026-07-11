@@ -336,6 +336,12 @@ function updateInspector(){
           (b.delve?' · <b>пати внутри</b>':'')+'</div>'+
           '<div class="row"><button class="qbtn" data-delve="'+S.pin.id+'"'+((activeSlot()&&!S.party&&dm<b.tier)?'':' disabled')+'>Спуск в шахту</button></div>';
       }
+    }else if(b.built&&(b.ruined||b.abandoned)){
+      // v2.2: развалины любого здания — данжен на одну зачистку героями
+      if(b.dgnDone)extra+='<div class="row">🏚 развалины зачищены героями</div>';
+      else if(S.lairAt[idx(b.x,b.y)]<0)
+        extra+='<div class="row"><button class="qbtn" data-delve="'+S.pin.id+'"'+
+          ((activeSlot()&&!S.party)?'':' disabled')+'>Зачистить развалины</button></div>';
     }
     if(b.built&&b.type==='port'){
       const ht=holdTotal(b);

@@ -452,10 +452,14 @@ function unitSprPick(race,moving,working,dirX,dirY,lastSlot,id){
   const spr=SPR[key];
   return spr?{spr,slot}:null; // null -> ASCII-фолбэк
 }
+const UNIT_SCALE={troll:1.5}; // тролль — здоровяк: в полтора роста остальных
 // квад PNG-юнита: холст 56px (арт 32px по центру), ноги ~на прежней базовой линии
-function pushUnitQuad(n,wx,wy,spr){
+function pushUnitQuad(n,wx,wy,spr,scale){
+  const s=scale||1;
+  const h=0.95*s,hw=0.475*s;
+  const y0=wy-0.44-0.214*h,y1=y0+h;
   const o=n*12,uo=n*8;
-  const x0=wx-0.475,x1=wx+0.475,y0=wy-0.64,y1=wy+0.31;
+  const x0=wx-hw,x1=wx+hw;
   R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
   R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
   R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -488,7 +492,7 @@ function fillUnits(alpha){
     const pick=unitSprPick(u.race,u.act==='goto',u.act==='work',u.dirX,u.dirY,u.sprSlot,u.id);
     if(pick){ // PNG-спрайт PixelLab: 6 гекс-сторон + кадры walk/work
       u.sprSlot=pick.slot;
-      pushUnitQuad(n,wx,wy,pick.spr);
+      pushUnitQuad(n,wx,wy,pick.spr,UNIT_SCALE[u.race]);
       n++;if(n>=96)break;
       continue;
     }
@@ -551,7 +555,7 @@ function fillUnits(alpha){
         const pick=unitSprPick(u.race,pMoving,false,pdx,pdy,P.sprSlot,k);
         if(pick){
           P.sprSlot=pick.slot;
-          pushUnitQuad(n,wx,wy,pick.spr);
+          pushUnitQuad(n,wx,wy,pick.spr,UNIT_SCALE[u.race]);
           n++;continue;
         }
         const spr=SPR['u_'+u.race+'_'+((t2+k)%2)];

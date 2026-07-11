@@ -5,6 +5,7 @@ function lairsDaily(){
   for(let li=0;li<S.lairs.length;li++){
     const L=S.lairs[li];
     if(L.dead)continue;
+    if(L.passive)continue; // руины-данжен: не крепнут, не копят агро, не рейдят
     L.hoard+=L.tier*1.2;
     if(S.day%8===0)L.str=Math.min(4+4*L.tier,L.str+1);
     if(L.cd>0){L.cd--;continue}

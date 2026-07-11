@@ -42,7 +42,7 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 глобальное состояние S; newGame, генерация мира, spawn поселенцев
 
-`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `classifyWater()` · `pickStart()` · `thSiteScore()` · `placeTownhall()` · `autoPlaceTownhall()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `withHeroPass()` · `placeBuilding()` · `spawnSettlers()`
+`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `classifyWater()` · `pickStart()` · `thSiteScore()` · `placeTownhall()` · `autoPlaceTownhall()` · `genFeatures()` · `genLairs()` · `genRuinLairs()` · `computeFear()` · `rebuildPass()` · `withHeroPass()` · `placeBuilding()` · `spawnSettlers()`
 
 ## src/04_econ.js
 
@@ -126,7 +126,7 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 экспедиции: sendParty/sendDelve, этапы логовищ, шахтные этажи
 
-`sendParty()` · `partyHeroes()` · `sendDelve()` · `partyTick()` · `partyArrive()` · `delveNextFloor()` · `aggroWord()` · `lairStages()` · `itemAtk()` · `clearNextStage()` · `endSlotMission()` · `goBack()`
+`sendParty()` · `partyHeroes()` · `sendDelve()` · `ruinSweep()` · `partyTick()` · `partyArrive()` · `delveNextFloor()` · `aggroWord()` · `lairStages()` · `itemAtk()` · `clearNextStage()` · `endSlotMission()` · `goBack()`
 
 ## src/16b_battle.js
 
@@ -162,7 +162,7 @@ canvas-атлас: отрисовка тайлов/зданий/иконок, bu
 
 three.js: батчи, меши террейна/дорог/зданий/юнитов, glow, fx (browser only)
 
-`R` · `makeBatch()` · `bQuad()` · `meshFromBatch()` · `cellTerr()` · `buildTerrain()` · `buildRivers()` · `reliefRenderField()` · `buildRelief()` · `buildRoads()` · `buildGridOverlay()` · `toggleGrid()` · `buildStatics()` · `buildBuildings()` · `makeGlowMesh()` · `buildingOccupancy()` · `fillGlow()` · `makeFxMesh()` · `fillFx()` · `makeUnitMesh()` · `unitHexSlot()` · `unitSprPick()` · `pushUnitQuad()` · `fillUnits()`
+`R` · `makeBatch()` · `bQuad()` · `meshFromBatch()` · `cellTerr()` · `buildTerrain()` · `buildRivers()` · `reliefRenderField()` · `buildRelief()` · `buildRoads()` · `buildGridOverlay()` · `toggleGrid()` · `buildStatics()` · `buildBuildings()` · `makeGlowMesh()` · `buildingOccupancy()` · `fillGlow()` · `makeFxMesh()` · `fillFx()` · `makeUnitMesh()` · `unitHexSlot()` · `unitSprPick()` · `UNIT_SCALE` · `pushUnitQuad()` · `fillUnits()`
 
 ## src/21_fog_input.js
 
@@ -180,7 +180,7 @@ DOM UI: панели, дебаг, пати-окно, инспектор, updateU
 
 экран боя (п.11, browser only): карточки рядов, лог, отступление
 
-`BTUI` · `btUnitGrid()` · `btUnitCard()` · `btRender()` · `openBattleScreen()`
+`BTUI` · `btUnitGrid()` · `btUnitCard()` · `btAct()` · `btRender()` · `openBattleScreen()`
 
 ## src/23_main.js
 

@@ -532,6 +532,7 @@ function buildAtlas(){
     ctx.drawImage(im,p2.x,p2.y);
     reg('up_'+key,p2.x,p2.y,im.width,im.height);
   }
+  SPR['l_ruins']=SPR['f_6']; // логово «Древние руины» рисуется спрайтом фичи руин
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),
     stone:paintIcon('stone'),gems:paintIcon('gems'),pop:paintIcon('pop'),ammo:paintIcon('ammo')};
   if(ATLAS.cur.y+ATLAS.cur.rowH>ATLAS.H)console.warn('[Марка] АТЛАС ПЕРЕПОЛНЕН:',ATLAS.cur.y+ATLAS.cur.rowH,'>',ATLAS.H);

@@ -200,7 +200,7 @@ function workMul(u,kind){
   const RC=CFG.RACE[u.race];
   if(kind==='build'||kind==='repair')return RC.build*(1+0.04*skillLvl(u,'craft'));
   if(kind==='clear'&&u.race==='troll')return 1.3;
-  if(kind==='oper'||kind==='ruins')return RC.work;
+  if(kind==='oper')return RC.work;
   return 1;
 }
 function arrive(u){

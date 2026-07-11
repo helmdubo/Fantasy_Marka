@@ -20,7 +20,6 @@ function marketLaborPriority(j){
   else if(j.kind==='pave')p=4;
   else if(j.kind==='oper')p=3;
   else if(j.kind==='watch')p=2.5;
-  else if(j.kind==='ruins')p=1.5;
   if(j.b!==undefined){
     const b=S.buildings[j.b];
     if(b){

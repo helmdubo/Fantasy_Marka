@@ -106,6 +106,10 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 .bt-unit .nm{font-size:10px;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bt-unit .hpbar{height:6px;background:#171209;border:1px solid var(--edge);margin-top:3px}
 .bt-unit .hpbar>div{height:100%;background:var(--ok)}
+.bt-unit .cdbar{height:4px;background:#171209;border:1px solid var(--edge);margin-top:2px}
+.bt-unit .cdbar>div{height:100%;background:#5a86c8;transition:width .09s linear}
+.bt-unit.pready{outline:2px solid #eec658;cursor:pointer;box-shadow:0 0 9px rgba(238,198,88,.55)}
+.bt-unit.pready .cdbar>div{background:#eec658}
 .bt-unit.dead{opacity:.35;filter:grayscale(1)}
 .bt-unit.hitfx{outline:2px solid var(--bad)}
 .bt-unit.healfx{outline:2px solid var(--ok)}
@@ -227,7 +231,8 @@ const CFG={
   CRAFT_EVERY:3,
   STAGES:{tower:['Двор','Залы','Вершина'],camp:['Частокол','Шатры'],
     cliff:['Тропа','Гнездо'],graves:['Ограда','Склепы','Алтарь'],
-    necro:['Врата','Лаборатория','Шпиль'],den:['Тропы','Логовище']},
+    necro:['Врата','Лаборатория','Шпиль'],den:['Тропы','Логовище'],
+    ruins:['Развалины','Гробница']},
   DELVE:['Штольни','Глубины','Бездна'],
   PRICE:{food:0.25,wood:0.45,stone:0.35,gems:4}, TRADE_Q:12, MARKET_TAX:0.10,
   TRIBUTE:{every:24,base:10,perDay:0.20,perPop:0.45,warn:3},
@@ -1363,7 +1368,7 @@ function newGame(seedStr){
     popups:[],portBars:null,
     log:[],uiDirty:true,fogDirty:true,featDirty:true,bldDirty:true,terrDirty:true,terrFullDirty:true,reliefDirty:true,
     nextId:1,hungry:false,dbgBuilder:'—',atlasMs:0,hoverLair:-1,revealAll:false};
-  genWorld();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
+  genWorld();pickStart();genFeatures();genLairs();genRuinLairs();computeFear();rebuildPass();
   S.road=new Uint8Array(N);S.roadConn=new Uint8Array(N);
   // Старт с ПАЛАТКИ: поселенцы разведывают округу, затем игрок (или авто
   // в headless) выбирает место ратуши. Губернаторских указов больше нет —
@@ -1540,9 +1545,22 @@ function genLairs(){
     }
   }
 }
+/* Древние руины (v2.2) — данжен для героев, а не работа поселенца:
+   пассивное логово (не копит агро, не шлёт рейды, не пугает жителей).
+   Визуал руин даёт спрайт логова; фича с клетки снимается. */
+function genRuinLairs(){
+  for(let i=0;i<S.W*S.H;i++){
+    if(S.feat[i]!==F.RUINS||S.lairAt[i]>=0)continue;
+    S.feat[i]=F.NONE;
+    S.lairs.push({id:'ruins',name:'Древние руины',tier:1,
+      x:i%S.W,y:(i/S.W)|0,hoard:14,str:3,aggro:0,cd:0,passive:true});
+    S.lairAt[i]=S.lairs.length-1;
+  }
+}
 function computeFear(){
   S.fear.fill(0);
   for(const L of S.lairs){
+    if(L.passive)continue; // руины не пугают — жители строятся рядом
     for(let dy=-CFG.FEAR_R;dy<=CFG.FEAR_R;dy++)for(let dx=-CFG.FEAR_R-1;dx<=CFG.FEAR_R+1;dx++){
       const x=L.x+dx,y=L.y+dy;
       if(inMap(x,y)&&cheb(x,y,L.x,L.y)<=CFG.FEAR_R)S.fear[idx(x,y)]=1;
@@ -1920,7 +1938,6 @@ function marketLaborPriority(j){
   else if(j.kind==='pave')p=4;
   else if(j.kind==='oper')p=3;
   else if(j.kind==='watch')p=2.5;
-  else if(j.kind==='ruins')p=1.5;
   if(j.b!==undefined){
     const b=S.buildings[j.b];
     if(b){
@@ -2136,7 +2153,7 @@ function rebuildJobs(){
       const i=idx(x,y);
       if(seenR.has(i))continue;seenR.add(i);
       if(!S.explored[i]||S.fear[i])continue;
-      if(S.feat[i]===F.RUINS)S.jobPool.push({kind:'ruins',x,y,adj:false});
+      // v2.2: древние руины — данжен героев (genRuinLairs), работы поселенцам нет
     }
   }
   for(let pi=0;pi<S.roadPlans.length;pi++){
@@ -2218,7 +2235,6 @@ function jobValid(j){
     case 'clear':case 'pave':{const pl=S.roadPlans[j.plan];
       return !!(pl&&pl.cells[pl.i]&&pl.cells[pl.i].x===j.x&&pl.cells[pl.i].y===j.y)}
     case 'supply':{const b=S.buildings[j.b];return !!(b&&!b.built&&missingRes(b))}
-    case 'ruins':return S.feat[i]===F.RUINS;
     case 'build':{const b=S.buildings[j.b];return !!(b&&!b.built&&!missingRes(b))}
     case 'oper':{const b=S.buildings[j.b];
       if(!b||!b.built||b.ruined||b.workerId!=null)return false;
@@ -2372,8 +2388,6 @@ function completeJob(u){
       if(S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP){S.feat[i]=F.NONE;S.featDirty=true}
       addSkillXp(u,'axe',0.8);roadLay(j.plan);break}
     case 'pave':addSkillXp(u,'craft',0.6);roadLay(j.plan);break;
-    case 'ruins':addSkillXp(u,'lore',1);S.feat[i]=F.NONE;S.featDirty=true;S.gold+=CFG.RUINS_GOLD;addResourcePopup('gold',CFG.RUINS_GOLD,j.x,j.y);
-      log('🏺 В древних руинах найдено '+CFG.RUINS_GOLD+' золотых — в казну.');break;
     case 'build':{const b=S.buildings[j.b];b.work--;addSkillXp(u,'craft',1);
       if(b.work<=0)finishBuilding(b);break}
     case 'watch':{
@@ -3020,7 +3034,7 @@ function workMul(u,kind){
   const RC=CFG.RACE[u.race];
   if(kind==='build'||kind==='repair')return RC.build*(1+0.04*skillLvl(u,'craft'));
   if(kind==='clear'&&u.race==='troll')return 1.3;
-  if(kind==='oper'||kind==='ruins')return RC.work;
+  if(kind==='oper')return RC.work;
   return 1;
 }
 function arrive(u){
@@ -3108,11 +3122,11 @@ function influenceAnchors(){
     if(b.built&&!b.ruined&&b.type==='tower'&&connected(b))a.push({x:b.x,y:b.y,r:CFG.TOWER_INFLUENCE});
   return a;
 }
-function inInfluence(x,y){
-  for(const an of influenceAnchors())if(cheb(x,y,an.x,an.y)<=an.r)return true;
+function inInfluence(x,y,extra){
+  for(const an of influenceAnchors())if(cheb(x,y,an.x,an.y)<=an.r+(extra||0))return true;
   return false;
 }
-function siteOk(type,x,y){
+function siteOk(type,x,y,veinReach){
   const i=idx(x,y);
   if(S.road[i])return false; // не на дороге
   const t=S.terr[i];
@@ -3125,7 +3139,8 @@ function siteOk(type,x,y){
     if(!nr)return false;
   }
   if(!S.explored[i]||S.fear[i]||!S.pass[i])return false;
-  if(!inInfluence(x,y))return false;
+  // «рудная концессия»: шахта у разведанной жилы может выйти чуть за зону влияния
+  if(!inInfluence(x,y,veinReach?5:0))return false;
   const orth=hexDirs(x); // hex: «примыкание» = любой из 6 соседей
   if(type==='fisher'){
     let w=false;for(const d of orth)if(inMap(x+d[0],y+d[1])&&S.terr[idx(x+d[0],y+d[1])]===T.WATER)w=true;
@@ -3272,7 +3287,9 @@ function resScore(type,x,y){
     if(type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0)n++;
     else if(type==='farm'&&S.feat[i]===F.WHEAT)n++;
     else if(type==='fisher'&&S.feat[i]===F.FISH)n++;
-    else if(type==='mine'){if(S.terr[i]===T.MTN)n++;if(S.feat[i]===F.VEIN)n+=3}
+    else if(type==='mine'){if(S.terr[i]===T.MTN)n++;
+      // разведанная самоцветная жила — главный магнит для шахты
+      if(S.feat[i]===F.VEIN&&S.explored[i])n+=8}
   }
   return n;
 }
@@ -3306,6 +3323,23 @@ function tryPlace(type){
       else if(PROD_TYPES[type])score=-(resScore(type,x,y)*100-d);
       else score=d;
       if(score<bd){bd=score;best={x,y}}
+    }
+  }
+  if(type==='mine'){
+    // шахта тянется к РАЗВЕДАННЫМ самоцветным жилам даже за зоной влияния:
+    // кандидаты — клетки в радиусе 2 от жилы, известной игроку
+    for(let i=0;i<S.W*S.H;i++){
+      if(S.feat[i]!==F.VEIN||!S.explored[i])continue;
+      const vx=i%S.W,vy=(i/S.W)|0;
+      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+        const x=vx+dx,y=vy+dy;
+        if(!inMap(x,y)||cheb(x,y,vx,vy)>2)continue;
+        if(!siteOk('mine',x,y,true))continue;
+        const d=cheb(x,y,S.th.x,S.th.y);
+        if(d<2)continue;
+        const score=-(resScore('mine',x,y)*100-d);
+        if(score<bd){bd=score;best={x,y}}
+      }
     }
   }
   if(!best)return false;
@@ -3742,20 +3776,28 @@ function orderShip(b){
   return true;
 }
 function launchShip(port,sign){
-  // v2.1: корабль идёт не по прямой оси причала, а в сторону центра моря —
-  // центроида floodfill-компоненты, к которой примыкает гавань.
-  let cell=null;
-  for(const d of hexDirs(port.x)){
-    const nx=port.x+d[0],ny=port.y+d[1];
-    if(inMap(nx,ny)&&S.terr[idx(nx,ny)]===T.WATER&&S.waterKind[idx(nx,ny)]===2){cell={x:nx,y:ny};break}
+  // v2.2: курс — В ОТКРЫТОЕ МОРЕ. Центроид морской компоненты не годится:
+  // море окружает остров, его центроид — посреди суши, и корабль «отплывал»
+  // вглубь берега. Вместо этого пускаем 16 лучей и берём направление с самой
+  // длинной непрерывной полосой морской воды.
+  let bdx=0,bdy=0,bl=-1;
+  for(let a=0;a<16;a++){
+    const ang=a*Math.PI/8;
+    const dx=Math.cos(ang),dy=Math.sin(ang);
+    let len=0;
+    for(let t=1;t<=9;t+=0.5){
+      const cx=Math.round(port.x+dx*t),cy=Math.round(port.y+dy*t);
+      if(!inMap(cx,cy))break;
+      const i=idx(cx,cy);
+      if(S.terr[i]!==T.WATER||S.waterKind[i]!==2)break;
+      len=t;
+    }
+    if(len>bl){bl=len;bdx=dx;bdy=dy}
   }
-  if(!cell)return;
-  const comp=S.waterComps&&S.waterComps[S.waterComp[idx(cell.x,cell.y)]];
-  let dx=cell.x-port.x,dy=cell.y-port.y;
-  if(comp&&comp.sea===2){dx=comp.cx-port.x;dy=comp.cy-port.y}
-  const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
-  if(sign>0)S.ships.push({x:port.x+0.5,y:port.y+0.5,dx,dy,t:0,ttl:4.5});
-  else S.ships.push({x:port.x+0.5+dx*2.4,y:port.y+0.5+dy*2.4,dx:-dx,dy:-dy,t:0,ttl:4.0});
+  if(bl<1)return; // открытого моря у причала нет
+  const far=Math.min(3.2,bl*0.7);
+  if(sign>0)S.ships.push({x:port.x+0.5,y:port.y+0.5,dx:bdx,dy:bdy,t:0,ttl:4.5});
+  else S.ships.push({x:port.x+0.5+bdx*far,y:port.y+0.5+bdy*far,dx:-bdx,dy:-bdy,t:0,ttl:4.0});
 }
 function tradeDaily(){
   const port=S.buildings.find(b=>b.built&&!b.ruined&&connected(b)&&b.type==='port');
@@ -3828,6 +3870,7 @@ function lairsDaily(){
   for(let li=0;li<S.lairs.length;li++){
     const L=S.lairs[li];
     if(L.dead)continue;
+    if(L.passive)continue; // руины-данжен: не крепнут, не копят агро, не рейдят
     L.hoard+=L.tier*1.2;
     if(S.day%8===0)L.str=Math.min(4+4*L.tier,L.str+1);
     if(L.cd>0){L.cd--;continue}
@@ -3959,24 +4002,53 @@ function partyHeroes(){return S.party.heroes.map(id=>S.settlers.find(u=>u.id===i
 function sendDelve(bi){
   if(S.party){log('⚔ Партия уже в походе.');return false}
   const b=S.buildings[bi];
-  if(!b||!b.built||b.type!=='mine'||b.ruined)return false;
-  // п.6: спуск только в ЗАБРОШЕННУЮ шахту — в работающей штольни заняты артелью
-  if(!b.abandoned){log('⛏ Шахта работает — герои не полезут под кирки артели. Ждите, пока она опустеет.');return false}
+  if(!b||!b.built)return false;
+  const mine=b.type==='mine'&&!b.ruined; // шахтный спуск по этажам
+  if(mine){
+    // п.6: спуск только в ЗАБРОШЕННУЮ шахту — в работающей штольни заняты артелью
+    if(!b.abandoned){log('⛏ Шахта работает — герои не полезут под кирки артели. Ждите, пока она опустеет.');return false}
+    if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Глубже этажей нет.');return false}
+  }else{
+    // v2.2: ЛЮБОЕ заброшенное/сгоревшее здание — данжен на одну зачистку
+    if(!(b.ruined||b.abandoned)){log('🏚 Здание обитаемо — зачищать нечего.');return false}
+    if(b.dgnDone){log('🏚 Эти развалины уже зачищены героями.');return false}
+    if(S.lairAt[idx(b.x,b.y)]>=0){log('☠ В развалинах уже засела нечисть — штурмуй логово.');return false}
+  }
   const sl=activeSlot();
   if(!sl){log('🛡 Нет готовой пати — сформируй её в окне отрядов (🗡).');return false}
-  if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Глубже этажей нет.');return false}
-  const prov=CFG.HERO.provisions+b.tier*2;
-  if(S.stock.food<prov){log('🥖 Для спуска нужно '+prov+' еды.');return false}
+  const prov=mine?CFG.HERO.provisions+b.tier*2:CFG.HERO.provisions;
+  if(S.stock.food<prov){log('🥖 Для вылазки нужно '+prov+' еды.');return false}
   const p=withHeroPass(()=>findPath(S,S.th.x,S.th.y,b.x,b.y,true));
-  if(!p){log('⛏ К шахте нет тропы.');return false}
+  if(!p){log('⛏ К развалинам нет тропы.');return false}
   S.stock.food-=prov;computeLevels();
   const hs=sl.heroes.map(id=>S.settlers.find(u=>u.id===id));
   for(const u of hs){u.inside=-2;releaseJob(u);u.carry=null;u.after=null;u.path=null;u.act='idle'}
-  sl.status='away';b.delve=true;
-  S.party={heroes:hs.map(u=>u.id),slot:sl.id,mineB:bi,mode:'delve',phase:'out',gain:0,
+  sl.status='away';
+  if(mine)b.delve=true;
+  S.party={heroes:hs.map(u=>u.id),slot:sl.id,mineB:bi,mode:mine?'delve':'ruinsweep',phase:'out',gain:0,
     floor:b.delveMax||0,x:S.th.x+0.5,y:S.th.y+0.5,px:S.th.x+0.5,py:S.th.y+0.5,path:p,pathI:0};
-  log('⛏ '+sl.name+' спускается в шахту (этаж «'+CFG.DELVE[b.delveMax||0]+'», провиант '+prov+').');
+  log(mine
+    ?'⛏ '+sl.name+' спускается в шахту (этаж «'+CFG.DELVE[b.delveMax||0]+'», провиант '+prov+').'
+    :'🏚 '+sl.name+' идёт зачищать развалины ('+CFG.BNAME[b.type].toLowerCase()+').');
   S.uiDirty=true;return true;
+}
+/* v2.2: зачистка развалин здания — один бой с мародёрами, разовая добыча */
+function ruinSweep(){
+  const P=S.party,b=S.buildings[P.mineB];
+  if(!b){goBack(0);return}
+  const fake={str:3+(b.tier||1)*2,id:'bld',name:'Развалины: '+CFG.BNAME[b.type]};
+  beginBattle({ambushed:false,mul:1,enemy:fake},res=>{
+    if(!partyHeroes().length){log('☠ Из похода не вернулся никто.');S.party=null;endSlotMission(true);S.uiDirty=true;return}
+    if(res.win){
+      b.dgnDone=true;
+      const loot=6+(b.tier||1)*5;
+      log('🏚 Развалины зачищены: в тайниках найдено '+loot+' з.');
+      goBack(loot);
+    }else{
+      log('🏳 Партия отступает от развалин.');
+      goBack(0);
+    }
+  });
 }
 function partyTick(dt){
   const P=S.party;if(!P||P.inBattle)return; // бой идёт на экране — не дёргать partyArrive
@@ -4007,6 +4079,7 @@ function partyArrive(){
   }
   // reached the lair
   if(P.mode==='delve'){delveNextFloor();return}
+  if(P.mode==='ruinsweep'){ruinSweep();return}
   if(L.dead){goBack(0);return}
   if(P.mode==='scout'){
     L.known=true;
@@ -4156,6 +4229,8 @@ const BATTLE_COMPS={
   graves:[['skeleton','skeleton'],['skeleton','skeleton','necromancer'],['necromancer','skeleton','skeleton']],
   necro:[['skeleton','skeleton','necromancer'],['skeleton','necromancer','necromancer'],['necromancer','skeleton','skeleton','skeleton']],
   delve:[['goblin','goblin','goblin'],['magmaatr','goblin','goblin'],['fireatr','magmaatr']],
+  ruins:[['skeleton','skeleton'],['skeleton','skeleton','necromancer']], // древние руины (v2.2)
+  bld:[['bandit','goblin','goblin']], // мародёры в развалинах зданий (v2.2)
 };
 function battleComp(lairId,stageIdx){
   const arr=BATTLE_COMPS[lairId]||BATTLE_COMPS.camp;
@@ -4167,10 +4242,14 @@ function makeBattle(opts){
   const hs=partyHeroes();
   const mul=opts.mul||1;
   const stageIdx=opts.stageIdx||0;
+  // кулдауны (v2.2): интерактивный бой в браузере — герой бьёт по клику,
+  // когда заряд полон; враги бьют сами по своему кулдауну (заряд виден игроку)
+  const CD_CLS={tank:3.0,bruiser:2.3,mage:3.4,support:2.9};
   const party=hs.map(u=>({side:'party',name:u.hero.name,cls:u.hero.cls,
     row:(u.hero.cls==='tank'||u.hero.cls==='bruiser')?'front':'back',
     hp:u.hero.hp,maxHp:u.hero.maxHp,
     atk:(u.hero.atk+itemAtk(u)+skillAtkBonus(u,stageIdx))*(u.hero.cls==='mage'?1.3:1),
+    cd:0,cdMax:CD_CLS[u.hero.cls]||2.8,
     caster:u.hero.cls==='mage',healer:u.hero.cls==='support',uref:u}));
   const comp=battleComp(L.id,stageIdx);
   const ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
@@ -4179,7 +4258,8 @@ function makeBattle(opts){
   const enemies=comp.map(k=>{const d=ENEMY_DEFS[k];
     const hp=Math.max(3,Math.round(ehp*d.hpW/hpW));
     return {side:'enemy',name:d.nm,key:k,row:d.row,hp,maxHp:hp,
-      atk:eatk*d.atkW/atkW,caster:!!d.caster,def:d};
+      atk:eatk*d.atkW/atkW,cd:0,cdMax:(d.caster?4.0:3.1)+(S.rng()*0.6-0.3),
+      caster:!!d.caster,def:d};
   });
   return {party,enemies,round:0,over:false,win:false,retreat:false,
     ambushed:!!opts.ambushed,thief:hs.some(u=>u.hero.thief),
@@ -6455,6 +6535,7 @@ function buildAtlas(){
     ctx.drawImage(im,p2.x,p2.y);
     reg('up_'+key,p2.x,p2.y,im.width,im.height);
   }
+  SPR['l_ruins']=SPR['f_6']; // логово «Древние руины» рисуется спрайтом фичи руин
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),
     stone:paintIcon('stone'),gems:paintIcon('gems'),pop:paintIcon('pop'),ammo:paintIcon('ammo')};
   if(ATLAS.cur.y+ATLAS.cur.rowH>ATLAS.H)console.warn('[Марка] АТЛАС ПЕРЕПОЛНЕН:',ATLAS.cur.y+ATLAS.cur.rowH,'>',ATLAS.H);
@@ -6914,10 +6995,14 @@ function unitSprPick(race,moving,working,dirX,dirY,lastSlot,id){
   const spr=SPR[key];
   return spr?{spr,slot}:null; // null -> ASCII-фолбэк
 }
+const UNIT_SCALE={troll:1.5}; // тролль — здоровяк: в полтора роста остальных
 // квад PNG-юнита: холст 56px (арт 32px по центру), ноги ~на прежней базовой линии
-function pushUnitQuad(n,wx,wy,spr){
+function pushUnitQuad(n,wx,wy,spr,scale){
+  const s=scale||1;
+  const h=0.95*s,hw=0.475*s;
+  const y0=wy-0.44-0.214*h,y1=y0+h;
   const o=n*12,uo=n*8;
-  const x0=wx-0.475,x1=wx+0.475,y0=wy-0.64,y1=wy+0.31;
+  const x0=wx-hw,x1=wx+hw;
   R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
   R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
   R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
@@ -6950,7 +7035,7 @@ function fillUnits(alpha){
     const pick=unitSprPick(u.race,u.act==='goto',u.act==='work',u.dirX,u.dirY,u.sprSlot,u.id);
     if(pick){ // PNG-спрайт PixelLab: 6 гекс-сторон + кадры walk/work
       u.sprSlot=pick.slot;
-      pushUnitQuad(n,wx,wy,pick.spr);
+      pushUnitQuad(n,wx,wy,pick.spr,UNIT_SCALE[u.race]);
       n++;if(n>=96)break;
       continue;
     }
@@ -7013,7 +7098,7 @@ function fillUnits(alpha){
         const pick=unitSprPick(u.race,pMoving,false,pdx,pdy,P.sprSlot,k);
         if(pick){
           P.sprSlot=pick.slot;
-          pushUnitQuad(n,wx,wy,pick.spr);
+          pushUnitQuad(n,wx,wy,pick.spr,UNIT_SCALE[u.race]);
           n++;continue;
         }
         const spr=SPR['u_'+u.race+'_'+((t2+k)%2)];
@@ -7802,6 +7887,12 @@ function updateInspector(){
           (b.delve?' · <b>пати внутри</b>':'')+'</div>'+
           '<div class="row"><button class="qbtn" data-delve="'+S.pin.id+'"'+((activeSlot()&&!S.party&&dm<b.tier)?'':' disabled')+'>Спуск в шахту</button></div>';
       }
+    }else if(b.built&&(b.ruined||b.abandoned)){
+      // v2.2: развалины любого здания — данжен на одну зачистку героями
+      if(b.dgnDone)extra+='<div class="row">🏚 развалины зачищены героями</div>';
+      else if(S.lairAt[idx(b.x,b.y)]<0)
+        extra+='<div class="row"><button class="qbtn" data-delve="'+S.pin.id+'"'+
+          ((activeSlot()&&!S.party)?'':' disabled')+'>Зачистить развалины</button></div>';
     }
     if(b.built&&b.type==='port'){
       const ht=holdTotal(b);
@@ -7927,8 +8018,34 @@ function btUnitCard(c){
   const nm=document.createElement('div');nm.className='nm';nm.textContent=c.name;div.appendChild(nm);
   const bar=document.createElement('div');bar.className='hpbar';
   const fill=document.createElement('div');bar.appendChild(fill);div.appendChild(bar);
-  c._el=div;c._hp=fill;
+  // v2.2: полоска заряда атаки (кулдаун) — видна и у своих, и у врагов
+  const cbar=document.createElement('div');cbar.className='cdbar';
+  const cfill=document.createElement('div');cbar.appendChild(cfill);div.appendChild(cbar);
+  c._el=div;c._hp=fill;c._cd=cfill;
+  if(c.side==='party'){ // герой бьёт по клику, когда заряд полон
+    div.onclick=()=>{
+      if(!BTUI||BTUI.bt.over)return;
+      if(c.hp<=0||c.cd<c.cdMax)return;
+      btAct(BTUI.bt,c,BTUI.bt.enemies);
+    };
+  }
   return div;
+}
+/* один акт бойца: удар/лечение, сброс заряда, проверка исхода */
+function btAct(bt,att,foes){
+  bt.events.length=0;
+  const tempo=(att.side==='party'&&bt.thief&&!att._struck)?1.5:1; // «Вор»: темп первого удара
+  att._struck=true;
+  btStrike(bt,att,foes,tempo);
+  att.cd=0;
+  if(!btAlive(bt.enemies).length){bt.over=true;bt.win=true}
+  else{
+    const alive=btAlive(bt.party);
+    const hpFrac=alive.reduce((a,u)=>a+u.hp,0)/bt.party.reduce((a,u)=>a+u.maxHp,0);
+    if(!alive.length||hpFrac<0.3){bt.over=true;bt.retreat=true}
+  }
+  btRender(bt);
+  bt.events.length=0; // события показаны — не дублировать в следующем рендере
 }
 function btRender(bt){
   for(const c of bt.party.concat(bt.enemies)){
@@ -7937,6 +8054,10 @@ function btRender(bt){
     c._hp.style.width=(f*100).toFixed(0)+'%';
     c._hp.style.background=f<0.3?'var(--bad)':(f<0.6?'#c9b458':'var(--ok)');
     c._el.classList.toggle('dead',c.hp<=0);
+    if(c._cd){
+      c._cd.style.width=Math.min(100,(c.cd/c.cdMax*100)).toFixed(0)+'%';
+      c._el.classList.toggle('pready',c.side==='party'&&c.hp>0&&c.cd>=c.cdMax&&!bt.over);
+    }
   }
   const lg=el('bt_log');
   const lines=[];
@@ -7957,10 +8078,13 @@ function btRender(bt){
   }
 }
 function openBattleScreen(bt,done){
+  // v2.2: бой на кулдаунах. Враги бьют сами, когда их заряд полон (полоска
+  // видна игроку). Герой с полным зарядом подсвечен — атакует по клику.
+  // Дальше этот же каркас поедет в пошаговый режим с решениями игрока.
   const box=el('battle');
   el('bt_title').textContent='Бой: «'+bt.lairName+'»'+(bt.ambushed?' · засада!':'');
   for(const id of ['bt_p_front','bt_p_back','bt_e_front','bt_e_back'])el(id).innerHTML='';
-  el('bt_log').innerHTML='<div class="e">Отряды сходятся…</div>';
+  el('bt_log').innerHTML='<div class="e">Кликай по герою с полным зарядом (жёлтая рамка) — он атакует.</div>';
   for(const c of bt.party)el(c.row==='front'?'bt_p_front':'bt_p_back').appendChild(btUnitCard(c));
   for(const c of bt.enemies)el(c.row==='front'?'bt_e_front':'bt_e_back').appendChild(btUnitCard(c));
   box.style.display='block';
@@ -7969,6 +8093,13 @@ function openBattleScreen(bt,done){
   fleeBtn.disabled=false;
   fleeBtn.onclick=()=>{bt.fleeReq=true;fleeBtn.disabled=true};
   fastBtn.onclick=()=>{speed=speed===1?2:1;fastBtn.classList.toggle('on',speed===2)};
+  // стартовые заряды: засада — враги почти заряжены («Дозор» отряда съедает
+  // фору), обычный бой — лёгкий разброс; «Вор» даёт героям фору темпа
+  bt.elapsed=0;bt.round=1;
+  for(const e of bt.enemies)
+    e.cd=bt.ambushed?e.cdMax*Math.max(0.4,1-0.12*bt.vigil):S.rng()*0.4*e.cdMax;
+  for(const h of bt.party)h.cd=bt.thief?h.cdMax*0.5:0;
+  if(bt.ambushed&&bt.vigil>0){bt.events=[{t:'note',m:'«Дозор» упреждает засаду'}]}
   btRender(bt);
   const finish=()=>{
     clearInterval(BTUI.iv);BTUI=null;
@@ -7980,13 +8111,28 @@ function openBattleScreen(bt,done){
   };
   BTUI={bt,iv:setInterval(()=>{
     if(!BTUI)return;
-    for(let k=0;k<speed;k++)if(!bt.over)stepBattleRound(bt);
-    btRender(bt);
+    if(!bt.over){
+      const dt=0.1*speed;
+      bt.elapsed+=dt;
+      bt.round=Math.max(1,Math.ceil(bt.elapsed/3)); // «раунды» для лога/итогов
+      if(bt.fleeReq){bt.over=true;bt.retreat=true;bt.events=[{t:'flee'}];btRender(bt)}
+      else{
+        for(const e of bt.enemies){
+          if(e.hp<=0||bt.over)continue;
+          e.cd=Math.min(e.cdMax,e.cd+dt);
+          if(e.cd>=e.cdMax)btAct(bt,e,bt.party);
+        }
+        for(const h of bt.party)
+          if(h.hp>0)h.cd=Math.min(h.cdMax,h.cd+dt);
+        if(bt.elapsed>90&&!bt.over){bt.over=true;bt.retreat=true} // затяжной бой — отход
+        btRender(bt);
+      }
+    }
     if(bt.over){
       el('bt_log').innerHTML='<div class="e">'+(bt.win?'🏆 Победа!':'🏳 Отряд отходит…')+'</div>'+el('bt_log').innerHTML;
       finish();
     }
-  },850)};
+  },100)};
 }
 /* ================= MAIN ================= */
 function restart(seedStr){

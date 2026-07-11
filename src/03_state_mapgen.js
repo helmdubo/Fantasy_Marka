@@ -23,7 +23,7 @@ function newGame(seedStr){
     popups:[],portBars:null,
     log:[],uiDirty:true,fogDirty:true,featDirty:true,bldDirty:true,terrDirty:true,terrFullDirty:true,reliefDirty:true,
     nextId:1,hungry:false,dbgBuilder:'—',atlasMs:0,hoverLair:-1,revealAll:false};
-  genWorld();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
+  genWorld();pickStart();genFeatures();genLairs();genRuinLairs();computeFear();rebuildPass();
   S.road=new Uint8Array(N);S.roadConn=new Uint8Array(N);
   // Старт с ПАЛАТКИ: поселенцы разведывают округу, затем игрок (или авто
   // в headless) выбирает место ратуши. Губернаторских указов больше нет —
@@ -200,9 +200,22 @@ function genLairs(){
     }
   }
 }
+/* Древние руины (v2.2) — данжен для героев, а не работа поселенца:
+   пассивное логово (не копит агро, не шлёт рейды, не пугает жителей).
+   Визуал руин даёт спрайт логова; фича с клетки снимается. */
+function genRuinLairs(){
+  for(let i=0;i<S.W*S.H;i++){
+    if(S.feat[i]!==F.RUINS||S.lairAt[i]>=0)continue;
+    S.feat[i]=F.NONE;
+    S.lairs.push({id:'ruins',name:'Древние руины',tier:1,
+      x:i%S.W,y:(i/S.W)|0,hoard:14,str:3,aggro:0,cd:0,passive:true});
+    S.lairAt[i]=S.lairs.length-1;
+  }
+}
 function computeFear(){
   S.fear.fill(0);
   for(const L of S.lairs){
+    if(L.passive)continue; // руины не пугают — жители строятся рядом
     for(let dy=-CFG.FEAR_R;dy<=CFG.FEAR_R;dy++)for(let dx=-CFG.FEAR_R-1;dx<=CFG.FEAR_R+1;dx++){
       const x=L.x+dx,y=L.y+dy;
       if(inMap(x,y)&&cheb(x,y,L.x,L.y)<=CFG.FEAR_R)S.fear[idx(x,y)]=1;

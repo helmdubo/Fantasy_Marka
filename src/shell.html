@@ -106,6 +106,10 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
 .bt-unit .nm{font-size:10px;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bt-unit .hpbar{height:6px;background:#171209;border:1px solid var(--edge);margin-top:3px}
 .bt-unit .hpbar>div{height:100%;background:var(--ok)}
+.bt-unit .cdbar{height:4px;background:#171209;border:1px solid var(--edge);margin-top:2px}
+.bt-unit .cdbar>div{height:100%;background:#5a86c8;transition:width .09s linear}
+.bt-unit.pready{outline:2px solid #eec658;cursor:pointer;box-shadow:0 0 9px rgba(238,198,88,.55)}
+.bt-unit.pready .cdbar>div{background:#eec658}
 .bt-unit.dead{opacity:.35;filter:grayscale(1)}
 .bt-unit.hitfx{outline:2px solid var(--bad)}
 .bt-unit.healfx{outline:2px solid var(--ok)}

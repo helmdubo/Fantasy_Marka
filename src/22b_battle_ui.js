@@ -28,8 +28,34 @@ function btUnitCard(c){
   const nm=document.createElement('div');nm.className='nm';nm.textContent=c.name;div.appendChild(nm);
   const bar=document.createElement('div');bar.className='hpbar';
   const fill=document.createElement('div');bar.appendChild(fill);div.appendChild(bar);
-  c._el=div;c._hp=fill;
+  // v2.2: полоска заряда атаки (кулдаун) — видна и у своих, и у врагов
+  const cbar=document.createElement('div');cbar.className='cdbar';
+  const cfill=document.createElement('div');cbar.appendChild(cfill);div.appendChild(cbar);
+  c._el=div;c._hp=fill;c._cd=cfill;
+  if(c.side==='party'){ // герой бьёт по клику, когда заряд полон
+    div.onclick=()=>{
+      if(!BTUI||BTUI.bt.over)return;
+      if(c.hp<=0||c.cd<c.cdMax)return;
+      btAct(BTUI.bt,c,BTUI.bt.enemies);
+    };
+  }
   return div;
+}
+/* один акт бойца: удар/лечение, сброс заряда, проверка исхода */
+function btAct(bt,att,foes){
+  bt.events.length=0;
+  const tempo=(att.side==='party'&&bt.thief&&!att._struck)?1.5:1; // «Вор»: темп первого удара
+  att._struck=true;
+  btStrike(bt,att,foes,tempo);
+  att.cd=0;
+  if(!btAlive(bt.enemies).length){bt.over=true;bt.win=true}
+  else{
+    const alive=btAlive(bt.party);
+    const hpFrac=alive.reduce((a,u)=>a+u.hp,0)/bt.party.reduce((a,u)=>a+u.maxHp,0);
+    if(!alive.length||hpFrac<0.3){bt.over=true;bt.retreat=true}
+  }
+  btRender(bt);
+  bt.events.length=0; // события показаны — не дублировать в следующем рендере
 }
 function btRender(bt){
   for(const c of bt.party.concat(bt.enemies)){
@@ -38,6 +64,10 @@ function btRender(bt){
     c._hp.style.width=(f*100).toFixed(0)+'%';
     c._hp.style.background=f<0.3?'var(--bad)':(f<0.6?'#c9b458':'var(--ok)');
     c._el.classList.toggle('dead',c.hp<=0);
+    if(c._cd){
+      c._cd.style.width=Math.min(100,(c.cd/c.cdMax*100)).toFixed(0)+'%';
+      c._el.classList.toggle('pready',c.side==='party'&&c.hp>0&&c.cd>=c.cdMax&&!bt.over);
+    }
   }
   const lg=el('bt_log');
   const lines=[];
@@ -58,10 +88,13 @@ function btRender(bt){
   }
 }
 function openBattleScreen(bt,done){
+  // v2.2: бой на кулдаунах. Враги бьют сами, когда их заряд полон (полоска
+  // видна игроку). Герой с полным зарядом подсвечен — атакует по клику.
+  // Дальше этот же каркас поедет в пошаговый режим с решениями игрока.
   const box=el('battle');
   el('bt_title').textContent='Бой: «'+bt.lairName+'»'+(bt.ambushed?' · засада!':'');
   for(const id of ['bt_p_front','bt_p_back','bt_e_front','bt_e_back'])el(id).innerHTML='';
-  el('bt_log').innerHTML='<div class="e">Отряды сходятся…</div>';
+  el('bt_log').innerHTML='<div class="e">Кликай по герою с полным зарядом (жёлтая рамка) — он атакует.</div>';
   for(const c of bt.party)el(c.row==='front'?'bt_p_front':'bt_p_back').appendChild(btUnitCard(c));
   for(const c of bt.enemies)el(c.row==='front'?'bt_e_front':'bt_e_back').appendChild(btUnitCard(c));
   box.style.display='block';
@@ -70,6 +103,13 @@ function openBattleScreen(bt,done){
   fleeBtn.disabled=false;
   fleeBtn.onclick=()=>{bt.fleeReq=true;fleeBtn.disabled=true};
   fastBtn.onclick=()=>{speed=speed===1?2:1;fastBtn.classList.toggle('on',speed===2)};
+  // стартовые заряды: засада — враги почти заряжены («Дозор» отряда съедает
+  // фору), обычный бой — лёгкий разброс; «Вор» даёт героям фору темпа
+  bt.elapsed=0;bt.round=1;
+  for(const e of bt.enemies)
+    e.cd=bt.ambushed?e.cdMax*Math.max(0.4,1-0.12*bt.vigil):S.rng()*0.4*e.cdMax;
+  for(const h of bt.party)h.cd=bt.thief?h.cdMax*0.5:0;
+  if(bt.ambushed&&bt.vigil>0){bt.events=[{t:'note',m:'«Дозор» упреждает засаду'}]}
   btRender(bt);
   const finish=()=>{
     clearInterval(BTUI.iv);BTUI=null;
@@ -81,11 +121,26 @@ function openBattleScreen(bt,done){
   };
   BTUI={bt,iv:setInterval(()=>{
     if(!BTUI)return;
-    for(let k=0;k<speed;k++)if(!bt.over)stepBattleRound(bt);
-    btRender(bt);
+    if(!bt.over){
+      const dt=0.1*speed;
+      bt.elapsed+=dt;
+      bt.round=Math.max(1,Math.ceil(bt.elapsed/3)); // «раунды» для лога/итогов
+      if(bt.fleeReq){bt.over=true;bt.retreat=true;bt.events=[{t:'flee'}];btRender(bt)}
+      else{
+        for(const e of bt.enemies){
+          if(e.hp<=0||bt.over)continue;
+          e.cd=Math.min(e.cdMax,e.cd+dt);
+          if(e.cd>=e.cdMax)btAct(bt,e,bt.party);
+        }
+        for(const h of bt.party)
+          if(h.hp>0)h.cd=Math.min(h.cdMax,h.cd+dt);
+        if(bt.elapsed>90&&!bt.over){bt.over=true;bt.retreat=true} // затяжной бой — отход
+        btRender(bt);
+      }
+    }
     if(bt.over){
       el('bt_log').innerHTML='<div class="e">'+(bt.win?'🏆 Победа!':'🏳 Отряд отходит…')+'</div>'+el('bt_log').innerHTML;
       finish();
     }
-  },850)};
+  },100)};
 }

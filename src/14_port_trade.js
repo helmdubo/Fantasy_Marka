@@ -74,20 +74,28 @@ function orderShip(b){
   return true;
 }
 function launchShip(port,sign){
-  // v2.1: корабль идёт не по прямой оси причала, а в сторону центра моря —
-  // центроида floodfill-компоненты, к которой примыкает гавань.
-  let cell=null;
-  for(const d of hexDirs(port.x)){
-    const nx=port.x+d[0],ny=port.y+d[1];
-    if(inMap(nx,ny)&&S.terr[idx(nx,ny)]===T.WATER&&S.waterKind[idx(nx,ny)]===2){cell={x:nx,y:ny};break}
+  // v2.2: курс — В ОТКРЫТОЕ МОРЕ. Центроид морской компоненты не годится:
+  // море окружает остров, его центроид — посреди суши, и корабль «отплывал»
+  // вглубь берега. Вместо этого пускаем 16 лучей и берём направление с самой
+  // длинной непрерывной полосой морской воды.
+  let bdx=0,bdy=0,bl=-1;
+  for(let a=0;a<16;a++){
+    const ang=a*Math.PI/8;
+    const dx=Math.cos(ang),dy=Math.sin(ang);
+    let len=0;
+    for(let t=1;t<=9;t+=0.5){
+      const cx=Math.round(port.x+dx*t),cy=Math.round(port.y+dy*t);
+      if(!inMap(cx,cy))break;
+      const i=idx(cx,cy);
+      if(S.terr[i]!==T.WATER||S.waterKind[i]!==2)break;
+      len=t;
+    }
+    if(len>bl){bl=len;bdx=dx;bdy=dy}
   }
-  if(!cell)return;
-  const comp=S.waterComps&&S.waterComps[S.waterComp[idx(cell.x,cell.y)]];
-  let dx=cell.x-port.x,dy=cell.y-port.y;
-  if(comp&&comp.sea===2){dx=comp.cx-port.x;dy=comp.cy-port.y}
-  const dl=Math.hypot(dx,dy)||1;dx/=dl;dy/=dl;
-  if(sign>0)S.ships.push({x:port.x+0.5,y:port.y+0.5,dx,dy,t:0,ttl:4.5});
-  else S.ships.push({x:port.x+0.5+dx*2.4,y:port.y+0.5+dy*2.4,dx:-dx,dy:-dy,t:0,ttl:4.0});
+  if(bl<1)return; // открытого моря у причала нет
+  const far=Math.min(3.2,bl*0.7);
+  if(sign>0)S.ships.push({x:port.x+0.5,y:port.y+0.5,dx:bdx,dy:bdy,t:0,ttl:4.5});
+  else S.ships.push({x:port.x+0.5+bdx*far,y:port.y+0.5+bdy*far,dx:-bdx,dy:-bdy,t:0,ttl:4.0});
 }
 function tradeDaily(){
   const port=S.buildings.find(b=>b.built&&!b.ruined&&connected(b)&&b.type==='port');

@@ -31,11 +31,11 @@ function influenceAnchors(){
     if(b.built&&!b.ruined&&b.type==='tower'&&connected(b))a.push({x:b.x,y:b.y,r:CFG.TOWER_INFLUENCE});
   return a;
 }
-function inInfluence(x,y){
-  for(const an of influenceAnchors())if(cheb(x,y,an.x,an.y)<=an.r)return true;
+function inInfluence(x,y,extra){
+  for(const an of influenceAnchors())if(cheb(x,y,an.x,an.y)<=an.r+(extra||0))return true;
   return false;
 }
-function siteOk(type,x,y){
+function siteOk(type,x,y,veinReach){
   const i=idx(x,y);
   if(S.road[i])return false; // не на дороге
   const t=S.terr[i];
@@ -48,7 +48,8 @@ function siteOk(type,x,y){
     if(!nr)return false;
   }
   if(!S.explored[i]||S.fear[i]||!S.pass[i])return false;
-  if(!inInfluence(x,y))return false;
+  // «рудная концессия»: шахта у разведанной жилы может выйти чуть за зону влияния
+  if(!inInfluence(x,y,veinReach?5:0))return false;
   const orth=hexDirs(x); // hex: «примыкание» = любой из 6 соседей
   if(type==='fisher'){
     let w=false;for(const d of orth)if(inMap(x+d[0],y+d[1])&&S.terr[idx(x+d[0],y+d[1])]===T.WATER)w=true;
@@ -195,7 +196,9 @@ function resScore(type,x,y){
     if(type==='lumber'&&S.terr[i]===T.FOREST&&S.terrHp[i]>0)n++;
     else if(type==='farm'&&S.feat[i]===F.WHEAT)n++;
     else if(type==='fisher'&&S.feat[i]===F.FISH)n++;
-    else if(type==='mine'){if(S.terr[i]===T.MTN)n++;if(S.feat[i]===F.VEIN)n+=3}
+    else if(type==='mine'){if(S.terr[i]===T.MTN)n++;
+      // разведанная самоцветная жила — главный магнит для шахты
+      if(S.feat[i]===F.VEIN&&S.explored[i])n+=8}
   }
   return n;
 }
@@ -229,6 +232,23 @@ function tryPlace(type){
       else if(PROD_TYPES[type])score=-(resScore(type,x,y)*100-d);
       else score=d;
       if(score<bd){bd=score;best={x,y}}
+    }
+  }
+  if(type==='mine'){
+    // шахта тянется к РАЗВЕДАННЫМ самоцветным жилам даже за зоной влияния:
+    // кандидаты — клетки в радиусе 2 от жилы, известной игроку
+    for(let i=0;i<S.W*S.H;i++){
+      if(S.feat[i]!==F.VEIN||!S.explored[i])continue;
+      const vx=i%S.W,vy=(i/S.W)|0;
+      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+        const x=vx+dx,y=vy+dy;
+        if(!inMap(x,y)||cheb(x,y,vx,vy)>2)continue;
+        if(!siteOk('mine',x,y,true))continue;
+        const d=cheb(x,y,S.th.x,S.th.y);
+        if(d<2)continue;
+        const score=-(resScore('mine',x,y)*100-d);
+        if(score<bd){bd=score;best={x,y}}
+      }
     }
   }
   if(!best)return false;

@@ -10,7 +10,7 @@ function rebuildJobs(){
       const i=idx(x,y);
       if(seenR.has(i))continue;seenR.add(i);
       if(!S.explored[i]||S.fear[i])continue;
-      if(S.feat[i]===F.RUINS)S.jobPool.push({kind:'ruins',x,y,adj:false});
+      // v2.2: древние руины — данжен героев (genRuinLairs), работы поселенцам нет
     }
   }
   for(let pi=0;pi<S.roadPlans.length;pi++){
@@ -92,7 +92,6 @@ function jobValid(j){
     case 'clear':case 'pave':{const pl=S.roadPlans[j.plan];
       return !!(pl&&pl.cells[pl.i]&&pl.cells[pl.i].x===j.x&&pl.cells[pl.i].y===j.y)}
     case 'supply':{const b=S.buildings[j.b];return !!(b&&!b.built&&missingRes(b))}
-    case 'ruins':return S.feat[i]===F.RUINS;
     case 'build':{const b=S.buildings[j.b];return !!(b&&!b.built&&!missingRes(b))}
     case 'oper':{const b=S.buildings[j.b];
       if(!b||!b.built||b.ruined||b.workerId!=null)return false;
@@ -246,8 +245,6 @@ function completeJob(u){
       if(S.feat[i]===F.WHEAT||S.feat[i]===F.STUMP){S.feat[i]=F.NONE;S.featDirty=true}
       addSkillXp(u,'axe',0.8);roadLay(j.plan);break}
     case 'pave':addSkillXp(u,'craft',0.6);roadLay(j.plan);break;
-    case 'ruins':addSkillXp(u,'lore',1);S.feat[i]=F.NONE;S.featDirty=true;S.gold+=CFG.RUINS_GOLD;addResourcePopup('gold',CFG.RUINS_GOLD,j.x,j.y);
-      log('🏺 В древних руинах найдено '+CFG.RUINS_GOLD+' золотых — в казну.');break;
     case 'build':{const b=S.buildings[j.b];b.work--;addSkillXp(u,'craft',1);
       if(b.work<=0)finishBuilding(b);break}
     case 'watch':{

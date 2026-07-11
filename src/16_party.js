@@ -30,24 +30,53 @@ function partyHeroes(){return S.party.heroes.map(id=>S.settlers.find(u=>u.id===i
 function sendDelve(bi){
   if(S.party){log('⚔ Партия уже в походе.');return false}
   const b=S.buildings[bi];
-  if(!b||!b.built||b.type!=='mine'||b.ruined)return false;
-  // п.6: спуск только в ЗАБРОШЕННУЮ шахту — в работающей штольни заняты артелью
-  if(!b.abandoned){log('⛏ Шахта работает — герои не полезут под кирки артели. Ждите, пока она опустеет.');return false}
+  if(!b||!b.built)return false;
+  const mine=b.type==='mine'&&!b.ruined; // шахтный спуск по этажам
+  if(mine){
+    // п.6: спуск только в ЗАБРОШЕННУЮ шахту — в работающей штольни заняты артелью
+    if(!b.abandoned){log('⛏ Шахта работает — герои не полезут под кирки артели. Ждите, пока она опустеет.');return false}
+    if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Глубже этажей нет.');return false}
+  }else{
+    // v2.2: ЛЮБОЕ заброшенное/сгоревшее здание — данжен на одну зачистку
+    if(!(b.ruined||b.abandoned)){log('🏚 Здание обитаемо — зачищать нечего.');return false}
+    if(b.dgnDone){log('🏚 Эти развалины уже зачищены героями.');return false}
+    if(S.lairAt[idx(b.x,b.y)]>=0){log('☠ В развалинах уже засела нечисть — штурмуй логово.');return false}
+  }
   const sl=activeSlot();
   if(!sl){log('🛡 Нет готовой пати — сформируй её в окне отрядов (🗡).');return false}
-  if((b.delveMax||0)>=b.tier){log('⛏ Шахта выбрана до дна (тир '+b.tier+'). Глубже этажей нет.');return false}
-  const prov=CFG.HERO.provisions+b.tier*2;
-  if(S.stock.food<prov){log('🥖 Для спуска нужно '+prov+' еды.');return false}
+  const prov=mine?CFG.HERO.provisions+b.tier*2:CFG.HERO.provisions;
+  if(S.stock.food<prov){log('🥖 Для вылазки нужно '+prov+' еды.');return false}
   const p=withHeroPass(()=>findPath(S,S.th.x,S.th.y,b.x,b.y,true));
-  if(!p){log('⛏ К шахте нет тропы.');return false}
+  if(!p){log('⛏ К развалинам нет тропы.');return false}
   S.stock.food-=prov;computeLevels();
   const hs=sl.heroes.map(id=>S.settlers.find(u=>u.id===id));
   for(const u of hs){u.inside=-2;releaseJob(u);u.carry=null;u.after=null;u.path=null;u.act='idle'}
-  sl.status='away';b.delve=true;
-  S.party={heroes:hs.map(u=>u.id),slot:sl.id,mineB:bi,mode:'delve',phase:'out',gain:0,
+  sl.status='away';
+  if(mine)b.delve=true;
+  S.party={heroes:hs.map(u=>u.id),slot:sl.id,mineB:bi,mode:mine?'delve':'ruinsweep',phase:'out',gain:0,
     floor:b.delveMax||0,x:S.th.x+0.5,y:S.th.y+0.5,px:S.th.x+0.5,py:S.th.y+0.5,path:p,pathI:0};
-  log('⛏ '+sl.name+' спускается в шахту (этаж «'+CFG.DELVE[b.delveMax||0]+'», провиант '+prov+').');
+  log(mine
+    ?'⛏ '+sl.name+' спускается в шахту (этаж «'+CFG.DELVE[b.delveMax||0]+'», провиант '+prov+').'
+    :'🏚 '+sl.name+' идёт зачищать развалины ('+CFG.BNAME[b.type].toLowerCase()+').');
   S.uiDirty=true;return true;
+}
+/* v2.2: зачистка развалин здания — один бой с мародёрами, разовая добыча */
+function ruinSweep(){
+  const P=S.party,b=S.buildings[P.mineB];
+  if(!b){goBack(0);return}
+  const fake={str:3+(b.tier||1)*2,id:'bld',name:'Развалины: '+CFG.BNAME[b.type]};
+  beginBattle({ambushed:false,mul:1,enemy:fake},res=>{
+    if(!partyHeroes().length){log('☠ Из похода не вернулся никто.');S.party=null;endSlotMission(true);S.uiDirty=true;return}
+    if(res.win){
+      b.dgnDone=true;
+      const loot=6+(b.tier||1)*5;
+      log('🏚 Развалины зачищены: в тайниках найдено '+loot+' з.');
+      goBack(loot);
+    }else{
+      log('🏳 Партия отступает от развалин.');
+      goBack(0);
+    }
+  });
 }
 function partyTick(dt){
   const P=S.party;if(!P||P.inBattle)return; // бой идёт на экране — не дёргать partyArrive
@@ -78,6 +107,7 @@ function partyArrive(){
   }
   // reached the lair
   if(P.mode==='delve'){delveNextFloor();return}
+  if(P.mode==='ruinsweep'){ruinSweep();return}
   if(L.dead){goBack(0);return}
   if(P.mode==='scout'){
     L.known=true;
