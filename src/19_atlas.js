@@ -1,7 +1,29 @@
 /* ================= ATLAS (browser only) =================
    Тайлы 28×32 на гекс (укрупнение мира ×2), здания 32px, юниты 16px
    (рисуются в полгекса — экранная плотность совпадает). */
-let ATLAS=null,SPR={},ICONS={};
+let ATLAS=null,SPR={},ICONS={},UNIT_IMGS=null;
+/* PNG-спрайты юнитов (PixelLab, вшиты сборкой в UNIT_PNG): декодируем base64
+   в Image ОДИН раз до boot() — buildAtlas синхронный и рисует уже готовые. */
+function loadUnitImages(){
+  if(UNIT_IMGS)return Promise.resolve(UNIT_IMGS);
+  const imgs={},jobs=[];
+  const add=(key,b64)=>{jobs.push(new Promise((res)=>{
+    const im=new Image();
+    im.onload=()=>{imgs[key]=im;res()};
+    im.onerror=()=>res(); // фейл декода — просто нет ключа, рендер уйдёт в ASCII-фолбэк
+    im.src='data:image/png;base64,'+b64;
+  }))};
+  if(typeof UNIT_PNG!=='undefined')for(const race in UNIT_PNG){
+    const rec=UNIT_PNG[race];
+    for(const slot in rec.idle)add(race+'_idle_'+slot,rec.idle[slot]);
+    for(const anim of ['walk','work']){
+      if(!rec[anim])continue;
+      for(const slot in rec[anim])
+        rec[anim][slot].forEach((b,f)=>add(race+'_'+anim+'_'+slot+'_'+f,b));
+    }
+  }
+  return Promise.all(jobs).then(()=>{UNIT_IMGS=imgs;return imgs});
+}
 function reg(name,x,y,w,h){
   SPR[name]={x,y,w,h,u0:x/ATLAS.W,u1:(x+w)/ATLAS.W,v1:1-y/ATLAS.H,v0:1-(y+h)/ATLAS.H};
 }
@@ -390,7 +412,7 @@ function paintIcon(name){
 }
 function buildAtlas(){
   const t0=performance.now();
-  ATLAS={W:512,H:2048,cur:{x:0,y:0,rowH:0}}; // 2048: рельеф+биомы+реки w/v не влезали в 1024
+  ATLAS={W:1024,H:2560,cur:{x:0,y:0,rowH:0}}; // 1024x2560: тайлы 28x32 + 486 PNG-юнитов 56x56 (~2310px)
   const cv=document.createElement('canvas');cv.width=ATLAS.W;cv.height=ATLAS.H;
   const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
   ATLAS.cv=cv;ATLAS.ctx=ctx;SPR={};
@@ -501,6 +523,14 @@ function buildAtlas(){
    p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y,7,4);reg('bridge_se',p.x,p.y,TRIW,TRIH)}
   for(const k of ['b_hut','b_house2','b_tent','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
+  }
+  // PNG-юниты PixelLab (56x56, арт 32px): idle/walk/work x 6 гекс-сторон.
+  // ASCII-гриды u_* выше остаются как фолбэк (headless/фейл декода).
+  if(UNIT_IMGS)for(const key in UNIT_IMGS){
+    const im=UNIT_IMGS[key];
+    const p2=place(im.width,im.height);
+    ctx.drawImage(im,p2.x,p2.y);
+    reg('up_'+key,p2.x,p2.y,im.width,im.height);
   }
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),
     stone:paintIcon('stone'),gems:paintIcon('gems'),pop:paintIcon('pop'),ammo:paintIcon('ammo')};

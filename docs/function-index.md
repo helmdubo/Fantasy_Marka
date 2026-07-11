@@ -146,17 +146,23 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 `PAL` · `OUTL` · `G_HUMAN` · `G_DWARF` · `G_ELF` · `G_TROLL` · `G_GOBLIN` · `GOBLIN_MAP` · `G_GOBSHAMAN` · `GOBSHAMAN_MAP` · `G_SKELETON` · `SKELETON_MAP` · `G_BEAST` · `BEAST_MAP` · `G_FIREATR` · `FIREATR_MAP` · `G_MAGMAATR` · `MAGMAATR_MAP` · `G_NECRO_U` · `NECRO_U_MAP` · `G_RAIDER` · `RAIDER_MAP` · `UNIT_MAPS` · `UNIT_GRIDS` · `G_HUT` · `G_HUT_MAP` · `G_HOUSE2` · `G_HOUSE2_MAP` · `G_TENT` · `G_TENT_MAP` · `G_TAVERN` · `G_TAVERN_MAP` · `G_TOWNHALL` · `G_TOWNHALL_MAP` · `G_FISHER` · `G_FISHER_MAP` · `G_LUMBER` · `G_LUMBER_MAP` · `G_FARM` · `G_FARM_MAP` · `G_MINE` · `G_MINE_MAP` · `G_PORT` · `G_PORT_MAP` · `G_GUILD` · `G_GUILD_MAP` · `G_ADVGUILD` · `G_ADVGUILD_MAP` · `G_CRAFTERS` · `G_CRAFTERS_MAP` · `G_LIBRARY` · `G_LIBRARY_MAP` · `G_KNOWLEDGE` · `G_KNOWLEDGE_MAP` · `G_WATCHTOWER` · `G_WATCHTOWER_MAP` · `G_SITE` · `G_SITE_MAP` · `L_TOWER` · `L_TOWER_MAP` · `L_NECRO` · `L_NECRO_MAP` · `L_CAMP` · `L_CAMP_MAP` · `L_DEN` · `L_DEN_MAP` · `L_CLIFF` · `L_CLIFF_MAP` · `L_GRAVES` · `L_GRAVES_MAP` · `F_BERRY` · `F_BERRY_MAP` · `F_DEADFALL` · `F_DEADFALL_MAP` · `F_RUBBLE` · `F_RUBBLE_MAP` · `F_VEIN` · `F_VEIN_MAP` · `F_FISH` · `F_FISH_MAP` · `F_RUINS` · `F_RUINS_MAP` · `F_WHEAT` · `F_WHEAT_MAP` · `F_STUMP` · `F_STUMP_MAP` · `G_SHIP` · `G_SHIP_MAP` · `G_STAKE` · `G_STAKE_MAP` · `G_PENNANT` · `G_PENNANT_MAP` · `G_SMOKE0` · `G_SMOKE0_MAP` · `G_SMOKE1` · `G_SMOKE1_MAP` · `G_HAMMER0` · `G_HAMMER0_MAP` · `G_HAMMER1` · `G_HAMMER1_MAP` · `validateSprites()` · `bobFrame()` · `terrPix()`
 
+## src/18c_units_png.js
+
+АВТОГЕНЕРИРУЕТСЯ build.mjs из assets/pixellab/characters: base64 PNG юнитов (idle/walk/work x 6 гекс-сторон)
+
+`UNIT_PNG`
+
 ## src/19_atlas.js
 
 canvas-атлас: отрисовка тайлов/зданий/иконок, buildAtlas (browser only)
 
-`ATLAS` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triCorners()` · `triBary()` · `triIns()` · `decorTri()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverTri()` · `paintReliefTri()` · `paintBiomeTri()` · `paintRiverMouth()` · `paintWaterfall()` · `paintBridge()` · `paintIcon()` · `buildAtlas()`
+`ATLAS` · `loadUnitImages()` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triCorners()` · `triBary()` · `triIns()` · `decorTri()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverTri()` · `paintReliefTri()` · `paintBiomeTri()` · `paintRiverMouth()` · `paintWaterfall()` · `paintBridge()` · `paintIcon()` · `buildAtlas()`
 
 ## src/20_render.js
 
 three.js: батчи, меши террейна/дорог/зданий/юнитов, glow, fx (browser only)
 
-`R` · `makeBatch()` · `bQuad()` · `meshFromBatch()` · `cellTerr()` · `buildTerrain()` · `buildRivers()` · `reliefRenderField()` · `buildRelief()` · `buildRoads()` · `buildGridOverlay()` · `toggleGrid()` · `buildStatics()` · `buildBuildings()` · `makeGlowMesh()` · `buildingOccupancy()` · `fillGlow()` · `makeFxMesh()` · `fillFx()` · `makeUnitMesh()` · `fillUnits()`
+`R` · `makeBatch()` · `bQuad()` · `meshFromBatch()` · `cellTerr()` · `buildTerrain()` · `buildRivers()` · `reliefRenderField()` · `buildRelief()` · `buildRoads()` · `buildGridOverlay()` · `toggleGrid()` · `buildStatics()` · `buildBuildings()` · `makeGlowMesh()` · `buildingOccupancy()` · `fillGlow()` · `makeFxMesh()` · `fillFx()` · `makeUnitMesh()` · `unitHexSlot()` · `unitSprPick()` · `pushUnitQuad()` · `fillUnits()`
 
 ## src/21_fog_input.js
 

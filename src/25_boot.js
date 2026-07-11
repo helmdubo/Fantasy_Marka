@@ -1,6 +1,8 @@
 if(IS_BROWSER){
-  if(document.readyState==='loading')window.addEventListener('DOMContentLoaded',boot);
-  else boot();
+  // PNG-юниты декодируются до boot: buildAtlas синхронный
+  const go=()=>loadUnitImages().then(boot);
+  if(document.readyState==='loading')window.addEventListener('DOMContentLoaded',go);
+  else go();
 }else{
   runHeadless();
 }

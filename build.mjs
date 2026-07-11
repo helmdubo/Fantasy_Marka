@@ -42,6 +42,7 @@ export const MANIFEST = [
   '16b_battle.js',      // боевое ядро (п.11): ряды, цели, раунды; составы врагов
   '17_daycycle.js',     // дань империи, смена дня onNewDay, роль поселения, главный tick(dt)
   '18_sprites.js',      // палитра PAL и пиксельные гриды спрайтов (расы, здания)
+  '18c_units_png.js',   // АВТОГЕНЕРИРУЕТСЯ build.mjs из assets/pixellab/characters: base64 PNG юнитов (idle/walk/work x 6 гекс-сторон)
   '19_atlas.js',        // canvas-атлас: отрисовка тайлов/зданий/иконок, buildAtlas (browser only)
   '20_render.js',       // three.js: батчи, меши террейна/дорог/зданий/юнитов, glow, fx (browser only)
   '21_fog_input.js',    // канва тумана, камера, тултип, инспектор-пик, ввод (мышь/тач/клавиатура)
@@ -52,7 +53,44 @@ export const MANIFEST = [
   '25_boot.js',         // точка входа: браузер -> boot(), node -> runHeadless()
 ];
 
+// Вшивка PNG-спрайтов юнитов (PixelLab): assets -> src/18c_units_png.js.
+// idle: 6 гекс-ротаций персонажа; walk/work: кадры анимаций по направлениям.
+// Файл генерируется при каждой сборке; в репо коммитится вместе с index.html.
+function genUnitsPng() {
+  const base = path.join(ROOT, 'assets', 'pixellab', 'characters');
+  const RACES = ['human', 'dwarf', 'elf', 'troll', 'raider'];
+  const SLOTS = { n: 'north', s: 'south', ne: 'north-east', nw: 'north-west', se: 'south-east', sw: 'south-west' };
+  const b64 = (p) => fs.readFileSync(p).toString('base64');
+  const out = {};
+  for (const r of RACES) {
+    const dir = path.join(base, r);
+    if (!fs.existsSync(dir)) continue;
+    const rec = { idle: {}, walk: {}, work: {} };
+    for (const [slot] of Object.entries(SLOTS)) {
+      const p = path.join(dir, slot + '.png');
+      if (fs.existsSync(p)) rec.idle[slot] = b64(p);
+    }
+    for (const anim of ['walk', 'work']) {
+      for (const [slot, full] of Object.entries(SLOTS)) {
+        const ad = path.join(dir, 'animations', anim, full);
+        if (!fs.existsSync(ad)) continue;
+        rec[anim][slot] = fs.readdirSync(ad).filter(f => f.endsWith('.png')).sort()
+          .map(f => b64(path.join(ad, f)));
+      }
+    }
+    if (!Object.keys(rec.work).length) delete rec.work;
+    out[r] = rec;
+  }
+  const js = '/* АВТОГЕНЕРИРОВАНО build.mjs из assets/pixellab/characters — НЕ ПРАВИТЬ РУКАМИ.\n' +
+    '   base64 PNG юнитов: idle (6 гекс-ротаций) + кадры walk/work по направлениям. */\n' +
+    'const UNIT_PNG=' + JSON.stringify(out) + ';\n';
+  fs.writeFileSync(path.join(SRC, '18c_units_png.js'), js);
+  return js.length;
+}
+
 function build() {
+  const pngBytes = genUnitsPng();
+  console.log(`units png embed: ${(pngBytes / 1024).toFixed(0)} KB`);
   const js = MANIFEST.map(f => fs.readFileSync(path.join(SRC, f), 'utf8')).join('');
   const shell = fs.readFileSync(path.join(SRC, 'shell.html'), 'utf8');
   const marker = '/*__GAME_JS__*/\n';

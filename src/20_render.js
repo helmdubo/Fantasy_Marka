@@ -433,6 +433,38 @@ function makeUnitMesh(){
   m.renderOrder=20;m.frustumCulled=false;
   R.scene.add(m);
 }
+/* PNG-юниты PixelLab: спрайт по гекс-направлению движения + кадры walk/work.
+   Слоты флэт-топ гекса: N, NE, SE, S, SW, NW (E/W на карте не бывает). */
+function unitHexSlot(dx,dy){
+  // (dx,dy) в координатах карты (x вправо, y вниз) -> мировой угол от севера
+  let deg=Math.atan2(dx*CW,-dy)*180/Math.PI;
+  if(deg<0)deg+=360;
+  return ['n','ne','se','s','sw','nw'][(((deg+30)%360)/60)|0];
+}
+function unitSprPick(race,moving,working,dirX,dirY,lastSlot,id){
+  let slot=lastSlot||'s';
+  if(moving&&(dirX||dirY))slot=unitHexSlot(dirX,dirY);
+  let key=null;
+  if(moving)key='up_'+race+'_walk_'+slot+'_'+((Math.floor(S.time*10)+id)%8);
+  else if(working&&SPR['up_'+race+'_work_'+slot+'_0'])
+    key='up_'+race+'_work_'+slot+'_'+((Math.floor(S.time*8)+id)%9);
+  if(!key||!SPR[key])key='up_'+race+'_idle_'+slot;
+  const spr=SPR[key];
+  return spr?{spr,slot}:null; // null -> ASCII-фолбэк
+}
+// квад PNG-юнита: холст 56px (арт 32px по центру), ноги ~на прежней базовой линии
+function pushUnitQuad(n,wx,wy,spr){
+  const o=n*12,uo=n*8;
+  const x0=wx-0.475,x1=wx+0.475,y0=wy-0.64,y1=wy+0.31;
+  R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
+  R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
+  R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
+  R.uPos[o+9]=x0;R.uPos[o+10]=y1;R.uPos[o+11]=0;
+  R.uUv[uo]=spr.u0;R.uUv[uo+1]=spr.v0;
+  R.uUv[uo+2]=spr.u1;R.uUv[uo+3]=spr.v0;
+  R.uUv[uo+4]=spr.u1;R.uUv[uo+5]=spr.v1;
+  R.uUv[uo+6]=spr.u0;R.uUv[uo+7]=spr.v1;
+}
 function fillUnits(alpha){
   let n=0;
   const t2=Math.floor(S.time*3.5);
@@ -453,6 +485,13 @@ function fillUnits(alpha){
      R.uUv[su]=sh.u0;R.uUv[su+1]=sh.v0;R.uUv[su+2]=sh.u1;R.uUv[su+3]=sh.v0;
      R.uUv[su+4]=sh.u1;R.uUv[su+5]=sh.v1;R.uUv[su+6]=sh.u0;R.uUv[su+7]=sh.v1;
      n++;if(n>=95)break;}
+    const pick=unitSprPick(u.race,u.act==='goto',u.act==='work',u.dirX,u.dirY,u.sprSlot,u.id);
+    if(pick){ // PNG-спрайт PixelLab: 6 гекс-сторон + кадры walk/work
+      u.sprSlot=pick.slot;
+      pushUnitQuad(n,wx,wy,pick.spr);
+      n++;if(n>=96)break;
+      continue;
+    }
     const o=n*12,uo=n*8;
     const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
     R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
@@ -472,10 +511,18 @@ function fillUnits(alpha){
     if(!inMap(w.x|0,w.y|0))continue;
     if(!S.visible[ci]&&!S.revealAll)continue;
     const x=lerp(w.px,w.x,alpha),y=lerp(w.py,w.y,alpha);
+    const mdx=w.x-w.px,mdy=w.y-w.py;
+    const moving=Math.abs(mdx)+Math.abs(mdy)>0.001;
     for(let k=0;k<Math.min(w.size,3);k++){
       if(n>=96)break;
       const ox=(k===1?-0.35:(k===2?0.35:0)),oy=(k>0?0.25:0);
       const wx=x*CW+ox,wy=(S.H-y)-zig(x-0.5)+oy;
+      const pick=unitSprPick('raider',moving,false,mdx,mdy,w.sprSlot,k);
+      if(pick){
+        w.sprSlot=pick.slot;
+        pushUnitQuad(n,wx,wy,pick.spr);
+        n++;continue;
+      }
       const spr=SPR['u_raider_'+((t2+k)%2)];
       const o=n*12,uo=n*8;
       const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
@@ -496,9 +543,17 @@ function fillUnits(alpha){
     const ci=idx(P.x|0,P.y|0);
     if(inMap(P.x|0,P.y|0)&&(S.visible[ci]||S.explored[ci]||S.revealAll)){
       const x=lerp(P.px,P.x,alpha),y=lerp(P.py,P.y,alpha);
+      const pdx=P.x-P.px,pdy=P.y-P.py;
+      const pMoving=Math.abs(pdx)+Math.abs(pdy)>0.001;
       for(let k=0;k<hs.length&&n<96;k++){
         const u=hs[k];
         const wx=x*CW+(k-1)*0.35,wy=(S.H-y)-zig(x-0.5)+(k===1?0.3:0);
+        const pick=unitSprPick(u.race,pMoving,false,pdx,pdy,P.sprSlot,k);
+        if(pick){
+          P.sprSlot=pick.slot;
+          pushUnitQuad(n,wx,wy,pick.spr);
+          n++;continue;
+        }
         const spr=SPR['u_'+u.race+'_'+((t2+k)%2)];
         const o=n*12,uo=n*8;
         const x0=wx-0.27,x1=wx+0.27,y0=wy-0.5,y1=wy+0.04; // юнит прежнего размера при гексе x2
