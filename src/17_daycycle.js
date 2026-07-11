@@ -52,6 +52,7 @@ function computeRole(){
     if(best)log('🏛 Поселение обретает лицо: '+role.toLowerCase()+'.')}
 }
 function onNewDay(){
+  checkValleySecrets(); // «секрет» котловины (§4): всё горное кольцо разведано?
   // food consumption
   const need=S.settlers.length*CFG.EAT;
   if(S.stock.food>=need){S.stock.food-=need;addResourcePopup('food',-need,S.th.x,S.th.y);

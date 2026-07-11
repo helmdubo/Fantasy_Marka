@@ -385,7 +385,9 @@ function updateInspector(){
     const t=S.terr[i];
     let tn=TNAME[t];
     if(t===T.WATER)tn=(S.waterKind[i]===2)?'Море':'Озеро';
-    h='<div class="hdr">'+tn+' · '+S.pin.x+','+S.pin.y+'</div>';
+    if(t===T.MTN&&S.reliefE&&S.reliefE[i]>=4.5)tn='Горы · снежный пик';
+    const bio=(S.biome&&S.biome[i]&&t===T.GRASS)?BIO_NAME[S.biome[i]]:'';
+    h='<div class="hdr">'+tn+(bio&&bio!=='Луговина'?' · '+bio.toLowerCase():'')+' · '+S.pin.x+','+S.pin.y+'</div>';
     if(t===T.FOREST&&S.terrHp[i]>0)h+='<div class="row">древесины: '+S.terrHp[i]+'</div>';
     if(S.feat[i])h+='<div class="row">'+FNAME[S.feat[i]]+'</div>';
     const li=S.lairAt[i];

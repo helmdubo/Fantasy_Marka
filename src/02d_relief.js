@@ -214,6 +214,22 @@ function detectPasses(det){
   }
 }
 
+/* --- «секрет» скрытой котловины (§4): пока кольцо не разведано, игрок
+   не знает, что внутри. Проверка событийная и дешёвая — раз в день. --- */
+function checkValleySecrets(){
+  if(!S.world||!S.world.valleys)return;
+  for(const v of S.world.valleys){
+    if(v.discovered)continue;
+    let all=true;
+    for(const r of v.ring)if(!S.explored[r]){all=false;break}
+    if(all){
+      v.discovered=true;
+      log('⛰ Секрет гор раскрыт: за кольцом хребтов — потаённая '+
+        (v.hasLake?'котловина с озером!':'долина!'));
+    }
+  }
+}
+
 /* --- мега-вершины: достраиваем розетки ★ к хребтам-«снежинкам» --- */
 function wgPeaks(){
   const W=S.W;

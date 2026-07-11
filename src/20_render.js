@@ -67,7 +67,23 @@ function buildTerrain(){
     for(const [t,ord] of [[T.GRASS,2],[T.ROCK,4],[T.MTN,5]]){
       m=meshFromBatch(layerBatch(t),ord);R.scene.add(m);R.terrStaticMeshes.push(m);
     }
+    // биом-тинты (степь/болотина): статичный марчинг по углам S.biome поверх лугов
+    if(S.biome){
+      const bb=makeBatch();
+      for(const bio of [BIO.STEPPE,BIO.SWAMP]){
+        for(let k=0;k<TL.length;k+=7){
+          const bit=(i)=>i>=0&&S.biome[i]===bio&&S.terr[i]===T.GRASS?1:0;
+          const bits=bit(TL[k+4])|(bit(TL[k+5])<<1)|(bit(TL[k+6])<<2);
+          if(!bits)continue;
+          const x=TL[k],y=TL[k+1],orr=TL[k+3]?'r':'l';
+          const wyTop=WYCC(TL[k+2],y);
+          bQuad(bb,WXC(x),wyTop-1,WXC(x)+CW,wyTop,SPR['bio'+bio+'_'+orr+'_'+bits]);
+        }
+      }
+      m=meshFromBatch(bb,2.5);R.scene.add(m);R.terrStaticMeshes.push(m);
+    }
     buildRivers();
+    buildRelief();
     S.terrFullDirty=false;
   }
   if(R.terrForestMesh){R.scene.remove(R.terrForestMesh);R.terrForestMesh.geometry.dispose()}
@@ -76,14 +92,17 @@ function buildTerrain(){
   S.terrDirty=false;
 }
 function buildRivers(){
-  // п.1 v2: русла по dual-треугольникам (order 6), дороги и мосты выше (order 7)
+  // реки v3: русла по dual-треугольникам (order 6), дороги и мосты выше (order 7).
+  // Ширина тайла — от накопленного потока (w1..3); noise-вариант меандра —
+  // детерминированный хеш позиции (INV-T4: сигнатура та же, интерьер варьируется).
   if(R.riverMesh){R.scene.remove(R.riverMesh);R.riverMesh.geometry.dispose();R.riverMesh=null}
   if(!S.riverTris||!S.riverTris.size)return;
   const b=makeBatch();
   for(const r of S.riverTris.values()){
     if(!r.mask)continue;
     const wyTop=WYCC(r.baseCol,r.y);
-    bQuad(b,WXC(r.x),wyTop-1,WXC(r.x)+CW,wyTop,SPR['rt_'+r.tint+'_'+r.or+'_'+r.mask]);
+    const v=hash2(r.x*3,r.y*5,911)<0.5?0:1;
+    bQuad(b,WXC(r.x),wyTop-1,WXC(r.x)+CW,wyTop,SPR['rt_'+r.tint+'_'+r.or+'_'+r.mask+'_w'+(r.w||1)+'_v'+v]);
   }
   for(const r of S.riverTris.values())
     for(const ov of r.over){
@@ -91,6 +110,34 @@ function buildRivers(){
       else if(ov.kind==='falls')bQuad(b,ov.wx-0.34,ov.wy-0.4,ov.wx+0.34,ov.wy+0.4,SPR['r_falls']);
     }
   R.riverMesh=meshFromBatch(b,6);R.scene.add(R.riverMesh);
+}
+/* ---------- ГИПСОМЕТРИЧЕСКИЙ РЕЛЬЕФ по knowledge-слою (§4, §5) ----------
+   Пояса E рисуются ТОЛЬКО по разведанным горам: кластеры пере-детектятся по
+   S.explored, гора буквально «растёт из тумана» по мере разведки — открыл
+   соседей хребта, маски перемарчились, пик дорос до снежника. Симуляция
+   при этом читает истинное поле S.reliefE — рендер-слой чисто производный. */
+function reliefRenderField(){
+  const det=mclusterDetect(i=>S.terr[i]===T.MTN&&(S.explored[i]||S.revealAll));
+  return reliefField(det);
+}
+function buildRelief(){
+  if(R.reliefMesh){R.scene.remove(R.reliefMesh);R.reliefMesh.geometry.dispose();R.reliefMesh=null}
+  const E=reliefRenderField();
+  const TL=R.triList;
+  const b=makeBatch();
+  for(const L of [2,3,4,5]){ // stacked binary passes: один марчинг, разные материалы
+    const th=L-0.5;
+    for(let k=0;k<TL.length;k+=7){
+      const bit=(i)=>i>=0&&E[i]>=th?1:0;
+      const bits=bit(TL[k+4])|(bit(TL[k+5])<<1)|(bit(TL[k+6])<<2);
+      if(!bits)continue;
+      const x=TL[k],y=TL[k+1],orr=TL[k+3]?'r':'l';
+      const wyTop=WYCC(TL[k+2],y);
+      bQuad(b,WXC(x),wyTop-1,WXC(x)+CW,wyTop,SPR['rl'+L+'_'+orr+'_'+bits]);
+    }
+  }
+  R.reliefMesh=meshFromBatch(b,5.5);R.scene.add(R.reliefMesh);
+  S.reliefDirty=false;
 }
 function buildRoads(){
   if(R.roadMesh){R.scene.remove(R.roadMesh);R.roadMesh.geometry.dispose();R.roadMesh=null}
@@ -154,9 +201,11 @@ function buildRoads(){
 // Drop I: debug-оверлей сеток — как «Main grid & dual grid» у Оскара.
 // Dual (красный): рёбра треугольной решётки между центрами хексов.
 // Main (синий): контуры Вороной-хексов — рёбра между центрами смежных треугольников.
+// Мосты (золотой): рёбра гекс-графа, пересекающие русло, — кандидаты на мост (§6).
 function buildGridOverlay(){
   if(R.gridDual){R.scene.remove(R.gridDual);R.gridDual.geometry.dispose();R.gridDual=null}
   if(R.gridMain){R.scene.remove(R.gridMain);R.gridMain.geometry.dispose();R.gridMain=null}
+  if(R.gridBridge){R.scene.remove(R.gridBridge);R.gridBridge.geometry.dispose();R.gridBridge=null}
   const dual=[],main=[];
   const cwx=(c)=>WXC(c[0]), cwy=(c)=>WYCC(c[0],c[1]);
   const edgeMap=new Map();
@@ -184,11 +233,24 @@ function buildGridOverlay(){
   };
   R.gridDual=mk(dual,0xc03a34,0.45);
   R.gridMain=mk(main,0x3a6ac0,0.55);
+  // рёбра гекс-графа поверх русла: пересечение дороги с рекой = мост,
+  // детектится тривиально — подсвечиваем все кандидаты
+  const bridge=[];
+  if(S.riverEdges&&S.riverEdges.size){
+    const N2=S.W*S.H;
+    for(const k of S.riverEdges){
+      const a=Math.floor(k/N2),c2=k%N2;
+      const ax=a%S.W,ay=(a/S.W)|0,bx2=c2%S.W,by2=(c2/S.W)|0;
+      if(S.terr[a]===T.WATER&&S.terr[c2]===T.WATER)continue;
+      bridge.push(WXC(ax),WYCC(ax,ay),0, WXC(bx2),WYCC(bx2,by2),0);
+    }
+  }
+  R.gridBridge=mk(bridge,0xeec658,0.8);
 }
 function toggleGrid(){
   S.showGrid=!S.showGrid;
   if(!R.gridDual)buildGridOverlay();
-  R.gridDual.visible=R.gridMain.visible=!!S.showGrid;
+  R.gridDual.visible=R.gridMain.visible=R.gridBridge.visible=!!S.showGrid;
   const b=el('dbg_grid');if(b)b.classList.toggle('on',!!S.showGrid);
 }
 function buildStatics(){

@@ -9,7 +9,9 @@ const PAL={
   DI:'#6d5238',w:'#8a6b45',Wd:'#6b4f30',
   r:'#a5533a',R:'#7c3b2a',y:'#eec658',k:'#100c14',
   SK:'#d9a066',Cb:'#3a5aa8',Cg:'#3f7d5a',Cr:'#a8353a',
-  TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c'
+  TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c',
+  // террейн v2.0: пояса рельефа и биом-тинты
+  M3:'#8a8494',St1:'#7d8a3f',St2:'#9c9a52',Sw1:'#2e5240',Sw2:'#3a6850'
 };
 const OUTL={};OUTL[T.GRASS]=PAL.G1;OUTL[T.FOREST]=PAL.F1;OUTL[T.ROCK]=PAL.R1;OUTL[T.MTN]=PAL.o;
 
@@ -383,7 +385,7 @@ function terrPix(t,x,y,seed){
     case T.FOREST:{const b=hash2(x>>1,y>>1,seed+3);if(b<0.28)return PAL.F1;if(b>0.74&&h<0.5)return PAL.F3;return PAL.F2}
     case T.ROCK: if(h<0.10)return PAL.R1; if(h>0.90)return PAL.R3; return PAL.R2;
     case T.MTN:{const d=(x+y)&7;let c=(d<3)?PAL.M2:PAL.M1;
-      if(y<5&&hash2(x,y,seed+7)<0.55)c=PAL.SN;
+      // снег больше не запечён в тайл: снежник даёт пояс E>=4.5 (гипсометрия §5)
       if(h<0.07)c=PAL.M1;return c}
   }
   return '#f0f';

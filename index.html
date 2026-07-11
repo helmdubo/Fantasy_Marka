@@ -990,6 +990,22 @@ function detectPasses(det){
   }
 }
 
+/* --- «секрет» скрытой котловины (§4): пока кольцо не разведано, игрок
+   не знает, что внутри. Проверка событийная и дешёвая — раз в день. --- */
+function checkValleySecrets(){
+  if(!S.world||!S.world.valleys)return;
+  for(const v of S.world.valleys){
+    if(v.discovered)continue;
+    let all=true;
+    for(const r of v.ring)if(!S.explored[r]){all=false;break}
+    if(all){
+      v.discovered=true;
+      log('⛰ Секрет гор раскрыт: за кольцом хребтов — потаённая '+
+        (v.hasLake?'котловина с озером!':'долина!'));
+    }
+  }
+}
+
 /* --- мега-вершины: достраиваем розетки ★ к хребтам-«снежинкам» --- */
 function wgPeaks(){
   const W=S.W;
@@ -1345,7 +1361,7 @@ function newGame(seedStr){
     rep:0,warbands:[],alarm:false,gameOver:null,ships:[],raidsSeen:0,lootLost:0,tributePaid:0,
     party:null,partySlots:[],heroDeaths:0,lairsDown:0,roadPlans:[],roadConn:null,showcase:[],craftT:0,stageCard:null,itemsSold:0,road:null,waterKind:null,policy:{food:'spend',wood:'import',stone:'export',gems:'export'},pin:null,
     popups:[],portBars:null,
-    log:[],uiDirty:true,fogDirty:true,featDirty:true,bldDirty:true,terrDirty:true,terrFullDirty:true,
+    log:[],uiDirty:true,fogDirty:true,featDirty:true,bldDirty:true,terrDirty:true,terrFullDirty:true,reliefDirty:true,
     nextId:1,hungry:false,dbgBuilder:'—',atlasMs:0,hoverLair:-1,revealAll:false};
   genWorld();pickStart();genFeatures();genLairs();computeFear();rebuildPass();
   S.road=new Uint8Array(N);S.roadConn=new Uint8Array(N);
@@ -1655,7 +1671,8 @@ function markVisibleCell(x,y,alpha){
   const i=idx(x,y);
   S.visible[i]=1;
   if(S.visibleAlpha)S.visibleAlpha[i]=Math.max(S.visibleAlpha[i]||0,alpha===undefined?1:alpha);
-  if(!S.explored[i]){S.explored[i]=1;S.fogDirty=true}
+  if(!S.explored[i]){S.explored[i]=1;S.fogDirty=true;
+    if(S.terr[i]===T.MTN)S.reliefDirty=true} // knowledge-рельеф: гора дорастает
 }
 function stampVision(cx,cy,r,viewH){
   // 360° building/ward visibility. Kept for towers and static points only.
@@ -1724,7 +1741,8 @@ function exploreRing(cx,cy){
   for(const d of cells){
     const x=cx+d[0],y=cy+d[1];if(!inMap(x,y))continue;
     const i=idx(x,y);
-    if(!S.explored[i]){S.explored[i]=1;S.fogDirty=true}
+    if(!S.explored[i]){S.explored[i]=1;S.fogDirty=true;
+      if(S.terr[i]===T.MTN)S.reliefDirty=true}
   }
 }
 
@@ -4300,6 +4318,7 @@ function computeRole(){
     if(best)log('🏛 Поселение обретает лицо: '+role.toLowerCase()+'.')}
 }
 function onNewDay(){
+  checkValleySecrets(); // «секрет» котловины (§4): всё горное кольцо разведано?
   // food consumption
   const need=S.settlers.length*CFG.EAT;
   if(S.stock.food>=need){S.stock.food-=need;addResourcePopup('food',-need,S.th.x,S.th.y);
@@ -4422,7 +4441,9 @@ const PAL={
   DI:'#6d5238',w:'#8a6b45',Wd:'#6b4f30',
   r:'#a5533a',R:'#7c3b2a',y:'#eec658',k:'#100c14',
   SK:'#d9a066',Cb:'#3a5aa8',Cg:'#3f7d5a',Cr:'#a8353a',
-  TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c'
+  TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c',
+  // террейн v2.0: пояса рельефа и биом-тинты
+  M3:'#8a8494',St1:'#7d8a3f',St2:'#9c9a52',Sw1:'#2e5240',Sw2:'#3a6850'
 };
 const OUTL={};OUTL[T.GRASS]=PAL.G1;OUTL[T.FOREST]=PAL.F1;OUTL[T.ROCK]=PAL.R1;OUTL[T.MTN]=PAL.o;
 
@@ -4796,7 +4817,7 @@ function terrPix(t,x,y,seed){
     case T.FOREST:{const b=hash2(x>>1,y>>1,seed+3);if(b<0.28)return PAL.F1;if(b>0.74&&h<0.5)return PAL.F3;return PAL.F2}
     case T.ROCK: if(h<0.10)return PAL.R1; if(h>0.90)return PAL.R3; return PAL.R2;
     case T.MTN:{const d=(x+y)&7;let c=(d<3)?PAL.M2:PAL.M1;
-      if(y<5&&hash2(x,y,seed+7)<0.55)c=PAL.SN;
+      // снег больше не запечён в тайл: снежник даёт пояс E>=4.5 (гипсометрия §5)
       if(h<0.07)c=PAL.M1;return c}
   }
   return '#f0f';
@@ -4911,27 +4932,35 @@ function paintRoadHex(ctx,x,y,mask){
     if(lit[ry*14+rx])ctx.fillRect(x+rx,y+ry,1,1);
   }
 }
-/* ---------- РЕКИ (п.1, v2): русло по dual-треугольникам ----------
+/* ---------- РЕКИ (v3): русло по dual-треугольникам ----------
    Река входит через ребро треугольника, идёт через центр и выходит через
    другое ребро (границы гексов). mask — 3 бита сторон (0:c0-c1,1:c1-c2,2:c2-c0).
-   tint — цвет берегов под террейн (луга/лес/скалы/горы). */
-function paintRiverTri(ctx,x0,y0,orr,mask,tint){
+   tint — цвет берегов под террейн; w — класс ширины от потока (1..3, §6);
+   v — noise-вариант меандра (§8.4, noisy edges): изгиб живёт внутри тайла,
+   концы пришиты к серединам рёбер — стыки соседних тайлов сходятся всегда. */
+function paintRiverTri(ctx,x0,y0,orr,mask,tint,w,v){
+  if(w===undefined)w=1;
+  if(v===undefined)v=0;
   const P=(orr==='r')?[[0,0],[0,16],[14,8]]:[[14,0],[14,16],[0,8]];
   const C=[(P[0][0]+P[1][0]+P[2][0])/3,(P[0][1]+P[1][1]+P[2][1])/3];
   const mids=[0,1,2].map(k=>[(P[k][0]+P[(k+1)%3][0])/2,(P[k][1]+P[(k+1)%3][1])/2]);
-  const ins=(px2,py2)=>{const w=triBary(orr,px2+0.5,py2+0.5);
-    return w[0]>=-0.045&&w[1]>=-0.045&&w[2]>=-0.045};
+  const ins=(px2,py2)=>{const w2=triBary(orr,px2+0.5,py2+0.5);
+    return w2[0]>=-0.045&&w2[1]>=-0.045&&w2[2]>=-0.045};
   const lit=new Uint8Array(14*16);
   const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<14&&py2<16&&ins(px2,py2))lit[py2*14+px2]=1};
+  const rad=w>=3?2:(w===2?1.6:1);
   const blob=(cx2,cy2)=>{const bx=Math.round(cx2),by=Math.round(cy2);
-    for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++)put(bx+ox,by+oy)};
+    const r=Math.ceil(rad);
+    for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++)
+      if(ox*ox+oy*oy<=rad*rad+0.6)put(bx+ox,by+oy)};
   blob(C[0],C[1]);
   for(let k=0;k<3;k++)if(mask&(1<<k)){
     const [ex,ey]=mids[k],steps=12;
-    // перпендикулярный изгиб: 0 на концах, чтобы русла соседних тайлов сходились
+    // перпендикулярный изгиб: 0 на концах, чтобы русла соседних тайлов сходились;
+    // амплитуда зависит от noise-варианта, узкие реки петляют сильней
     const dx0=ex-C[0],dy0=ey-C[1],dl=Math.hypot(dx0,dy0)||1;
     const px3=-dy0/dl,py3=dx0/dl;
-    const amp=(hash2(k+1,mask*3+(orr==='r'?1:0),771)*2-1)*2.0;
+    const amp=(hash2(k+1+v*17,mask*3+(orr==='r'?1:0),771)*2-1)*(w===1?2.4:(w===2?1.5:0.9));
     for(let i=0;i<=steps;i++){
       const t2=i/steps;
       const off=Math.sin(t2*Math.PI)*amp;
@@ -4956,6 +4985,60 @@ function paintRiverTri(ctx,x0,y0,orr,mask,tint){
     const h=hash2(px2+mask*7,py2+tint*13,313);
     ctx.fillStyle=h<0.12?PAL.W3:(h>0.9?PAL.W1:PAL.W2);
     ctx.fillRect(x0+px2,y0+py2,1,1);
+  }
+}
+/* ---------- ГИПСОМЕТРИЧЕСКИЕ ПОЯСА (§5): stacked binary passes ----------
+   Один и тот же марчинг масок по порогам E (1.5, 2.5, 3.5, 4.5) — меняется
+   только материал: L2 дымка предгорий (дизеринг), L3/L4 склоны, L5 снежник.
+   Кромка пояса L>=3 обведена — читается как crease-линия хребта. */
+function paintReliefTri(ctx,x0,y0,orr,bits,L){
+  const c=[bits&1,(bits>>1)&1,(bits>>2)&1];
+  const mask=new Uint8Array(TRIW*TRIH),ins=new Uint8Array(TRIW*TRIH);
+  for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
+    const w=triBary(orr,x+0.5,y+0.5);
+    if(w[0]<-0.045||w[1]<-0.045||w[2]<-0.045)continue;
+    ins[y*TRIW+x]=1;
+    let v=w[0]*c[0]+w[1]*c[1]+w[2]*c[2];
+    if(bits!==7)v+=hash2(x+L*47,y+bits*7+(orr==='r'?191:0),913)*0.30-0.15;
+    mask[y*TRIW+x]=v>0.5?1:0;
+  }
+  for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
+    if(!mask[y*TRIW+x])continue;
+    const h=hash2(x+L*31,y+bits*29,517);
+    let col=null;
+    if(L===2)col=h<0.34?(h<0.10?PAL.M1:PAL.R1):null;      // дымка предгорий
+    else if(L===3)col=h<0.10?PAL.M2:PAL.M1;               // нижний склон
+    else if(L===4)col=h<0.12?PAL.M3:PAL.M2;               // верхний склон
+    else col=h<0.14?PAL.M3:PAL.SN;                        // снежник (E>=4.5)
+    if(col){ctx.fillStyle=col;ctx.fillRect(x0+x,y0+y,1,1)}
+  }
+  if(L>=3){ // crease: тёмная кромка пояса
+    ctx.fillStyle=L===5?PAL.M3:PAL.o;
+    for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
+      if(!mask[y*TRIW+x])continue;
+      let edge=false;
+      if(x>0&&ins[y*TRIW+x-1]&&!mask[y*TRIW+x-1])edge=true;
+      if(x<TRIW-1&&ins[y*TRIW+x+1]&&!mask[y*TRIW+x+1])edge=true;
+      if(y>0&&ins[(y-1)*TRIW+x]&&!mask[(y-1)*TRIW+x])edge=true;
+      if(y<TRIH-1&&ins[(y+1)*TRIW+x]&&!mask[(y+1)*TRIW+x])edge=true;
+      if(edge)ctx.fillRect(x0+x,y0+y,1,1);
+    }
+  }
+}
+/* ---------- БИОМ-ТИНТЫ (§8.3): дизеринг-оверлеи поверх лугов ---------- */
+function paintBiomeTri(ctx,x0,y0,orr,bits,bio){
+  const c=[bits&1,(bits>>1)&1,(bits>>2)&1];
+  for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
+    const w=triBary(orr,x+0.5,y+0.5);
+    if(w[0]<-0.045||w[1]<-0.045||w[2]<-0.045)continue;
+    let v=w[0]*c[0]+w[1]*c[1]+w[2]*c[2];
+    if(bits!==7)v+=hash2(x+bio*53,y+bits*11+(orr==='r'?191:0),919)*0.30-0.15;
+    if(v<=0.5)continue;
+    const h=hash2(x+bio*13,y+bits*17,733);
+    let col=null;
+    if(bio===BIO.STEPPE)col=h<0.42?(h<0.14?PAL.St1:PAL.St2):null;     // сухостой
+    else col=h<0.52?(h<0.16?PAL.W2:(h<0.34?PAL.Sw1:PAL.Sw2)):null;    // мокрая болотина
+    if(col){ctx.fillStyle=col;ctx.fillRect(x0+x,y0+y,1,1)}
   }
 }
 function paintRiverMouth(ctx,x,y){ // устье: пена впадения (8x8, оверлей)
@@ -5302,9 +5385,28 @@ function buildAtlas(){
   p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
   p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
   for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
+  // реки v3: тинт берегов x маска x ширина потока x noise-вариант меандра
   for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN])
     for(const orr of ['l','r'])
-      for(let m=1;m<8;m++){p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,14,16)}
+      for(let m=1;m<8;m++)
+        for(let w=1;w<=3;w++)
+          for(let v=0;v<2;v++){
+            p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t,w,v);
+            reg('rt_'+t+'_'+orr+'_'+m+'_w'+w+'_v'+v,p.x,p.y,14,16);
+          }
+  // гипсометрические пояса рельефа (L2..L5) и биом-тинты (степь/болотина)
+  for(const L of [2,3,4,5])
+    for(const orr of ['l','r'])
+      for(let bits=1;bits<8;bits++){
+        p=place(TRIW,TRIH);paintReliefTri(ctx,p.x,p.y,orr,bits,L);
+        reg('rl'+L+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
+      }
+  for(const bio of [BIO.STEPPE,BIO.SWAMP])
+    for(const orr of ['l','r'])
+      for(let bits=1;bits<8;bits++){
+        p=place(TRIW,TRIH);paintBiomeTri(ctx,p.x,p.y,orr,bits,bio);
+        reg('bio'+bio+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
+      }
   p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);
   p=place(10,12);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,10,12);
   p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16);
@@ -5313,6 +5415,7 @@ function buildAtlas(){
   }
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),
     stone:paintIcon('stone'),gems:paintIcon('gems'),pop:paintIcon('pop'),ammo:paintIcon('ammo')};
+  if(ATLAS.cur.y+ATLAS.cur.rowH>ATLAS.H)console.warn('[Марка] АТЛАС ПЕРЕПОЛНЕН:',ATLAS.cur.y+ATLAS.cur.rowH,'>',ATLAS.H);
   S.atlasMs=performance.now()-t0;
 }
 
@@ -5385,7 +5488,23 @@ function buildTerrain(){
     for(const [t,ord] of [[T.GRASS,2],[T.ROCK,4],[T.MTN,5]]){
       m=meshFromBatch(layerBatch(t),ord);R.scene.add(m);R.terrStaticMeshes.push(m);
     }
+    // биом-тинты (степь/болотина): статичный марчинг по углам S.biome поверх лугов
+    if(S.biome){
+      const bb=makeBatch();
+      for(const bio of [BIO.STEPPE,BIO.SWAMP]){
+        for(let k=0;k<TL.length;k+=7){
+          const bit=(i)=>i>=0&&S.biome[i]===bio&&S.terr[i]===T.GRASS?1:0;
+          const bits=bit(TL[k+4])|(bit(TL[k+5])<<1)|(bit(TL[k+6])<<2);
+          if(!bits)continue;
+          const x=TL[k],y=TL[k+1],orr=TL[k+3]?'r':'l';
+          const wyTop=WYCC(TL[k+2],y);
+          bQuad(bb,WXC(x),wyTop-1,WXC(x)+CW,wyTop,SPR['bio'+bio+'_'+orr+'_'+bits]);
+        }
+      }
+      m=meshFromBatch(bb,2.5);R.scene.add(m);R.terrStaticMeshes.push(m);
+    }
     buildRivers();
+    buildRelief();
     S.terrFullDirty=false;
   }
   if(R.terrForestMesh){R.scene.remove(R.terrForestMesh);R.terrForestMesh.geometry.dispose()}
@@ -5394,14 +5513,17 @@ function buildTerrain(){
   S.terrDirty=false;
 }
 function buildRivers(){
-  // п.1 v2: русла по dual-треугольникам (order 6), дороги и мосты выше (order 7)
+  // реки v3: русла по dual-треугольникам (order 6), дороги и мосты выше (order 7).
+  // Ширина тайла — от накопленного потока (w1..3); noise-вариант меандра —
+  // детерминированный хеш позиции (INV-T4: сигнатура та же, интерьер варьируется).
   if(R.riverMesh){R.scene.remove(R.riverMesh);R.riverMesh.geometry.dispose();R.riverMesh=null}
   if(!S.riverTris||!S.riverTris.size)return;
   const b=makeBatch();
   for(const r of S.riverTris.values()){
     if(!r.mask)continue;
     const wyTop=WYCC(r.baseCol,r.y);
-    bQuad(b,WXC(r.x),wyTop-1,WXC(r.x)+CW,wyTop,SPR['rt_'+r.tint+'_'+r.or+'_'+r.mask]);
+    const v=hash2(r.x*3,r.y*5,911)<0.5?0:1;
+    bQuad(b,WXC(r.x),wyTop-1,WXC(r.x)+CW,wyTop,SPR['rt_'+r.tint+'_'+r.or+'_'+r.mask+'_w'+(r.w||1)+'_v'+v]);
   }
   for(const r of S.riverTris.values())
     for(const ov of r.over){
@@ -5409,6 +5531,34 @@ function buildRivers(){
       else if(ov.kind==='falls')bQuad(b,ov.wx-0.34,ov.wy-0.4,ov.wx+0.34,ov.wy+0.4,SPR['r_falls']);
     }
   R.riverMesh=meshFromBatch(b,6);R.scene.add(R.riverMesh);
+}
+/* ---------- ГИПСОМЕТРИЧЕСКИЙ РЕЛЬЕФ по knowledge-слою (§4, §5) ----------
+   Пояса E рисуются ТОЛЬКО по разведанным горам: кластеры пере-детектятся по
+   S.explored, гора буквально «растёт из тумана» по мере разведки — открыл
+   соседей хребта, маски перемарчились, пик дорос до снежника. Симуляция
+   при этом читает истинное поле S.reliefE — рендер-слой чисто производный. */
+function reliefRenderField(){
+  const det=mclusterDetect(i=>S.terr[i]===T.MTN&&(S.explored[i]||S.revealAll));
+  return reliefField(det);
+}
+function buildRelief(){
+  if(R.reliefMesh){R.scene.remove(R.reliefMesh);R.reliefMesh.geometry.dispose();R.reliefMesh=null}
+  const E=reliefRenderField();
+  const TL=R.triList;
+  const b=makeBatch();
+  for(const L of [2,3,4,5]){ // stacked binary passes: один марчинг, разные материалы
+    const th=L-0.5;
+    for(let k=0;k<TL.length;k+=7){
+      const bit=(i)=>i>=0&&E[i]>=th?1:0;
+      const bits=bit(TL[k+4])|(bit(TL[k+5])<<1)|(bit(TL[k+6])<<2);
+      if(!bits)continue;
+      const x=TL[k],y=TL[k+1],orr=TL[k+3]?'r':'l';
+      const wyTop=WYCC(TL[k+2],y);
+      bQuad(b,WXC(x),wyTop-1,WXC(x)+CW,wyTop,SPR['rl'+L+'_'+orr+'_'+bits]);
+    }
+  }
+  R.reliefMesh=meshFromBatch(b,5.5);R.scene.add(R.reliefMesh);
+  S.reliefDirty=false;
 }
 function buildRoads(){
   if(R.roadMesh){R.scene.remove(R.roadMesh);R.roadMesh.geometry.dispose();R.roadMesh=null}
@@ -5472,9 +5622,11 @@ function buildRoads(){
 // Drop I: debug-оверлей сеток — как «Main grid & dual grid» у Оскара.
 // Dual (красный): рёбра треугольной решётки между центрами хексов.
 // Main (синий): контуры Вороной-хексов — рёбра между центрами смежных треугольников.
+// Мосты (золотой): рёбра гекс-графа, пересекающие русло, — кандидаты на мост (§6).
 function buildGridOverlay(){
   if(R.gridDual){R.scene.remove(R.gridDual);R.gridDual.geometry.dispose();R.gridDual=null}
   if(R.gridMain){R.scene.remove(R.gridMain);R.gridMain.geometry.dispose();R.gridMain=null}
+  if(R.gridBridge){R.scene.remove(R.gridBridge);R.gridBridge.geometry.dispose();R.gridBridge=null}
   const dual=[],main=[];
   const cwx=(c)=>WXC(c[0]), cwy=(c)=>WYCC(c[0],c[1]);
   const edgeMap=new Map();
@@ -5502,11 +5654,24 @@ function buildGridOverlay(){
   };
   R.gridDual=mk(dual,0xc03a34,0.45);
   R.gridMain=mk(main,0x3a6ac0,0.55);
+  // рёбра гекс-графа поверх русла: пересечение дороги с рекой = мост,
+  // детектится тривиально — подсвечиваем все кандидаты
+  const bridge=[];
+  if(S.riverEdges&&S.riverEdges.size){
+    const N2=S.W*S.H;
+    for(const k of S.riverEdges){
+      const a=Math.floor(k/N2),c2=k%N2;
+      const ax=a%S.W,ay=(a/S.W)|0,bx2=c2%S.W,by2=(c2/S.W)|0;
+      if(S.terr[a]===T.WATER&&S.terr[c2]===T.WATER)continue;
+      bridge.push(WXC(ax),WYCC(ax,ay),0, WXC(bx2),WYCC(bx2,by2),0);
+    }
+  }
+  R.gridBridge=mk(bridge,0xeec658,0.8);
 }
 function toggleGrid(){
   S.showGrid=!S.showGrid;
   if(!R.gridDual)buildGridOverlay();
-  R.gridDual.visible=R.gridMain.visible=!!S.showGrid;
+  R.gridDual.visible=R.gridMain.visible=R.gridBridge.visible=!!S.showGrid;
   const b=el('dbg_grid');if(b)b.classList.toggle('on',!!S.showGrid);
 }
 function buildStatics(){
@@ -5943,6 +6108,8 @@ function updateTip(mx,my,clx,cly){
   }else{
     let tn0=TNAME[S.terr[i]];
     if(S.terr[i]===T.WATER)tn0=(S.waterKind[i]===2)?'Море':'Озеро';
+    if(S.terr[i]===T.GRASS&&S.biome&&S.biome[i]&&S.biome[i]!==BIO.MEADOW)
+      tn0+=' · '+BIO_NAME[S.biome[i]].toLowerCase();
     html='<div class="t1">'+tn0+'</div>';
     if(cellNearRiver(cx,cy))html+='<div class="t2">🌊 у реки — на тот берег только по мосту (дорога на обоих берегах)</div>';
     if(S.terr[i]===T.FOREST&&S.terrHp[i]>0)html+='<div class="t2">древесины на '+S.terrHp[i]+' ходки</div>';
@@ -6582,7 +6749,9 @@ function updateInspector(){
     const t=S.terr[i];
     let tn=TNAME[t];
     if(t===T.WATER)tn=(S.waterKind[i]===2)?'Море':'Озеро';
-    h='<div class="hdr">'+tn+' · '+S.pin.x+','+S.pin.y+'</div>';
+    if(t===T.MTN&&S.reliefE&&S.reliefE[i]>=4.5)tn='Горы · снежный пик';
+    const bio=(S.biome&&S.biome[i]&&t===T.GRASS)?BIO_NAME[S.biome[i]]:'';
+    h='<div class="hdr">'+tn+(bio&&bio!=='Луговина'?' · '+bio.toLowerCase():'')+' · '+S.pin.x+','+S.pin.y+'</div>';
     if(t===T.FOREST&&S.terrHp[i]>0)h+='<div class="row">древесины: '+S.terrHp[i]+'</div>';
     if(S.feat[i])h+='<div class="row">'+FNAME[S.feat[i]]+'</div>';
     const li=S.lairAt[i];
@@ -6727,6 +6896,7 @@ function restart(seedStr){
   buildTerrain();buildRoads();buildStatics();buildBuildings();paintFog();
   if(R.gridDual){R.scene.remove(R.gridDual);R.gridDual.geometry.dispose();R.gridDual=null}
   if(R.gridMain){R.scene.remove(R.gridMain);R.gridMain.geometry.dispose();R.gridMain=null}
+  if(R.gridBridge){R.scene.remove(R.gridBridge);R.gridBridge.geometry.dispose();R.gridBridge=null}
   if(S.showGrid){S.showGrid=false;toggleGrid()}
   buildUI();
   setSpeed(1);
@@ -6752,6 +6922,9 @@ function boot(){
     }
     keysPan(dtR);
     if(S.terrDirty)buildTerrain();
+    // knowledge-рельеф: гора «растёт из тумана» — перестройка по мере
+    // разведки горных гексов, не чаще двух раз в секунду
+    if(S.reliefDirty&&(!R.reliefT||t-R.reliefT>500)){R.reliefT=t;buildRelief()}
     if(S.roadDirty)buildRoads();
     if(S.featDirty)buildStatics();
     if(S.bldDirty)buildBuildings();

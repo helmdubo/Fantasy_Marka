@@ -30,7 +30,7 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 рельеф v2.0: кластеры гор (розетки/тройки/цепи), псевдовысоты E, котловины/перевалы, влажность/биомы
 
-`hexAdjIdx()` · `mclusterDetect()` · `reliefField()` · `detectBasins()` · `detectPasses()` · `wgPeaks()` · `wgMoisture()` · `wgRelief()`
+`hexAdjIdx()` · `mclusterDetect()` · `reliefField()` · `detectBasins()` · `detectPasses()` · `checkValleySecrets()` · `wgPeaks()` · `wgMoisture()` · `wgRelief()`
 
 ## src/02e_rivers.js
 
@@ -150,13 +150,13 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 canvas-атлас: отрисовка тайлов/зданий/иконок, buildAtlas (browser only)
 
-`ATLAS` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triBary()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverTri()` · `paintRiverMouth()` · `paintWaterfall()` · `paintBridge()` · `paintFull()` · `px()` · `rect()` · `paintBerry()` · `paintDeadfall()` · `paintRubble()` · `paintVein()` · `paintFish()` · `paintRuins()` · `paintSite()` · `paintFarm()` · `paintMine()` · `paintCamp()` · `paintDen()` · `paintCliff()` · `paintGraves()` · `paintFisher()` · `paintLumber()` · `paintPort()` · `paintGuild()` · `paintAdvGuild()` · `paintShip()` · `paintCrafters()` · `paintStake()` · `paintPennant()` · `paintHammer()` · `paintSmoke()` · `paintWheat()` · `paintStump()` · `paintWatchtower()` · `paintLibrary()` · `paintKnowledge()` · `paintIcon()` · `buildAtlas()`
+`ATLAS` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triBary()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverTri()` · `paintReliefTri()` · `paintBiomeTri()` · `paintRiverMouth()` · `paintWaterfall()` · `paintBridge()` · `paintFull()` · `px()` · `rect()` · `paintBerry()` · `paintDeadfall()` · `paintRubble()` · `paintVein()` · `paintFish()` · `paintRuins()` · `paintSite()` · `paintFarm()` · `paintMine()` · `paintCamp()` · `paintDen()` · `paintCliff()` · `paintGraves()` · `paintFisher()` · `paintLumber()` · `paintPort()` · `paintGuild()` · `paintAdvGuild()` · `paintShip()` · `paintCrafters()` · `paintStake()` · `paintPennant()` · `paintHammer()` · `paintSmoke()` · `paintWheat()` · `paintStump()` · `paintWatchtower()` · `paintLibrary()` · `paintKnowledge()` · `paintIcon()` · `buildAtlas()`
 
 ## src/20_render.js
 
 three.js: батчи, меши террейна/дорог/зданий/юнитов, glow, fx (browser only)
 
-`R` · `makeBatch()` · `bQuad()` · `meshFromBatch()` · `cellTerr()` · `buildTerrain()` · `buildRivers()` · `buildRoads()` · `buildGridOverlay()` · `toggleGrid()` · `buildStatics()` · `buildBuildings()` · `makeGlowMesh()` · `buildingOccupancy()` · `fillGlow()` · `makeFxMesh()` · `fillFx()` · `makeUnitMesh()` · `fillUnits()`
+`R` · `makeBatch()` · `bQuad()` · `meshFromBatch()` · `cellTerr()` · `buildTerrain()` · `buildRivers()` · `reliefRenderField()` · `buildRelief()` · `buildRoads()` · `buildGridOverlay()` · `toggleGrid()` · `buildStatics()` · `buildBuildings()` · `makeGlowMesh()` · `buildingOccupancy()` · `fillGlow()` · `makeFxMesh()` · `fillFx()` · `makeUnitMesh()` · `fillUnits()`
 
 ## src/21_fog_input.js
 

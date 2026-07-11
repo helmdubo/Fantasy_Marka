@@ -19,7 +19,8 @@ function markVisibleCell(x,y,alpha){
   const i=idx(x,y);
   S.visible[i]=1;
   if(S.visibleAlpha)S.visibleAlpha[i]=Math.max(S.visibleAlpha[i]||0,alpha===undefined?1:alpha);
-  if(!S.explored[i]){S.explored[i]=1;S.fogDirty=true}
+  if(!S.explored[i]){S.explored[i]=1;S.fogDirty=true;
+    if(S.terr[i]===T.MTN)S.reliefDirty=true} // knowledge-рельеф: гора дорастает
 }
 function stampVision(cx,cy,r,viewH){
   // 360° building/ward visibility. Kept for towers and static points only.
@@ -88,7 +89,8 @@ function exploreRing(cx,cy){
   for(const d of cells){
     const x=cx+d[0],y=cy+d[1];if(!inMap(x,y))continue;
     const i=idx(x,y);
-    if(!S.explored[i]){S.explored[i]=1;S.fogDirty=true}
+    if(!S.explored[i]){S.explored[i]=1;S.fogDirty=true;
+      if(S.terr[i]===T.MTN)S.reliefDirty=true}
   }
 }
 

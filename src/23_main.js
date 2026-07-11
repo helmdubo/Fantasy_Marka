@@ -8,6 +8,7 @@ function restart(seedStr){
   buildTerrain();buildRoads();buildStatics();buildBuildings();paintFog();
   if(R.gridDual){R.scene.remove(R.gridDual);R.gridDual.geometry.dispose();R.gridDual=null}
   if(R.gridMain){R.scene.remove(R.gridMain);R.gridMain.geometry.dispose();R.gridMain=null}
+  if(R.gridBridge){R.scene.remove(R.gridBridge);R.gridBridge.geometry.dispose();R.gridBridge=null}
   if(S.showGrid){S.showGrid=false;toggleGrid()}
   buildUI();
   setSpeed(1);
@@ -33,6 +34,9 @@ function boot(){
     }
     keysPan(dtR);
     if(S.terrDirty)buildTerrain();
+    // knowledge-рельеф: гора «растёт из тумана» — перестройка по мере
+    // разведки горных гексов, не чаще двух раз в секунду
+    if(S.reliefDirty&&(!R.reliefT||t-R.reliefT>500)){R.reliefT=t;buildRelief()}
     if(S.roadDirty)buildRoads();
     if(S.featDirty)buildStatics();
     if(S.bldDirty)buildBuildings();

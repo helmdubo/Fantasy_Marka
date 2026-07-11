@@ -154,6 +154,8 @@ function updateTip(mx,my,clx,cly){
   }else{
     let tn0=TNAME[S.terr[i]];
     if(S.terr[i]===T.WATER)tn0=(S.waterKind[i]===2)?'Море':'Озеро';
+    if(S.terr[i]===T.GRASS&&S.biome&&S.biome[i]&&S.biome[i]!==BIO.MEADOW)
+      tn0+=' · '+BIO_NAME[S.biome[i]].toLowerCase();
     html='<div class="t1">'+tn0+'</div>';
     if(cellNearRiver(cx,cy))html+='<div class="t2">🌊 у реки — на тот берег только по мосту (дорога на обоих берегах)</div>';
     if(S.terr[i]===T.FOREST&&S.terrHp[i]>0)html+='<div class="t2">древесины на '+S.terrHp[i]+' ходки</div>';
