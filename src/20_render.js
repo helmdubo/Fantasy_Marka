@@ -202,7 +202,7 @@ function buildStatics(){
   }
   for(const L of S.lairs){
     if(L.dead)continue;
-    const spr=SPR['l_'+L.id],h=spr.h/16;
+    const spr=SPR['l_'+L.id],h=spr.h/32; // 32 px на гекс
     const cx=WXC(L.x),yb=WYCC(L.x,L.y)-0.5;
     bQuad(b,cx-0.5,yb,cx+0.5,yb+h,spr);
   }
@@ -215,7 +215,7 @@ function buildBuildings(){
   for(const bd of S.buildings){
     const spr=bd.built?((bd.type==='library'&&(bd.tier||1)>=2)?SPR['b_knowledge']:
       ((bd.type==='hut'&&(bd.tier||1)>=2)?SPR['b_house2']:SPR['b_'+bd.type])):SPR['b_site'];
-    const h=spr.h/16;
+    const h=spr.h/32; // 32 px на гекс
     const cx=WXC(bd.x),yb=WYCC(bd.x,bd.y)-0.5;
     bQuad(b,cx-0.5,yb,cx+0.5,yb+h,spr);
     if(bd.built&&(bd.ruined||bd.abandoned)){
@@ -330,7 +330,7 @@ function fillFx(){
     const i=idx(b.x,b.y);
     if(!S.visible[i]&&!S.explored[i]&&!S.revealAll)continue;
     const spr=SPR[sprKey];
-    const bh=(SPR['b_'+b.type]?SPR['b_'+b.type].h:16)/16;
+    const bh=(SPR['b_'+b.type]?SPR['b_'+b.type].h:32)/32;
     const cx=WXC(b.x),yb=WYCC(b.x,b.y)-0.5;
     const x0=cx-0.08,x1=cx+0.42;
     const y0=yb+bh-0.12,y1=y0+0.5;

@@ -1,4 +1,6 @@
-/* ================= ATLAS (browser only) ================= */
+/* ================= ATLAS (browser only) =================
+   Тайлы 28×32 на гекс (укрупнение мира ×2), здания 32px, юниты 16px
+   (рисуются в полгекса — экранная плотность совпадает). */
 let ATLAS=null,SPR={},ICONS={};
 function reg(name,x,y,w,h){
   SPR[name]={x,y,w,h,u0:x/ATLAS.W,u1:(x+w)/ATLAS.W,v1:1-y/ATLAS.H,v0:1-(y+h)/ATLAS.H};
@@ -26,43 +28,125 @@ function vgradeRegion(ctx,gx,gy,w,h,amt){
   }
   ctx.putImageData(img,gx,gy);
 }
-function drawGrid(ctx,gx,gy,rows,map){
+function drawGrid(ctx,gx,gy,rows,map,skip){
   for(let y=0;y<rows.length;y++){const row=rows[y];
     for(let x=0;x<row.length;x++){const ch=row[x];
       if(ch==='.')continue;
+      if(skip&&skip(x,y))continue;
       const col=map[ch]||'#f0f';
       ctx.fillStyle=col;ctx.fillRect(gx+x,gy+y,1,1);
     }
   }
 }
-/* --- Drop I v1.2: flat-top. Dual-triangle тайлы 14x16, ориентации 'r' ▶ / 'l' ◀.
-   Колонки odd-q со сдвигом вниз, шаг CW=14/16; у хекса две ГОРИЗОНТАЛЬНЫЕ грани.
+/* --- Drop I v1.2: flat-top. Dual-triangle тайлы 28x32, ориентации 'r' ▶ / 'l' ◀.
+   Колонки odd-q со сдвигом вниз, шаг CW=28/32; у хекса две ГОРИЗОНТАЛЬНЫЕ грани.
    Барицентрическая интерполяция трёх угловых бит; седловых неоднозначностей нет. --- */
-const TRIW=14,TRIH=16;
-function triBary(orr,pxx,pyy){
+const TRIW=28,TRIH=32;
+function triCorners(orr){
   // 'r' ▶: углы [TL, BL, апекс-право]; 'l' ◀: [TR, BR, апекс-лево]
-  const P=(orr==='r')?[[0,0],[0,16],[14,8]]:[[14,0],[14,16],[0,8]];
-  const [a,b,c]=P;
+  return (orr==='r')?[[0,0],[0,TRIH],[TRIW,TRIH/2]]:[[TRIW,0],[TRIW,TRIH],[0,TRIH/2]];
+}
+function triBary(orr,pxx,pyy){
+  const [a,b,c]=triCorners(orr);
   const den=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);
   const w0=((b[1]-c[1])*(pxx-c[0])+(c[0]-b[0])*(pyy-c[1]))/den;
   const w1=((c[1]-a[1])*(pxx-c[0])+(a[0]-c[0])*(pyy-c[1]))/den;
   return [w0,w1,1-w0-w1];
 }
+function triIns(orr){
+  return (x,y)=>{const w=triBary(orr,x+0.5,y+0.5);
+    return w[0]>=-0.045&&w[1]>=-0.045&&w[2]>=-0.045};
+}
+/* Декор террейна поверх шума: лес — ёлки, луга — пучки трав, скалы — валуны
+   и трещины, горы — гребни и снежники, вода — гребешки волн.
+   ins(x,y) — пиксель принадлежит этому террейну (маска перехода/треугольник). */
+function decorTri(ctx,x0,y0,t,seed,ins){
+  const put=(x,y,c)=>{if(x>=0&&y>=0&&x<TRIW&&y<TRIH&&ins(x,y)){ctx.fillStyle=c;ctx.fillRect(x0+x,y0+y,1,1)}};
+  const fits=(x,y,w,h)=>{if(x<0||y<0||x+w>TRIW||y+h>TRIH)return false;
+    for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(!ins(xx,yy))return false;return true};
+  const rnd=(i,k)=>hash2(i,seed+k*17,809);
+  if(t===T.FOREST){
+    let n=0;
+    for(let i=0;i<18&&n<6;i++){
+      const tx=(rnd(i,1)*(TRIW-5))|0, ty=(rnd(i,2)*(TRIH-8))|0;
+      if(rnd(i,3)<0.55&&fits(tx,ty,5,8)){ // ель 5×8
+        put(tx+2,ty,PAL.F3);
+        put(tx+1,ty+1,PAL.F3);put(tx+2,ty+1,PAL.F3);put(tx+3,ty+1,PAL.F2);
+        put(tx+1,ty+2,PAL.F3);put(tx+2,ty+2,PAL.F2);put(tx+3,ty+2,PAL.F1);
+        for(let k=0;k<5;k++)put(tx+k,ty+3,k<2?PAL.F3:(k<4?PAL.F2:PAL.F1));
+        for(let k=0;k<5;k++)put(tx+k,ty+4,k<1?PAL.F2:(k<3?PAL.F2:PAL.F1));
+        put(tx+1,ty+5,PAL.F1);put(tx+2,ty+5,PAL.F1);put(tx+3,ty+5,PAL.F1);
+        put(tx+2,ty+6,PAL.D);
+        put(tx+1,ty+7,PAL.F1);put(tx+3,ty+7,PAL.F1); // тень у корня
+        n++;
+      }else if(fits(tx,ty,3,5)){ // ёлочка 3×5
+        put(tx+1,ty,PAL.F3);
+        put(tx,ty+1,PAL.F3);put(tx+1,ty+1,PAL.F2);put(tx+2,ty+1,PAL.F1);
+        put(tx,ty+2,PAL.F2);put(tx+1,ty+2,PAL.F2);put(tx+2,ty+2,PAL.F1);
+        put(tx+1,ty+3,PAL.F1);
+        put(tx+1,ty+4,PAL.D);
+        n++;
+      }
+    }
+  }else if(t===T.GRASS){
+    for(let i=0;i<5;i++){
+      const tx=1+(rnd(i,4)*(TRIW-2))|0, ty=1+(rnd(i,5)*(TRIH-3))|0;
+      if(!ins(tx,ty))continue;
+      put(tx,ty,PAL.G3);put(tx-1,ty+1,PAL.G1);put(tx+1,ty+1,PAL.G1);
+      if(rnd(i,6)<0.15)put(tx,ty-1,PAL.SN); // редкий цветок
+    }
+  }else if(t===T.ROCK){
+    for(let i=0;i<3;i++){
+      const tx=(rnd(i,7)*(TRIW-4))|0, ty=(rnd(i,8)*(TRIH-3))|0;
+      if(!fits(tx,ty,4,3))continue;
+      for(let k=0;k<4;k++)put(tx+k,ty,PAL.R3);
+      for(let k=0;k<4;k++)put(tx+k,ty+1,k===0?PAL.R3:PAL.R2);
+      for(let k=0;k<4;k++)put(tx+k,ty+2,PAL.R1);
+    }
+    for(let i=0;i<3;i++){ // трещины
+      const tx=1+(rnd(i,9)*(TRIW-4))|0,ty=1+(rnd(i,10)*(TRIH-4))|0;
+      put(tx,ty,PAL.R1);put(tx+1,ty+1,PAL.R1);put(tx+1,ty+2,PAL.R1);
+    }
+  }else if(t===T.MTN){
+    for(let i=0;i<3;i++){ // диагональные гребни
+      const tx=1+(rnd(i,11)*(TRIW-8))|0,ty=1+(rnd(i,12)*(TRIH-8))|0;
+      for(let k=0;k<5;k++){put(tx+k,ty+k,PAL.M2);put(tx+k,ty+k+1,PAL.M1)}
+    }
+    if(rnd(0,13)<0.55){ // снежник (не на каждом тайле; только целиком в маске)
+      const cx2=3+(rnd(1,13)*(TRIW-11))|0,cy2=2+(rnd(2,13)*(TRIH-8))|0;
+      if(fits(cx2,cy2,8,5)){
+        for(let oy=0;oy<5;oy++)for(let ox=0;ox<8;ox++){
+          const d=Math.abs(ox-3.5)/4+Math.abs(oy-2)/2.5;
+          if(d<1&&hash2(ox+cx2,oy+cy2,seed+31)<0.85)put(cx2+ox,cy2+oy,PAL.SN);
+        }
+      }
+    }
+  }else if(t===T.WATER){
+    for(let i=0;i<4;i++){ // гребешки волн
+      const tx=1+(rnd(i,14)*(TRIW-6))|0,ty=1+(rnd(i,15)*(TRIH-3))|0;
+      const len=2+(rnd(i,16)*3|0);
+      for(let k=0;k<len;k++)put(tx+k,ty,PAL.W3);
+      put(tx-1,ty+1,PAL.W1);
+    }
+  }
+}
 function paintTriFull(ctx,x0,y0,t,orr,variant){
+  const ins=triIns(orr);
   for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
-    const w=triBary(orr,x+0.5,y+0.5);
-    if(w[0]<-0.045||w[1]<-0.045||w[2]<-0.045)continue;
+    if(!ins(x,y))continue;
     ctx.fillStyle=terrPix(t,x+variant*97,y+variant*53,S?S.seed:7);
     ctx.fillRect(x0+x,y0+y,1,1);
   }
+  decorTri(ctx,x0,y0,t,t*29+variant*7+(orr==='r'?3:0),ins);
 }
 function paintTriTransition(ctx,x0,y0,t,orr,bits){
   const c=[bits&1,(bits>>1)&1,(bits>>2)&1];
-  const mask=new Uint8Array(TRIW*TRIH),ins=new Uint8Array(TRIW*TRIH);
+  const mask=new Uint8Array(TRIW*TRIH),insArr=new Uint8Array(TRIW*TRIH);
+  const insT=triIns(orr);
   for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
+    if(!insT(x,y))continue;
+    insArr[y*TRIW+x]=1;
     const w=triBary(orr,x+0.5,y+0.5);
-    if(w[0]<-0.045||w[1]<-0.045||w[2]<-0.045)continue;
-    ins[y*TRIW+x]=1;
     let v=w[0]*c[0]+w[1]*c[1]+w[2]*c[2];
     v+=hash2(x+t*31,y+bits*7+(orr==='r'?191:0),911)*0.30-0.15;
     mask[y*TRIW+x]=v>0.5?1:0;
@@ -72,39 +156,51 @@ function paintTriTransition(ctx,x0,y0,t,orr,bits){
     ctx.fillStyle=terrPix(t,x+bits*13,y+bits*29,S?S.seed:7);
     ctx.fillRect(x0+x,y0+y,1,1);
   }
+  decorTri(ctx,x0,y0,t,t*57+bits*11+(orr==='r'?5:0),(x,y)=>!!mask[y*TRIW+x]);
   ctx.fillStyle=OUTL[t];
   for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
     if(!mask[y*TRIW+x])continue;
     let edge=false;
-    if(x>0&&ins[y*TRIW+x-1]&&!mask[y*TRIW+x-1])edge=true;
-    if(x<TRIW-1&&ins[y*TRIW+x+1]&&!mask[y*TRIW+x+1])edge=true;
-    if(y>0&&ins[(y-1)*TRIW+x]&&!mask[(y-1)*TRIW+x])edge=true;
-    if(y<TRIH-1&&ins[(y+1)*TRIW+x]&&!mask[(y+1)*TRIW+x])edge=true;
+    if(x>0&&insArr[y*TRIW+x-1]&&!mask[y*TRIW+x-1])edge=true;
+    if(x<TRIW-1&&insArr[y*TRIW+x+1]&&!mask[y*TRIW+x+1])edge=true;
+    if(y>0&&insArr[(y-1)*TRIW+x]&&!mask[(y-1)*TRIW+x])edge=true;
+    if(y<TRIH-1&&insArr[(y+1)*TRIW+x]&&!mask[(y+1)*TRIW+x])edge=true;
     if(edge)ctx.fillRect(x0+x,y0+y,1,1);
   }
 }
 function paintRoadHex(ctx,x,y,mask){
-  // 6-битная маска мировых слотов N,S,NE,NW,SE,SW; спрайт 14x16 на клетку (flat-top).
-  const c1=PAL.DI,c2='#7d5f40';
-  const ends=[[7,0],[7,16],[14,4],[0,4],[14,12],[0,12]];
-  const lit=new Uint8Array(14*16);
-  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<14&&py2<16)lit[py2*14+px2]=1};
-  const blob=(cx2,cy2)=>{for(let oy=-1;oy<=2;oy++)for(let ox=-1;ox<=2;ox++)put(cx2+ox,cy2+oy)};
-  blob(6,7);
+  // 6-битная маска мировых слотов N,S,NE,NW,SE,SW; спрайт 28x32 на клетку (flat-top).
+  const c1=PAL.DI,c2='#7d5f40',c3='#5a4028';
+  const ends=[[14,0],[14,32],[28,8],[0,8],[28,24],[0,24]];
+  const lit=new Uint8Array(TRIW*TRIH);
+  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<TRIW&&py2<TRIH)lit[py2*TRIW+px2]=1};
+  const blob=(cx2,cy2)=>{for(let oy=-2;oy<=3;oy++)for(let ox=-2;ox<=3;ox++)put(cx2+ox,cy2+oy)};
+  blob(13,15);
   for(let b=0;b<6;b++)if(mask&(1<<b)){
-    const [ex,ey]=ends[b],steps=14;
+    const [ex,ey]=ends[b],steps=28;
     for(let i=0;i<=steps;i++){
       const t2=i/steps;
-      blob(Math.round(6+(ex-7)*t2),Math.round(7+(ey-8)*t2));
+      blob(Math.round(13+(ex-14)*t2),Math.round(15+(ey-16)*t2));
     }
   }
   ctx.fillStyle=c1;
-  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++)
-    if(lit[py2*14+px2])ctx.fillRect(x+px2,y+py2,1,1);
-  ctx.fillStyle=c2;
-  for(let i=0;i<10;i++){
-    const rx=hash2(i,mask,31)*14|0,ry=hash2(mask,i,77)*16|0;
-    if(lit[ry*14+rx])ctx.fillRect(x+rx,y+ry,1,1);
+  for(let py2=0;py2<TRIH;py2++)for(let px2=0;px2<TRIW;px2++)
+    if(lit[py2*TRIW+px2])ctx.fillRect(x+px2,y+py2,1,1);
+  // тёмная кромка обочины (внутри тайла; края тайла не трогаем — стыки бесшовны)
+  ctx.fillStyle=c3;
+  for(let py2=0;py2<TRIH;py2++)for(let px2=0;px2<TRIW;px2++){
+    if(!lit[py2*TRIW+px2])continue;
+    let edge=false;
+    if(px2>0&&!lit[py2*TRIW+px2-1])edge=true;
+    if(px2<TRIW-1&&!lit[py2*TRIW+px2+1])edge=true;
+    if(py2>0&&!lit[(py2-1)*TRIW+px2])edge=true;
+    if(py2<TRIH-1&&!lit[(py2+1)*TRIW+px2])edge=true;
+    if(edge)ctx.fillRect(x+px2,y+py2,1,1);
+  }
+  // камешки и выбоины
+  for(let i=0;i<26;i++){
+    const rx=hash2(i,mask,31)*TRIW|0,ry=hash2(mask,i,77)*TRIH|0;
+    if(lit[ry*TRIW+rx]){ctx.fillStyle=(i%3)?c2:c3;ctx.fillRect(x+rx,y+ry,1,1)}
   }
 }
 /* ---------- РЕКИ (п.1, v2): русло по dual-треугольникам ----------
@@ -112,22 +208,24 @@ function paintRoadHex(ctx,x,y,mask){
    другое ребро (границы гексов). mask — 3 бита сторон (0:c0-c1,1:c1-c2,2:c2-c0).
    tint — цвет берегов под террейн (луга/лес/скалы/горы). */
 function paintRiverTri(ctx,x0,y0,orr,mask,tint){
-  const P=(orr==='r')?[[0,0],[0,16],[14,8]]:[[14,0],[14,16],[0,8]];
+  const P=triCorners(orr);
   const C=[(P[0][0]+P[1][0]+P[2][0])/3,(P[0][1]+P[1][1]+P[2][1])/3];
   const mids=[0,1,2].map(k=>[(P[k][0]+P[(k+1)%3][0])/2,(P[k][1]+P[(k+1)%3][1])/2]);
-  const ins=(px2,py2)=>{const w=triBary(orr,px2+0.5,py2+0.5);
-    return w[0]>=-0.045&&w[1]>=-0.045&&w[2]>=-0.045};
-  const lit=new Uint8Array(14*16);
-  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<14&&py2<16&&ins(px2,py2))lit[py2*14+px2]=1};
+  const ins=triIns(orr);
+  const lit=new Uint8Array(TRIW*TRIH);
+  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<TRIW&&py2<TRIH&&ins(px2,py2))lit[py2*TRIW+px2]=1};
   const blob=(cx2,cy2)=>{const bx=Math.round(cx2),by=Math.round(cy2);
-    for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++)put(bx+ox,by+oy)};
+    for(let oy=-2;oy<=2;oy++)for(let ox=-2;ox<=2;ox++){
+      if(Math.abs(ox)+Math.abs(oy)>3)continue; // скруглённое русло ~5px
+      put(bx+ox,by+oy);
+    }};
   blob(C[0],C[1]);
   for(let k=0;k<3;k++)if(mask&(1<<k)){
-    const [ex,ey]=mids[k],steps=12;
+    const [ex,ey]=mids[k],steps=24;
     // перпендикулярный изгиб: 0 на концах, чтобы русла соседних тайлов сходились
     const dx0=ex-C[0],dy0=ey-C[1],dl=Math.hypot(dx0,dy0)||1;
     const px3=-dy0/dl,py3=dx0/dl;
-    const amp=(hash2(k+1,mask*3+(orr==='r'?1:0),771)*2-1)*2.0;
+    const amp=(hash2(k+1,mask*3+(orr==='r'?1:0),771)*2-1)*4.0;
     for(let i=0;i<=steps;i++){
       const t2=i/steps;
       const off=Math.sin(t2*Math.PI)*amp;
@@ -137,253 +235,60 @@ function paintRiverTri(ctx,x0,y0,orr,mask,tint){
   // берега: пиксели рядом с водой, тон под террейн
   const bankC={};bankC[T.GRASS]=PAL.G1;bankC[T.FOREST]=PAL.F1;bankC[T.ROCK]=PAL.R1;bankC[T.MTN]=PAL.M1;
   ctx.fillStyle=bankC[tint]||PAL.G1;
-  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
-    if(lit[py2*14+px2]||!ins(px2,py2))continue;
+  for(let py2=0;py2<TRIH;py2++)for(let px2=0;px2<TRIW;px2++){
+    if(lit[py2*TRIW+px2]||!ins(px2,py2))continue;
     let near=false;
     for(const[ox,oy]of[[1,0],[-1,0],[0,1],[0,-1]]){
       const qx=px2+ox,qy=py2+oy;
-      if(qx>=0&&qx<14&&qy>=0&&qy<16&&lit[qy*14+qx])near=true;
+      if(qx>=0&&qx<TRIW&&qy>=0&&qy<TRIH&&lit[qy*TRIW+qx])near=true;
     }
     if(near)ctx.fillRect(x0+px2,y0+py2,1,1);
   }
   // вода с бликами
-  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
-    if(!lit[py2*14+px2])continue;
+  for(let py2=0;py2<TRIH;py2++)for(let px2=0;px2<TRIW;px2++){
+    if(!lit[py2*TRIW+px2])continue;
     const h=hash2(px2+mask*7,py2+tint*13,313);
-    ctx.fillStyle=h<0.12?PAL.W3:(h>0.9?PAL.W1:PAL.W2);
+    ctx.fillStyle=h<0.10?PAL.W3:(h>0.92?PAL.W1:PAL.W2);
     ctx.fillRect(x0+px2,y0+py2,1,1);
   }
 }
-function paintRiverMouth(ctx,x,y){ // устье: пена впадения (8x8, оверлей)
-  for(let py=0;py<8;py++)for(let px=0;px<8;px++){
-    const d=Math.hypot(px-3.5,py-3.5);
-    if(d>3.8)continue;
+function paintRiverMouth(ctx,x,y){ // устье: пена впадения (16x16, оверлей)
+  for(let py=0;py<16;py++)for(let px=0;px<16;px++){
+    const d=Math.hypot(px-7.5,py-7.5);
+    if(d>7.6)continue;
     const h=hash2(px,py,881);
-    if(h<0.45){ctx.fillStyle=h<0.2?PAL.SN:PAL.W3;ctx.fillRect(x+px,y+py,1,1)}
+    if(h<0.45-d*0.03){ctx.fillStyle=h<0.18?PAL.SN:PAL.W3;ctx.fillRect(x+px,y+py,1,1)}
   }
 }
-function paintWaterfall(ctx,x,y){ // исток: белопенный сброс (10x12, оверлей)
-  for(let py=0;py<8;py++)for(let px=2;px<8;px++){
-    const h=hash2(px,py,551);
-    ctx.fillStyle=h<0.3?PAL.SN:(h<0.65?PAL.W3:PAL.W2);
-    ctx.fillRect(x+px,y+py,1,1);
+function paintWaterfall(ctx,x,y){ // исток: белопенный сброс (20x24, оверлей)
+  for(let py=0;py<17;py++){ // струи с рваным краем
+    const wob=Math.round(hash2(0,py>>2,559)*2-1);
+    const x0=7+wob,x1=13+wob;
+    for(let px=x0;px<=x1;px++){
+      const h=hash2(px,py,551);
+      ctx.fillStyle=h<0.35?PAL.SN:(h<0.7?PAL.W3:PAL.W2);
+      ctx.fillRect(x+px,y+py,1,1);
+    }
   }
-  for(let px=0;px<10;px++){
-    if(hash2(px,9,552)<0.7){ctx.fillStyle=PAL.SN;ctx.fillRect(x+px,y+8,1,1)}
-    if(hash2(px,10,553)<0.45){ctx.fillStyle=PAL.W3;ctx.fillRect(x+px,y+9,1,1)}
+  for(let py=15;py<24;py++)for(let px=0;px<20;px++){ // пена у подножия
+    const dx=(px-10)/9,dy=(py-19)/4.5;
+    const d=dx*dx+dy*dy;
+    if(d>1)continue;
+    const h=hash2(px,py,553);
+    if(h<0.8-d*0.6){ctx.fillStyle=h<0.32?PAL.SN:PAL.W3;ctx.fillRect(x+px,y+py,1,1)}
   }
 }
 function paintBridge(ctx,x,y){
   // деревянный настил через русло; дорога рисуется поверх
-  for(let py=5;py<11;py++)for(let px=0;px<14;px++){
-    ctx.fillStyle=((px+ (py&1)*2)%4===0)?PAL.D:PAL.Wd;
+  for(let py=10;py<22;py++)for(let px=0;px<28;px++){
+    const seam=((px+((py-10)>>2)*2)%5===0);
+    ctx.fillStyle=seam?PAL.D:((py-10)%4===0?PAL.wh:((py-10)%4===3?PAL.Wd:PAL.w));
     ctx.fillRect(x+px,y+py,1,1);
   }
   ctx.fillStyle=PAL.o;
-  for(let px=0;px<14;px++){ctx.fillRect(x+px,y+4,1,1);ctx.fillRect(x+px,y+11,1,1)}
-}
-function paintFull(ctx,x0,y0,t,variant){
-  for(let y=0;y<16;y++)for(let x=0;x<16;x++){
-    ctx.fillStyle=terrPix(t,x+variant*97,y+variant*53,S?S.seed:7);
-    ctx.fillRect(x0+x,y0+y,1,1);
-  }
-}
-function px(ctx,ox,oy,x,y,c){ctx.fillStyle=c;ctx.fillRect(ox+x,oy+y,1,1)}
-function rect(ctx,ox,oy,x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(ox+x,oy+y,w,h)}
-function paintBerry(ctx,x,y){
-  rect(ctx,x,y,4,8,8,5,PAL.F2);rect(ctx,x,y,5,7,6,1,PAL.F3);rect(ctx,x,y,5,13,6,1,PAL.F1);
-  px(ctx,x,y,6,9,PAL.BER);px(ctx,x,y,9,10,PAL.BER);px(ctx,x,y,7,11,PAL.BER);px(ctx,x,y,10,8,PAL.BER);
-}
-function paintDeadfall(ctx,x,y){
-  rect(ctx,x,y,2,9,12,2,PAL.Wd);rect(ctx,x,y,2,8,12,1,PAL.w);
-  rect(ctx,x,y,4,5,2,8,PAL.DI);rect(ctx,x,y,9,4,2,9,PAL.Wd);
-  px(ctx,x,y,1,9,PAL.o);px(ctx,x,y,14,10,PAL.o);
-}
-function paintRubble(ctx,x,y){
-  rect(ctx,x,y,3,9,5,4,PAL.R2);rect(ctx,x,y,3,9,5,1,PAL.R3);
-  rect(ctx,x,y,9,10,4,3,PAL.R1);rect(ctx,x,y,6,6,3,3,PAL.R2);
-}
-function paintVein(ctx,x,y){
-  px(ctx,x,y,4,4,PAL.GEM);px(ctx,x,y,5,5,PAL.GEM);
-  px(ctx,x,y,10,7,PAL.GEM);px(ctx,x,y,11,6,PAL.GEM);
-  px(ctx,x,y,6,11,PAL.GEM);px(ctx,x,y,7,12,PAL.GEM);
-  px(ctx,x,y,12,12,PAL.GEM);px(ctx,x,y,3,9,PAL.GEM);
-}
-function paintFish(ctx,x,y){
-  rect(ctx,x,y,3,6,5,1,PAL.W3);rect(ctx,x,y,8,9,5,1,PAL.W3);
-  px(ctx,x,y,6,11,PAL.SN);px(ctx,x,y,7,12,PAL.SN);px(ctx,x,y,8,11,PAL.SN);
-}
-function paintRuins(ctx,x,y){
-  rect(ctx,x,y,3,6,3,8,PAL.R3);rect(ctx,x,y,3,6,3,1,PAL.SN);
-  rect(ctx,x,y,10,9,3,5,PAL.R2);rect(ctx,x,y,7,13,6,1,PAL.R1);
-  px(ctx,x,y,11,8,PAL.R3);
-}
-function paintSite(ctx,x,y){
-  rect(ctx,x,y,1,1,3,4,PAL.Wd);rect(ctx,x,y,12,1,3,4,PAL.Wd);
-  rect(ctx,x,y,1,11,3,4,PAL.Wd);rect(ctx,x,y,12,11,3,4,PAL.Wd);
-  rect(ctx,x,y,1,1,3,1,PAL.w);rect(ctx,x,y,12,1,3,1,PAL.w);
-  for(let i=0;i<12;i++){px(ctx,x,y,2+i,13-i,PAL.y);px(ctx,x,y,2+i,14-i,PAL.w)}
-  rect(ctx,x,y,4,6,8,3,PAL.DI);rect(ctx,x,y,4,6,8,1,'#7d5f40');
-}
-function paintFarm(ctx,x,y){
-  for(let ry=4;ry<14;ry++){
-    const c=(ry%2===0)?PAL.DI:'#5a4028';
-    rect(ctx,x,y,2,ry,12,1,c);
-  }
-  for(let i=0;i<8;i++){
-    const sx=3+((i*3)%11),sy=5+((i*5)%8);
-    px(ctx,x,y,sx,sy,PAL.G3);
-  }
-  rect(ctx,x,y,2,3,12,1,PAL.w);
-}
-function paintMine(ctx,x,y){
-  rect(ctx,x,y,2,6,12,9,PAL.R2);rect(ctx,x,y,3,5,10,1,PAL.R3);
-  rect(ctx,x,y,4,4,8,1,PAL.R3);
-  rect(ctx,x,y,6,8,4,7,PAL.k);
-  rect(ctx,x,y,5,7,6,1,PAL.Wd);
-  rect(ctx,x,y,5,8,1,7,PAL.Wd);rect(ctx,x,y,10,8,1,7,PAL.Wd);
-}
-function paintCamp(ctx,x,y){
-  for(let i=0;i<5;i++){rect(ctx,x,y,3+i,10-i,1,i+1,PAL.DI);rect(ctx,x,y,8-i,10-i,1,i+1,PAL.Wd)}
-  for(let i=0;i<4;i++){rect(ctx,x,y,9+i,12-i,1,i+1,PAL.Cr);rect(ctx,x,y,14-i,12-i,1,i+1,PAL.R)}
-  px(ctx,x,y,5,12,PAL.y);px(ctx,x,y,6,13,PAL.r);px(ctx,x,y,5,13,PAL.r);
-}
-function paintDen(ctx,x,y){
-  // звериное логово (п.11): тёмная нора под корягой, кости у входа
-  rect(ctx,x,y,3,8,10,6,PAL.DI);rect(ctx,x,y,4,9,8,4,PAL.k);
-  rect(ctx,x,y,2,7,12,1,PAL.Wd);px(ctx,x,y,2,6,PAL.Wd);px(ctx,x,y,13,6,PAL.Wd);
-  px(ctx,x,y,5,13,PAL.SN);px(ctx,x,y,6,14,PAL.SN);px(ctx,x,y,10,13,PAL.SN);
-  px(ctx,x,y,11,14,PAL.SN);px(ctx,x,y,8,14,PAL.SN);
-}
-function paintCliff(ctx,x,y){
-  rect(ctx,x,y,3,7,10,8,PAL.R1);rect(ctx,x,y,4,6,8,1,PAL.R2);
-  rect(ctx,x,y,5,5,5,1,PAL.R2);rect(ctx,x,y,6,9,2,2,PAL.k);
-  rect(ctx,x,y,11,2,1,5,PAL.Wd);rect(ctx,x,y,12,2,3,2,PAL.Cr);
-}
-function paintGraves(ctx,x,y){
-  rect(ctx,x,y,2,10,12,5,PAL.F1);
-  const cross=(cx,cy)=>{rect(ctx,x,y,cx,cy,1,4,PAL.R3);rect(ctx,x,y,cx-1,cy+1,3,1,PAL.R3)};
-  cross(4,7);cross(8,6);cross(12,8);
-}
-function paintFisher(ctx,x,y){
-  rect(ctx,x,y,2,10,12,2,PAL.w);rect(ctx,x,y,2,12,12,1,PAL.Wd);
-  rect(ctx,x,y,3,13,1,3,PAL.Wd);rect(ctx,x,y,12,13,1,3,PAL.Wd);rect(ctx,x,y,7,13,1,3,PAL.Wd);
-  rect(ctx,x,y,4,4,7,6,PAL.w);
-  rect(ctx,x,y,3,3,9,2,PAL.Cb);rect(ctx,x,y,4,2,7,1,PAL.Cb);rect(ctx,x,y,3,5,9,1,PAL.W1);
-  rect(ctx,x,y,6,6,2,4,PAL.D);
-  rect(ctx,x,y,13,8,1,4,PAL.Wd);px(ctx,x,y,13,7,PAL.r);
-}
-function paintLumber(ctx,x,y){
-  rect(ctx,x,y,2,3,12,1,PAL.w);rect(ctx,x,y,2,4,12,2,PAL.Wd);
-  rect(ctx,x,y,2,6,1,7,PAL.Wd);rect(ctx,x,y,13,6,1,7,PAL.Wd);
-  rect(ctx,x,y,4,11,8,2,PAL.w);rect(ctx,x,y,5,9,6,2,PAL.Wd);rect(ctx,x,y,6,7,4,2,PAL.w);
-  px(ctx,x,y,4,11,PAL.DI);px(ctx,x,y,11,11,PAL.DI);px(ctx,x,y,5,9,PAL.DI);px(ctx,x,y,10,9,PAL.DI);
-  rect(ctx,x,y,3,13,10,1,PAL.o);
-}
-function paintPort(ctx,x,y){
-  rect(ctx,x,y,1,9,14,2,PAL.w);rect(ctx,x,y,1,11,14,1,PAL.Wd);
-  rect(ctx,x,y,2,12,1,4,PAL.Wd);rect(ctx,x,y,13,12,1,4,PAL.Wd);rect(ctx,x,y,7,12,1,4,PAL.Wd);
-  rect(ctx,x,y,2,3,8,6,PAL.w);rect(ctx,x,y,1,2,10,2,PAL.Cb);rect(ctx,x,y,2,1,8,1,PAL.Cb);
-  rect(ctx,x,y,4,5,2,4,PAL.D);
-  rect(ctx,x,y,11,4,1,5,PAL.Wd);rect(ctx,x,y,12,5,3,1,PAL.Wd);px(ctx,x,y,14,6,PAL.y);
-  rect(ctx,x,y,11,10,2,2,PAL.R);px(ctx,x,y,13,10,PAL.R);
-}
-function paintGuild(ctx,x,y){
-  rect(ctx,x,y,2,4,12,10,PAL.R2);rect(ctx,x,y,2,4,12,1,PAL.R3);
-  rect(ctx,x,y,1,3,14,1,PAL.R);rect(ctx,x,y,2,2,12,1,PAL.R);
-  rect(ctx,x,y,6,8,4,6,PAL.k);rect(ctx,x,y,5,7,6,1,PAL.Wd);
-  rect(ctx,x,y,3,5,2,2,PAL.y);rect(ctx,x,y,11,5,2,2,PAL.y);
-  rect(ctx,x,y,2,14,12,1,PAL.R1);
-}
-function paintAdvGuild(ctx,x,y){
-  rect(ctx,x,y,2,5,12,9,PAL.w);rect(ctx,x,y,2,5,12,1,PAL.Wd);
-  rect(ctx,x,y,1,4,14,1,PAL.R);rect(ctx,x,y,2,3,12,1,PAL.R);rect(ctx,x,y,3,2,10,1,PAL.r);
-  rect(ctx,x,y,6,9,4,5,PAL.k);rect(ctx,x,y,5,8,6,1,PAL.Wd);
-  rect(ctx,x,y,3,6,2,3,PAL.Cr);px(ctx,x,y,3,6,PAL.y);px(ctx,x,y,4,7,PAL.y);
-  rect(ctx,x,y,11,6,1,3,PAL.R3);px(ctx,x,y,11,5,PAL.R3);px(ctx,x,y,12,6,PAL.Wd);
-  rect(ctx,x,y,2,14,12,1,PAL.Wd);
-}
-function paintShip(ctx,x,y,fade){
-  const put=(px2,py2,c)=>{if(fade&&((px2+py2)&1))return;ctx.fillStyle=c;ctx.fillRect(x+px2,y+py2,1,1)};
-  for(let i=0;i<10;i++)put(3+i,11,PAL.Wd);
-  for(let i=0;i<8;i++)put(4+i,12,PAL.D);
-  for(let i=0;i<6;i++)put(5+i,13,PAL.o);
-  for(let yy=3;yy<=9;yy++)for(let xx=0;xx<Math.min(6,yy-1);xx++)put(7+xx,yy,PAL.SN);
-  put(7,2,PAL.y);
-  for(let yy=2;yy<=11;yy++)put(6,yy,PAL.Wd);
-}
-function paintCrafters(ctx,x,y){
-  rect(ctx,x,y,2,6,12,8,PAL.R1);rect(ctx,x,y,2,6,12,1,PAL.w);
-  rect(ctx,x,y,1,4,14,2,PAL.R3);rect(ctx,x,y,3,3,10,1,PAL.R3);
-  rect(ctx,x,y,6,9,4,5,PAL.k);
-  rect(ctx,x,y,3,8,2,2,PAL.y);rect(ctx,x,y,11,8,2,2,PAL.y);
-  rect(ctx,x,y,12,1,2,3,PAL.D);px(ctx,x,y,12,0,PAL.Cb);
-  px(ctx,x,y,7,12,'#ff9a3d');px(ctx,x,y,8,12,'#ffd23d');
-  rect(ctx,x,y,2,14,12,1,PAL.o);
-}
-function paintStake(ctx,x,y){
-  rect(ctx,x,y,7,6,1,7,PAL.Wd);
-  rect(ctx,x,y,8,6,3,2,PAL.Cr);
-  px(ctx,x,y,7,13,PAL.o);
-}
-function paintPennant(ctx,x,y){
-  rect(ctx,x,y,3,1,1,6,PAL.Wd);
-  rect(ctx,x,y,4,1,3,2,PAL.y);px(ctx,x,y,4,3,PAL.y);
-}
-function paintHammer(ctx,x,y,f){
-  if(f===0){rect(ctx,x,y,2,3,3,2,PAL.R3);rect(ctx,x,y,4,5,2,3,PAL.Wd)}
-  else{rect(ctx,x,y,4,2,2,3,PAL.R3);rect(ctx,x,y,3,5,2,3,PAL.Wd)}
-  px(ctx,x,y,6,7,PAL.y);
-}
-function paintSmoke(ctx,x,y,f){
-  const c1=PAL.SN,c2=PAL.R3;
-  if(f===0){px(ctx,x,y,3,6,c2);px(ctx,x,y,4,5,c1);px(ctx,x,y,3,4,c1);px(ctx,x,y,4,3,c2);px(ctx,x,y,5,2,c1);px(ctx,x,y,4,1,c2)}
-  else{px(ctx,x,y,4,6,c2);px(ctx,x,y,3,5,c1);px(ctx,x,y,4,4,c1);px(ctx,x,y,3,3,c2);px(ctx,x,y,4,2,c1);px(ctx,x,y,5,1,c2)}
-}
-function paintWheat(ctx,x,y){
-  for(let i=0;i<6;i++){
-    const sx=3+((i*2)%10),h=4+(i%3);
-    rect(ctx,x,y,sx,12-h,1,h,PAL.y);
-    px(ctx,x,y,sx,11-h,'#f4e08a');
-  }
-  rect(ctx,x,y,2,12,12,1,PAL.G1);
-}
-function paintStump(ctx,x,y){
-  rect(ctx,x,y,4,9,3,3,PAL.Wd);rect(ctx,x,y,4,9,3,1,PAL.w);
-  rect(ctx,x,y,10,11,2,2,PAL.Wd);px(ctx,x,y,10,11,PAL.w);
-  px(ctx,x,y,7,13,PAL.DI);px(ctx,x,y,3,12,PAL.DI);
-}
-function paintWatchtower(ctx,x,y){
-  rect(ctx,x,y,4,2,8,1,PAL.R);rect(ctx,x,y,5,1,6,1,PAL.R);
-  rect(ctx,x,y,4,3,8,3,PAL.w);rect(ctx,x,y,4,3,8,1,PAL.Wd);
-  px(ctx,x,y,6,4,PAL.k);px(ctx,x,y,9,4,PAL.k);
-  rect(ctx,x,y,3,6,10,1,PAL.Wd);
-  rect(ctx,x,y,4,7,1,8,PAL.Wd);rect(ctx,x,y,11,7,1,8,PAL.Wd);
-  rect(ctx,x,y,5,9,6,1,PAL.Wd);rect(ctx,x,y,5,12,6,1,PAL.Wd);
-  px(ctx,x,y,12,1,PAL.y);px(ctx,x,y,13,2,PAL.r);
-}
-function paintLibrary(ctx,x,y){
-  // v2.1: библиотека — каменный корпус, синяя черепица учёных, раскрытая книга над входом
-  rect(ctx,x,y,3,5,10,9,PAL.R2);rect(ctx,x,y,3,5,10,1,PAL.R3);
-  rect(ctx,x,y,2,3,12,2,PAL.Cb);rect(ctx,x,y,4,2,8,1,PAL.Cb);rect(ctx,x,y,2,5,12,1,PAL.W1);
-  rect(ctx,x,y,7,9,3,5,PAL.k);rect(ctx,x,y,6,8,5,1,PAL.Wd);
-  rect(ctx,x,y,4,7,2,2,PAL.y);rect(ctx,x,y,11,7,2,2,PAL.y);
-  rect(ctx,x,y,6,4,2,1,PAL.SN);rect(ctx,x,y,9,4,2,1,PAL.SN);px(ctx,x,y,8,4,PAL.y);
-  rect(ctx,x,y,3,13,10,1,PAL.R1);
-}
-function paintKnowledge(ctx,x,y){
-  // v2.1: башня знаний (тир 2) — шпиль с самоцветом и крылья-архивы; силуэт выше библиотеки
-  rect(ctx,x,y,5,7,6,9,PAL.R2);rect(ctx,x,y,5,7,6,1,PAL.R3);
-  rect(ctx,x,y,4,6,8,1,PAL.R3);
-  rect(ctx,x,y,5,3,6,3,PAL.Cb);rect(ctx,x,y,6,2,4,1,PAL.Cb);
-  px(ctx,x,y,7,1,PAL.GEM);px(ctx,x,y,8,1,PAL.GEM);px(ctx,x,y,7,0,PAL.GEM);px(ctx,x,y,8,0,PAL.GEM);
-  rect(ctx,x,y,7,4,2,1,PAL.GEM);
-  px(ctx,x,y,6,9,PAL.y);px(ctx,x,y,9,9,PAL.y);
-  rect(ctx,x,y,7,13,2,3,PAL.k);rect(ctx,x,y,6,12,4,1,PAL.Wd);
-  rect(ctx,x,y,2,13,3,3,PAL.R1);rect(ctx,x,y,11,13,3,3,PAL.R1);
-  rect(ctx,x,y,2,13,3,1,PAL.R3);rect(ctx,x,y,11,13,3,1,PAL.R3);
-  px(ctx,x,y,3,14,PAL.y);px(ctx,x,y,12,14,PAL.y);
-  rect(ctx,x,y,4,16,8,1,PAL.o);
+  for(let px=0;px<28;px++){ctx.fillRect(x+px,y+9,1,1);ctx.fillRect(x+px,y+22,1,1)}
+  ctx.fillStyle=PAL.Wd; // сваи
+  for(const bx of [2,13,25]){ctx.fillRect(x+bx,y+23,2,4)}
 }
 function paintIcon(name){
   const cv=document.createElement('canvas');cv.width=12;cv.height=12;
@@ -401,7 +306,7 @@ function paintIcon(name){
 }
 function buildAtlas(){
   const t0=performance.now();
-  ATLAS={W:256,H:1024,cur:{x:0,y:0,rowH:0}};
+  ATLAS={W:512,H:1024,cur:{x:0,y:0,rowH:0}};
   const cv=document.createElement('canvas');cv.width=ATLAS.W;cv.height=ATLAS.H;
   const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
   ATLAS.cv=cv;ATLAS.ctx=ctx;SPR={};
@@ -422,7 +327,7 @@ function buildAtlas(){
         const p=place(TRIW,TRIH);paintTriTransition(ctx,p.x,p.y,t,orr,bits);reg('tri'+t+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
       }
   }
-  // units
+  // units (16×16: на карте пол-гекса, в бою холст 16×16)
   for(const race of RACES){
     const g=UNIT_GRIDS[race],m=UNIT_MAPS[race];
     let p=place(16,16);drawGrid(ctx,p.x,p.y,g,m);
@@ -445,65 +350,49 @@ function buildAtlas(){
    c2.fillStyle='rgba(10,8,14,0.22)';
    c2.beginPath();c2.ellipse(ps.x+8,ps.y+8,6.6,3.1,0,0,Math.PI*2);c2.fill();
    reg('shadow',ps.x,ps.y,16,16)}
-  // buildings: distinct silhouettes
-  let p=place(16,16);drawGrid(ctx,p.x,p.y,G_HUT,HUT_MAPS.hut);reg('b_hut',p.x,p.y,16,16);
-  p=place(16,16);drawGrid(ctx,p.x,p.y,G_HOUSE2,HOUSE2_MAP);reg('b_house2',p.x,p.y,16,16);
-  p=place(16,16);drawGrid(ctx,p.x,p.y,G_TENT,TENT_MAP);reg('b_tent',p.x,p.y,16,16);
-  p=place(16,16);paintFisher(ctx,p.x,p.y);reg('b_fisher',p.x,p.y,16,16);
-  p=place(16,16);paintLumber(ctx,p.x,p.y);reg('b_lumber',p.x,p.y,16,16);
-  p=place(16,16);drawGrid(ctx,p.x,p.y,G_TAVERN,TAVERN_MAP);
-  rect(ctx,p.x,p.y,14,9,2,2,PAL.y);px(ctx,p.x,p.y,14,8,PAL.Wd);
-  reg('b_tavern',p.x,p.y,16,16);
-  p=place(16,16);paintFarm(ctx,p.x,p.y);
-  rect(ctx,p.x,p.y,11,3,4,1,PAL.r);rect(ctx,p.x,p.y,11,4,4,3,PAL.w);px(ctx,p.x,p.y,12,5,PAL.D);
-  reg('b_farm',p.x,p.y,16,16);
-  p=place(8,8);paintSmoke(ctx,p.x,p.y,0);reg('fx_0',p.x,p.y,8,8);
-  p=place(8,8);paintSmoke(ctx,p.x,p.y,1);reg('fx_1',p.x,p.y,8,8);
-  p=place(8,8);paintHammer(ctx,p.x,p.y,0);reg('fxh_0',p.x,p.y,8,8);
-  p=place(8,8);paintHammer(ctx,p.x,p.y,1);reg('fxh_1',p.x,p.y,8,8);
-  p=place(16,16);paintPort(ctx,p.x,p.y);reg('b_port',p.x,p.y,16,16);
-  p=place(16,16);paintGuild(ctx,p.x,p.y);reg('b_guild',p.x,p.y,16,16);
-  p=place(16,16);paintAdvGuild(ctx,p.x,p.y);reg('b_advguild',p.x,p.y,16,16);
-  p=place(8,8);paintPennant(ctx,p.x,p.y);reg('pennant',p.x,p.y,8,8);
-  p=place(16,16);paintStake(ctx,p.x,p.y);reg('stake',p.x,p.y,16,16);
-  p=place(16,16);paintCrafters(ctx,p.x,p.y);reg('b_crafters',p.x,p.y,16,16);
-  p=place(16,16);paintShip(ctx,p.x,p.y,false);reg('ship0',p.x,p.y,16,16);
-  p=place(16,16);paintShip(ctx,p.x,p.y,true);reg('ship1',p.x,p.y,16,16);
-  p=place(16,16);
-  for(let yy=0;yy<16;yy++)for(let xx=0;xx<16;xx++){
-    const h=hash2(xx,yy,404);
-    if(h<0.55){ctx.fillStyle=(h<0.15)?'#000000':PAL.o;ctx.fillRect(p.x+xx,p.y+yy,1,1)}
+  // здания/логовища/фичи: детальные гриды 32px
+  const GRIDS=[
+    ['b_hut',G_HUT,G_HUT_MAP],['b_house2',G_HOUSE2,G_HOUSE2_MAP],
+    ['b_tent',G_TENT,G_TENT_MAP],['b_fisher',G_FISHER,G_FISHER_MAP],
+    ['b_lumber',G_LUMBER,G_LUMBER_MAP],['b_tavern',G_TAVERN,G_TAVERN_MAP],
+    ['b_farm',G_FARM,G_FARM_MAP],['b_mine',G_MINE,G_MINE_MAP],
+    ['b_site',G_SITE,G_SITE_MAP],['b_townhall',G_TOWNHALL,G_TOWNHALL_MAP],
+    ['b_tower',G_WATCHTOWER,G_WATCHTOWER_MAP],['b_port',G_PORT,G_PORT_MAP],
+    ['b_guild',G_GUILD,G_GUILD_MAP],['b_advguild',G_ADVGUILD,G_ADVGUILD_MAP],
+    ['b_crafters',G_CRAFTERS,G_CRAFTERS_MAP],['b_library',G_LIBRARY,G_LIBRARY_MAP],
+    ['b_knowledge',G_KNOWLEDGE,G_KNOWLEDGE_MAP],
+    ['l_tower',L_TOWER,L_TOWER_MAP],['l_necro',L_NECRO,L_NECRO_MAP],
+    ['l_camp',L_CAMP,L_CAMP_MAP],['l_den',L_DEN,L_DEN_MAP],
+    ['l_cliff',L_CLIFF,L_CLIFF_MAP],['l_graves',L_GRAVES,L_GRAVES_MAP],
+    ['f_1',F_BERRY,F_BERRY_MAP],['f_2',F_DEADFALL,F_DEADFALL_MAP],
+    ['f_3',F_RUBBLE,F_RUBBLE_MAP],['f_4',F_VEIN,F_VEIN_MAP],
+    ['f_5',F_FISH,F_FISH_MAP],['f_6',F_RUINS,F_RUINS_MAP],
+    ['f_7',F_WHEAT,F_WHEAT_MAP],['f_8',F_STUMP,F_STUMP_MAP],
+    ['stake',G_STAKE,G_STAKE_MAP],['pennant',G_PENNANT,G_PENNANT_MAP],
+    ['fx_0',G_SMOKE0,G_SMOKE0_MAP],['fx_1',G_SMOKE1,G_SMOKE1_MAP],
+    ['fxh_0',G_HAMMER0,G_HAMMER0_MAP],['fxh_1',G_HAMMER1,G_HAMMER1_MAP]
+  ];
+  for(const [k,g,m] of GRIDS){
+    const w=g[0].length,h=g.length;
+    const p=place(w,h);drawGrid(ctx,p.x,p.y,g,m);reg(k,p.x,p.y,w,h);
   }
-  reg('ash',p.x,p.y,16,16);
-  p=place(16,16);paintMine(ctx,p.x,p.y);reg('b_mine',p.x,p.y,16,16);
-  p=place(16,16);paintSite(ctx,p.x,p.y);reg('b_site',p.x,p.y,16,16);
-  p=place(16,17);drawGrid(ctx,p.x,p.y,G_TOWNHALL,TH_MAP);reg('b_townhall',p.x,p.y,16,17);
-  // lairs
-  p=place(16,12);drawGrid(ctx,p.x,p.y,G_TOWER,TOWER_MAP);reg('l_tower',p.x,p.y,16,12);
-  p=place(16,15);drawGrid(ctx,p.x,p.y,G_NECRO,NECRO_MAP);reg('l_necro',p.x,p.y,16,15);
-  p=place(16,16);paintCamp(ctx,p.x,p.y);reg('l_camp',p.x,p.y,16,16);
-  p=place(16,16);paintDen(ctx,p.x,p.y);reg('l_den',p.x,p.y,16,16);
-  p=place(16,16);paintCliff(ctx,p.x,p.y);reg('l_cliff',p.x,p.y,16,16);
-  p=place(16,16);paintGraves(ctx,p.x,p.y);reg('l_graves',p.x,p.y,16,16);
-  // features
-  p=place(16,16);paintBerry(ctx,p.x,p.y);reg('f_1',p.x,p.y,16,16);
-  p=place(16,16);paintDeadfall(ctx,p.x,p.y);reg('f_2',p.x,p.y,16,16);
-  p=place(16,16);paintRubble(ctx,p.x,p.y);reg('f_3',p.x,p.y,16,16);
-  p=place(16,16);paintVein(ctx,p.x,p.y);reg('f_4',p.x,p.y,16,16);
-  p=place(16,16);paintFish(ctx,p.x,p.y);reg('f_5',p.x,p.y,16,16);
-  p=place(16,16);paintRuins(ctx,p.x,p.y);reg('f_6',p.x,p.y,16,16);
-  p=place(16,16);paintWheat(ctx,p.x,p.y);reg('f_7',p.x,p.y,16,16);
-  p=place(16,16);paintStump(ctx,p.x,p.y);reg('f_8',p.x,p.y,16,16);
-  p=place(16,16);paintWatchtower(ctx,p.x,p.y);reg('b_tower',p.x,p.y,16,16);
-  p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
-  p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
-  for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
+  // корабль: целый и «затухающий» (дизеринг для дальнего рейса)
+  {let p=place(20,20);drawGrid(ctx,p.x,p.y,G_SHIP,G_SHIP_MAP);reg('ship0',p.x,p.y,20,20);
+   p=place(20,20);drawGrid(ctx,p.x,p.y,G_SHIP,G_SHIP_MAP,(x,y)=>((x+y)&1)===1);reg('ship1',p.x,p.y,20,20)}
+  // пепелище (оверлей руин; разреженный — силуэт здания должен угадываться)
+  {const p=place(32,32);
+   for(let yy=0;yy<32;yy++)for(let xx=0;xx<32;xx++){
+     const h=hash2(xx,yy,404);
+     if(h<0.42){ctx.fillStyle=(h<0.10)?'#000000':PAL.o;ctx.fillRect(p.x+xx,p.y+yy,1,1)}
+   }
+   reg('ash',p.x,p.y,32,32)}
+  for(let m=0;m<64;m++){const p=place(TRIW,TRIH);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,TRIW,TRIH)}
   for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN])
     for(const orr of ['l','r'])
-      for(let m=1;m<8;m++){p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,14,16)}
-  p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);
-  p=place(10,12);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,10,12);
-  p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16);
+      for(let m=1;m<8;m++){const p=place(TRIW,TRIH);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,TRIW,TRIH)}
+  {let p=place(16,16);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,16,16);
+   p=place(20,24);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,20,24);
+   p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,TRIW,TRIH)}
   for(const k of ['b_hut','b_house2','b_tent','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }
@@ -511,4 +400,3 @@ function buildAtlas(){
     stone:paintIcon('stone'),gems:paintIcon('gems'),pop:paintIcon('pop'),ammo:paintIcon('ammo')};
   S.atlasMs=performance.now()-t0;
 }
-
