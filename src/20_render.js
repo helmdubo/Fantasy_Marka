@@ -139,7 +139,13 @@ function buildRoads(){
       if(!S.road[a]||!S.road[c2])continue;
       const ax=a%S.W,ay=(a/S.W)|0,bx2=c2%S.W,by2=(c2/S.W)|0;
       const mx=(WXC(ax)+WXC(bx2))/2,my=(WYCC(ax,ay)+WYCC(bx2,by2))/2;
-      bQuad(b,mx-0.42,my-0.34,mx+0.42,my+0.34,SPR['bridge']);
+      // настил вдоль оси дороги между гексами: N-S либо одна из диагоналей
+      let key='bridge_v';
+      if(ax!==bx2){
+        const rise=(WYCC(bx2,by2)-WYCC(ax,ay))*(WXC(bx2)-WXC(ax))>0; // подъём вправо
+        key=rise?'bridge_ne':'bridge_se';
+      }
+      bQuad(b,mx-CW*0.5,my-0.5,mx+CW*0.5,my+0.5,SPR[key]);
     }
   }
   for(const pl of S.roadPlans)

@@ -278,17 +278,30 @@ function paintWaterfall(ctx,x,y){ // исток: белопенный сброс
     if(h<0.8-d*0.6){ctx.fillStyle=h<0.32?PAL.SN:PAL.W3;ctx.fillRect(x+px,y+py,1,1)}
   }
 }
-function paintBridge(ctx,x,y){
-  // деревянный настил через русло; дорога рисуется поверх
-  for(let py=10;py<22;py++)for(let px=0;px<28;px++){
-    const seam=((px+((py-10)>>2)*2)%5===0);
-    ctx.fillStyle=seam?PAL.D:((py-10)%4===0?PAL.wh:((py-10)%4===3?PAL.Wd:PAL.w));
-    ctx.fillRect(x+px,y+py,1,1);
+function paintBridge(ctx,x,y,dx,dy){
+  // Настил ВДОЛЬ оси дороги, пересекающей речное ребро. (dx,dy) — вектор оси
+  // в пикселях тайла (y вниз): N-S (0,-1), NE-SW (7,-4), NW-SE (7,4) — те же
+  // направления, что у слотов paintRoadHex. Доски поперёк хода, по бокам
+  // тёмная кромка-перила; тайл 28×32 кладётся квадом CW×1 на середину ребра.
+  const cx=14,cy=16;
+  const L=Math.hypot(dx,dy);dx/=L;dy/=L;
+  const nx=-dy,ny=dx; // поперёк хода
+  const halfLen=10.5,halfW=4.5;
+  for(let yy=0;yy<TRIH;yy++)for(let xx=0;xx<TRIW;xx++){
+    const rx=xx+0.5-cx,ry=yy+0.5-cy;
+    const u=rx*dx+ry*dy,v=rx*nx+ry*ny;
+    const au=Math.abs(u),av=Math.abs(v);
+    if(au>halfLen)continue;
+    if(av<=halfW){ // полотно из досок
+      const seam=(Math.floor(u+halfLen)%3===0);       // шов между досками
+      const board=Math.floor(v+halfW)%4===1;          // блик доски
+      ctx.fillStyle=seam?PAL.D:(av>halfW-1?PAL.Wd:(board?PAL.wh:PAL.w));
+      ctx.fillRect(x+xx,y+yy,1,1);
+    }else if(av<=halfW+1.3){ // кромка-перила с усиленными концами
+      ctx.fillStyle=(au>halfLen-2)?PAL.Wd:PAL.o;
+      ctx.fillRect(x+xx,y+yy,1,1);
+    }
   }
-  ctx.fillStyle=PAL.o;
-  for(let px=0;px<28;px++){ctx.fillRect(x+px,y+9,1,1);ctx.fillRect(x+px,y+22,1,1)}
-  ctx.fillStyle=PAL.Wd; // сваи
-  for(const bx of [2,13,25]){ctx.fillRect(x+bx,y+23,2,4)}
 }
 function paintIcon(name){
   const cv=document.createElement('canvas');cv.width=12;cv.height=12;
@@ -392,7 +405,10 @@ function buildAtlas(){
       for(let m=1;m<8;m++){const p=place(TRIW,TRIH);paintRiverTri(ctx,p.x,p.y,orr,m,t);reg('rt_'+t+'_'+orr+'_'+m,p.x,p.y,TRIW,TRIH)}
   {let p=place(16,16);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,16,16);
    p=place(20,24);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,20,24);
-   p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,TRIW,TRIH)}
+   // мосты по осям дорог: вертикаль N-S и две диагонали (подъём/спуск вправо)
+   p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y,0,-1);reg('bridge_v',p.x,p.y,TRIW,TRIH);
+   p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y,7,-4);reg('bridge_ne',p.x,p.y,TRIW,TRIH);
+   p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y,7,4);reg('bridge_se',p.x,p.y,TRIW,TRIH)}
   for(const k of ['b_hut','b_house2','b_tent','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }
