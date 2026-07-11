@@ -54,8 +54,30 @@ function runHeadless(){
   console.log('terrain:',cnt.map((n,i)=>TNAME[i]+' '+(100*n/S.terr.length).toFixed(0)+'%').join(' | '));
   {const N2=S.W*S.H;let br=0;
    for(const k of (S.riverEdges||[])){const a=Math.floor(k/N2),b=k%N2;if(S.road[a]&&S.road[b])br++}
+   const wcnt=[0,0,0,0];for(const r of (S.riverTris?S.riverTris.values():[]))wcnt[r.w||1]++;
    console.log('rivers: edges='+(S.riverEdges?S.riverEdges.size:0)+' tris='+(S.riverTris?S.riverTris.size:0)+
-     ' springs='+S.riverStats.springs+' outflows='+S.riverStats.outflows+' bridges='+br)}
+     ' springs='+S.riverStats.springs+' outflows='+S.riverStats.outflows+
+     ' flowMax='+(S.riverStats.flowMax||0)+' w1/w2/w3='+wcnt[1]+'/'+wcnt[2]+'/'+wcnt[3]+' bridges='+br)}
+  if(S.world.mountains){
+    const cnt={};for(const c of S.world.mountains)cnt[c.kind]=(cnt[c.kind]||0)+1;
+    let emax=0,lip=0;
+    for(let i=0;i<S.W*S.H;i++){
+      if(S.reliefE[i]>emax)emax=S.reliefE[i];
+      const x=i%S.W,y=(i/S.W)|0;
+      for(const d of hexDirs(x)){ // INV-T2: поле E — 1-Lipschitz
+        const nx=x+d[0],ny=y+d[1];
+        if(inMap(nx,ny)&&S.terr[i]!==T.WATER&&S.terr[idx(nx,ny)]!==T.WATER&&
+          Math.abs(S.reliefE[i]-S.reliefE[idx(nx,ny)])>1.001)lip++;
+      }
+    }
+    console.log('relief: clusters='+S.world.mountains.length+' '+JSON.stringify(cnt)+
+      ' Emax='+emax.toFixed(1)+' lipViol='+lip+
+      ' valleys='+S.world.valleys.length+' passes='+S.world.passes.length);
+  }
+  if(S.biome){
+    const bc=[0,0,0,0,0];for(const b of S.biome)bc[b]++;
+    console.log('biomes:',BIO_NAME.map((n,i)=>n?n+' '+bc[i]:'').filter(Boolean).join(' | '));
+  }
   console.log('start:',S.th.x+','+S.th.y,'| lairs:',S.lairs.map(l=>l.id+'@'+l.x+','+l.y+' d='+cheb(l.x,l.y,S.th.x,S.th.y)).join('  '));
   console.log('settlers:',S.settlers.map(u=>u.race).join(', '));
   S.policy.wood='export';S.policy.food='export';

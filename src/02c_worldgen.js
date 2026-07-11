@@ -18,9 +18,11 @@ function genWorld(){
     wgLakes();
     classifyWater();
     wgRidges();
-    wgElevation();
-    genRivers();       // реки v2 (рёберные), высоту берут из S.elev
+    wgPeaks();         // мега-вершины: розетки ★ у концов хребтов (02d_relief)
+    wgRelief();        // кластеры гор, псевдовысоты E, CDF-высота, котловины/перевалы
+    genRivers();       // реки v3: flow-аккумуляция на графе треугольников (02e_rivers)
     classifyWater();   // тупиковые пруды рек становятся озёрами
+    wgMoisture();      // влажность от пресной воды + биомы Уиттекера (02d_relief)
     wgFill();
     wgEntities();
     const err=wgValidate();
@@ -192,35 +194,30 @@ function wgRidges(){
   }
 }
 
-/* --- 4. высота: от берега вверх к хребту (реки текут строго вниз) --- */
-function wgElevation(){
-  const N=S.W*S.H;
-  const dr=wgBfsField(i=>S.terr[i]===T.MTN);
-  let maxDc=1;for(const v of S.distCoast)if(v<32767&&v>maxDc)maxDc=v;
-  S.elev=new Float32Array(N);
-  for(let i=0;i<N;i++){
-    if(S.terr[i]===T.WATER){S.elev[i]=0;continue}
-    const ridge=dr[i]>=32767?0:Math.max(0,1-dr[i]/16);
-    S.elev[i]=0.42*(S.distCoast[i]/maxDc)+0.58*ridge;
-  }
-}
+/* --- 4. высота мира: см. wgRelief в 02d_relief.js (кластеры -> E -> CDF) --- */
 
 /* --- 5. WFC-заполнение: волна от контуров, мягкие правила соседства --- */
 function wgFill(){
   const W=S.W,H=S.H,N=W*H;
   let maxDc=1;for(const v of S.distCoast)if(v<32767&&v>maxDc)maxDc=v;
-  const dr=wgBfsField(i=>S.terr[i]===T.MTN);
   const TILES=[T.GRASS,T.FOREST,T.ROCK];
   const fixed=new Uint8Array(N); // контуры: вода и горы уже «схлопнуты»
   for(let i=0;i<N;i++)if(S.terr[i]===T.WATER||S.terr[i]===T.MTN)fixed[i]=1;
-  // зональные приоры (кольца от берега, предгорья, поймы, берега озёр)
+  // зональные приоры: кольца от берега, предгорья по полю E (эмерджентные),
+  // биомы Уиттекера (высота x влажность), поймы, берега озёр
   const prior=(i)=>{
     const x=i%W,y=(i/W)|0;
-    const dc=S.distCoast[i],drr=dr[i];
+    const dc=S.distCoast[i];
+    const E=S.reliefE[i],m=S.moist?S.moist[i]:0.4,bio=S.biome?S.biome[i]:BIO.MEADOW;
     let g=1.4,f=0.62,r=0.24;
     if(dc<=5){f*=0.35;r*=(dc<=2?2.2:0.6)}         // прибрежье: луга, утёсы у кромки
-    else if(drr>6){f*=1.45}                         // средний пояс: лесные кластеры
-    if(drr<=3){r*=3.4;f*=0.45}                      // предгорья: скалы-холмы
+    else if(E<1){f*=1.45}                           // средний пояс: лесные кластеры
+    if(E>=1.5){r*=2.8+E;f*=0.45}                    // предгорья: пояс E у гор — скалы-холмы
+    else if(E>=0.8){r*=2.2}
+    if(bio===BIO.TAIGA)f*=1.8;                      // тайга: густой лес
+    else if(bio===BIO.STEPPE){f*=0.35;g*=1.5;r*=1.4} // степь: открытые травы, каменистость
+    else if(bio===BIO.SWAMP){f*=0.7;r*=0.25;g*=1.6} // болотина: мокрые луга
+    f*=0.6+0.8*m;                                   // лес любит влагу
     let lake=false,sea=false;
     for(const d of hexDirs(x)){
       const nx=x+d[0],ny=y+d[1];

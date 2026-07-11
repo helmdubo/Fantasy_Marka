@@ -66,10 +66,18 @@ const CFG={
     cost:{tavern:6,port:10,guild:10,advguild:14,crafters:16},
     tier2:{advguild:1,crafters:1},
     libTier2:{stone:16,gems:3}},
+  // Террейн v2.0 (handoff): ранги кластеров гор для псевдовысот (§5),
+  // CDF-перераспределение высот (§8.2), влажность (§8.3), реки (§6)
+  RELIEF:{RANK:{peak:5.0,ring:4.0,triple:3.2,chain:2.6,ringChain:2.6,massif:2.4,single:1.8},
+    CDF_POW:2, MOIST_R:12,
+    RIVERS:{want:6, minSpacing:4, wideAt:2, hugeAt:4}},
 };
 const UTIL={oper:3.0,watch:2.4,build:2.6,repair:2.8,supply:2.7,pave:1.8,clear:1.8,ruins:1.6};
 const T={WATER:0,GRASS:1,FOREST:2,ROCK:3,MTN:4};
 const TNAME=['Вода','Луга','Лес','Скалы','Горы'];
+// Биомы Уиттекера (terrain handoff §8.3): высота x влажность -> тип покрова
+const BIO={NONE:0,MEADOW:1,STEPPE:2,SWAMP:3,TAIGA:4};
+const BIO_NAME=['','Луговина','Степь','Болотина','Тайга'];
 const F={NONE:0,BERRY:1,DEADFALL:2,RUBBLE:3,VEIN:4,FISH:5,RUINS:6,WHEAT:7,STUMP:8};
 const FNAME=['','Ягодник','Бурелом (завал)','Каменная осыпь','Самоцветная жила','Рыбное место','Древние руины','Пшеничное поле','Пеньки (вырубка)'];
 const RACES=['human','dwarf','elf','troll'];

@@ -6,7 +6,7 @@
 
 CFG: все игровые константы; таблицы T/F/RACES/LAIR_DEFS
 
-`VERSION` · `IS_BROWSER` · `CFG` · `UTIL` · `T` · `TNAME` · `F` · `FNAME` · `RACES` · `RNAME` · `ACTNAME` · `LAIR_DEFS`
+`VERSION` · `IS_BROWSER` · `CFG` · `UTIL` · `T` · `TNAME` · `BIO` · `BIO_NAME` · `F` · `FNAME` · `RACES` · `RNAME` · `ACTNAME` · `LAIR_DEFS`
 
 ## src/01_core.js
 
@@ -22,15 +22,27 @@ RNG (mulberry32), шум fbm, hash, clamp/lerp, скорость по терре
 
 ## src/02c_worldgen.js
 
-генератор мира: остров, хребты-графы, высота, WFC-заполнение от контуров
+генератор мира: остров, хребты-графы, WFC-заполнение от контуров
 
-`WFC_DEBUG` · `genWorld()` · `wgIsland()` · `wgBfsField()` · `wgLakes()` · `wgRidges()` · `wgElevation()` · `wgFill()` · `wgEntities()` · `wgValidate()`
+`WFC_DEBUG` · `genWorld()` · `wgIsland()` · `wgBfsField()` · `wgLakes()` · `wgRidges()` · `wgFill()` · `wgEntities()` · `wgValidate()`
+
+## src/02d_relief.js
+
+рельеф v2.0: кластеры гор (розетки/тройки/цепи), псевдовысоты E, котловины/перевалы, влажность/биомы
+
+`hexAdjIdx()` · `mclusterDetect()` · `reliefField()` · `detectBasins()` · `detectPasses()` · `wgPeaks()` · `wgMoisture()` · `wgRelief()`
+
+## src/02e_rivers.js
+
+реки v3: flow-аккумуляция на графе треугольников, ширина от потока, стоки озёр
+
+`edgeKeyCells()` · `cellNearRiver()` · `genRivers()`
 
 ## src/03_state_mapgen.js
 
 глобальное состояние S; newGame, генерация мира, spawn поселенцев
 
-`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `edgeKeyCells()` · `cellNearRiver()` · `genRivers()` · `classifyWater()` · `pickStart()` · `thSiteScore()` · `placeTownhall()` · `autoPlaceTownhall()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `withHeroPass()` · `placeBuilding()` · `spawnSettlers()`
+`S` · `log()` · `idx()` · `inMap()` · `newGame()` · `classifyWater()` · `pickStart()` · `thSiteScore()` · `placeTownhall()` · `autoPlaceTownhall()` · `genFeatures()` · `genLairs()` · `computeFear()` · `rebuildPass()` · `withHeroPass()` · `placeBuilding()` · `spawnSettlers()`
 
 ## src/04_econ.js
 
