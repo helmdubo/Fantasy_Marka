@@ -4430,7 +4430,10 @@ function wakeAll(){
   }
 }
 
-/* ================= SPRITES (palette + grids) ================= */
+/* ================= SPRITES (palette + grids) =================
+   Юниты и враги экрана боя — 16×16 (на карте рисуются в полгекса, в бою
+   на холсте 16×16). Здания/логовища/фичи — 32 px на гекс (перерисовка
+   под укрупнение мира ×2); их гриды сгенерированы скриптом и правятся руками. */
 const PAL={
   o:'#141018',
   W1:'#1d4f6e',W2:'#2a6f92',W3:'#4899b0',
@@ -4443,7 +4446,10 @@ const PAL={
   SK:'#d9a066',Cb:'#3a5aa8',Cg:'#3f7d5a',Cr:'#a8353a',
   TR:'#7c8a6a',GEM:'#59d6d0',BER:'#c8384a',NEC:'#7a4fae',D:'#3a2a1c',
   // террейн v2.0: пояса рельефа и биом-тинты
-  M3:'#8a8494',St1:'#7d8a3f',St2:'#9c9a52',Sw1:'#2e5240',Sw2:'#3a6850'
+  M3:'#8a8494',St1:'#7d8a3f',St2:'#9c9a52',Sw1:'#2e5240',Sw2:'#3a6850',
+  // тона детальных 32px-спрайтов
+  rh:'#c06848',wh:'#a8895c',yl:'#fff2b0',ch:'#549a70',bh:'#5578c8',
+  f1:'#ff7a2e',f2:'#ffd23d',t1:'#b39554',t2:'#8a6f3c',t3:'#5a4426',nec2:'#332b40'
 };
 const OUTL={};OUTL[T.GRASS]=PAL.G1;OUTL[T.FOREST]=PAL.F1;OUTL[T.ROCK]=PAL.R1;OUTL[T.MTN]=PAL.o;
 
@@ -4515,23 +4521,7 @@ const G_TROLL=[
 "................",
 "................",
 "................"];
-const G_HUT=[
-"................",
-"................",
-"................",
-"..oooooooooooo..",
-"..orrrrrrrrrro..",
-"..orrrrrrrrrro..",
-"..oRRRRRRRRRRo..",
-"..owwwwwwwwwwo..",
-"..owwwwDDwwwwo..",
-"..owwwwDDwwwwo..",
-"..oWWWWWWWWWWo..",
-"..oooooooooooo..",
-"................",
-"................",
-"................",
-"................"];
+
 /* ---------- ВРАГИ ЭКРАНА БОЯ (п.11) ---------- */
 const G_GOBLIN=[
 "................",
@@ -4659,108 +4649,7 @@ const G_NECRO_U=[
 "................",
 "................"];
 const NECRO_U_MAP={n:'#2a2333',v:PAL.NEC,w:PAL.Wd,p:PAL.NEC};
-const G_TENT=[ // палатка переселенцев: стартовый лагерь до ратуши
-"................",
-"................",
-"................",
-"................",
-".......p........",
-".......pp.......",
-"......tttt......",
-".....tttttt.....",
-"....tttWWttt....",
-"...ttttWWtttt...",
-"...oT.tWWt.To...",
-"..cc..........c.",
-".ccc.....c..ccc.",
-"................",
-"................",
-"................"];
-const TENT_MAP={t:'#b39554',T:'#8a6f3c',W:'#5a4426',o:PAL.o,p:PAL.r,c:PAL.G1};
-const G_HOUSE2=[ // дом переселенцев (лачуга тир 2, п.10): каменный низ, деревянный верх
-"................",
-"......oooo......",
-"....oorrrroo....",
-"...orrrrrrrro...",
-"..orrrrrrrrrro..",
-"..oRRRRRRRRRRo..",
-"..owwwwwwwwwwo..",
-"..owgowwwwogwo..",
-"..owwwwwwwwwwo..",
-"..oWWWWWWWWWWo..",
-"..osssssssssso..",
-"..osgossssogso..",
-"..ossssDDsssso..",
-"..ossssDDsssso..",
-"..oSSSSSSSSSSo..",
-"..oooooooooooo.."];
-const HOUSE2_MAP={o:PAL.o,r:PAL.r,R:PAL.R,w:PAL.w,W:PAL.Wd,s:PAL.R2,S:PAL.R1,D:PAL.D,g:PAL.y};
-const G_TOWNHALL=[
-"........y.......",
-"........yy......",
-"........p.......",
-"......oooo......",
-".....orrrro.....",
-"....orrrrrro....",
-"...orrrrrrrro...",
-"..orrrrrrrrrro..",
-".orrrrrrrrrrrro.",
-".oRRRRRRRRRRRRo.",
-".osssssssssssso.",
-".osssssssssssso.",
-".osgsssDDsssgso.",
-".osgsssDDsssgso.",
-".osssssDDssssso.",
-".oSSSSSSSSSSSSo.",
-".oooooooooooooo."];
-const G_TOWER=[
-"....s.ss.s......",
-"....ssssss......",
-"....ssssss......",
-"....sskkss......",
-"....ssssss......",
-"....ssssss......",
-"....sskkss......",
-"....ssssss......",
-"...ssssssss.....",
-"...sSSSSSSs.....",
-"...ssssssss.....",
-"..ssssssssss...."];
-const G_NECRO=[
-".......v........",
-"......vvv.......",
-".......n........",
-"......nnn.......",
-"......nnn.......",
-".....nnnnn......",
-".....nknkn......",
-".....nnnnn......",
-".....nnnnn......",
-".....nknkn......",
-".....nnnnn......",
-"....nnnnnnn.....",
-"....nNNNNNn.....",
-"....nnnnnnn.....",
-"...nnnnnnnnn...."];
 
-const G_TAVERN=[
-"................",
-"................",
-"................",
-"................",
-"....oooooooo....",
-"...orrrrrrrro...",
-"..orrrrrrrrrro..",
-".orrrrrrrrrrrro.",
-".oRRRRRRRRRRRRo.",
-".owwwwwwwwwwwwo.",
-".owgowwwwwwogwo.",
-".owgowwDDwwogwo.",
-".owwwwwDDwwwwwo.",
-".oWWWWWWWWWWWWo.",
-".oooooooooooooo.",
-"................"];
-const TAVERN_MAP={o:PAL.o,r:PAL.Cg,R:PAL.F1,w:PAL.w,W:PAL.Wd,D:PAL.D,g:PAL.y};
 const G_RAIDER=[
 "................",
 "................",
@@ -4786,44 +4675,1252 @@ const UNIT_MAPS={
   troll:{g:PAL.TR,e:PAL.o,d:PAL.DI,b:PAL.D}
 };
 const UNIT_GRIDS={human:G_HUMAN,dwarf:G_DWARF,elf:G_ELF,troll:G_TROLL};
-const HUT_MAPS={
-  hut:{o:PAL.o,r:PAL.r,R:PAL.R,w:PAL.w,W:PAL.Wd,D:PAL.D},
-  fisher:{o:PAL.o,r:PAL.Cb,R:PAL.W1,w:PAL.w,W:PAL.Wd,D:PAL.D},
-  lumber:{o:PAL.o,r:PAL.Wd,R:PAL.D,w:PAL.w,W:PAL.Wd,D:PAL.D},
-  tavern:{o:PAL.o,r:PAL.Cg,R:PAL.F1,w:PAL.w,W:PAL.Wd,D:PAL.D}
-};
-const TH_MAP={y:PAL.y,p:PAL.Wd,o:PAL.o,r:PAL.r,R:PAL.R,s:PAL.R2,S:PAL.R1,g:PAL.y,D:PAL.k};
-const TOWER_MAP={s:PAL.R2,S:PAL.R1,k:PAL.k};
-const NECRO_MAP={n:PAL.M1,N:PAL.o,k:PAL.NEC,v:PAL.NEC};
+
+/* ---------- ДЕТАЛЬНЫЕ СПРАЙТЫ 32px (укрупнение мира ×2) ----------
+   Гриды зданий/логовищ/фич; ширина 32 (корабль 20, fx 16). Высота
+   ратуши/башни знаний 34 — верх торчит над гексом. */
+const G_HUT=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"............RhhhhhhR............",
+"...........RRrhrRrhrR...........",
+"..........RrRrrrRrrrRR..........",
+"..........RRRRRRRRRRRR..........",
+".........RRrhrRrhrRrhrR.........",
+"........RrRrrrRrrrRrrrRR........",
+".......RRRRRRRRRRRRRRRRRR.......",
+"......RrRrhrRrhrRrhrRrhrRR......",
+".....RrrRrrrRrrrRrrrRrrrRrR.....",
+".....RRRRRRRRRRRRRRRRRRRRRR.....",
+"....RrRrhrRrhrRrhrRrhrRrhrRR....",
+"...RRRRRRRRRRRRRRRRRRRRRRRRRR...",
+".....WwwwwvwwwwvwwwwvwwwwvW.....",
+".....WwwwwwwwwwwwwwwwwwwwwW.....",
+".....WWWWWWWWWWWWWWWWWWWWWW.....",
+".....WwWyyyWvWWWWWWwWyyyWwW.....",
+".....WwWyYyWwWWDDWWwWyYyWwW.....",
+".....WWWyyyWWWDDDDWWWyyyWWW.....",
+".....WwWWWWWwWDDDDWvWWWWWwW.....",
+".....WwwwwwwwWDDDDWwwwwwwwW.....",
+".....WWWWWWWWWDDDDWWWWWWWWW.....",
+".....WsZsssSsWDDDDWZsssSsZW.....",
+".....WsssssSsWDDDDWssssSssW.....",
+".....WsssssSsWDDDDWssssSssW..p..",
+"...p.WSSSSSSSWDDDDWSSSSSSSW.g.g.",
+"..g.g...........................",
+"................................"];
+const G_HUT_MAP={D:PAL.D,R:PAL.R,S:PAL.R1,W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,g:PAL.G1,h:PAL.rh,p:PAL.G3,r:PAL.r,s:PAL.R2,v:PAL.wh,w:PAL.w,y:PAL.y};
+const G_HOUSE2=[
+".......................S........",
+"......................ZZZ.......",
+"......................sss.......",
+"...........RhhhhhhhhR.sss.......",
+"..........RrRrhrRrhrRRsss.......",
+".........RrrRrrrRrrrRrR.........",
+"........RRRRRRRRRRRRRRRR........",
+".......RhrRrhrRrhrRrhrRrR.......",
+".......RrrRrrrRrrrRrrrRrR.......",
+"......RRRRRRRRRRRRRRRRRRRR......",
+".....RhrRrhrRrhrRrhrRrhrRrR.....",
+"....RrrrRrrrRrrrRrrrRrrrRrrR....",
+"...RRRRRRRRRRRRRRRRRRRRRRRRRR...",
+".....WwwwwvwwwwvwwwwvwwwwvW.....",
+".....WwwWWWWWwwwwwwWWWWWwwW.....",
+".....WWWWyyyWWWWWWWWyyyWWWW.....",
+".....WwvWyYyWwwwwvwWyYyWwwW.....",
+".....WwwWyyyWwwwwwwWyyyWwwW.....",
+".....WWWWWWWWWWWWWWWWWWWWWW.....",
+".....WwwwvwwwwvwwwwvwwwwvwW.....",
+".....WwwwwwwwwwwwwwwwwwwwwW.....",
+"....SSSSSSSSSSSSSSSSSSSSSSSS....",
+"....SsssssSssWWWWWWsssSsssss....",
+"....SsSSSSSssWWDDWWssSSSSSss....",
+"....SSSyyySSSWDDDDWSSSyyySSS....",
+"....ssSyYySssWDDDDWSsSyYySsZ....",
+"....ssSyyySssWDDDDWSsSyyySss....",
+"....ssSSSSSssWDDDDWSsSSSSSss....",
+"....SSSSSSSSSWDDDDWSSSSSSSSS....",
+"....SsZsssSsZWDDDDWsssSsZsss....",
+"....SsssssSssWDDDDWsssSsssss....",
+"................................"];
+const G_HOUSE2_MAP={D:PAL.D,R:PAL.R,S:PAL.R1,W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,h:PAL.rh,r:PAL.r,s:PAL.R2,v:PAL.wh,w:PAL.w,y:PAL.y};
+const G_TENT=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"...............Weeee............",
+"...............Weeee............",
+"...............We...............",
+"...............W................",
+"..............TtU...............",
+".............TtttU..............",
+"............TtttTtU.............",
+"...........TtttTtttU............",
+"...........TttTttttU............",
+"..........TttTttttTtU...........",
+".........TttTttttTtttU..........",
+"........TttTttttTttttTU.........",
+".......TttTttttWttttTttU........",
+"......TttTttttWWWttTttttU.......",
+".....TttTttttTWWWtTttttTtU......",
+".....TtTttttTWWWWWttttTttU......",
+"....TtTttttTtWWWWWtttTttttUf....",
+"...TtTttttTtWWWWWWWtTttttTFU....",
+"..TUUUUUUUUUWWWWWWWUUUUUUUffU...",
+".........................W..W...",
+"....p....................WWWW...",
+"...g.g..p.............p......p..",
+".......g.g...........g.g....g.g.",
+"................................"];
+const G_TENT_MAP={F:PAL.f2,T:PAL.t2,U:PAL.t3,W:PAL.Wd,e:PAL.Cr,f:PAL.f1,g:PAL.G1,p:PAL.G3,t:PAL.t1};
+const G_TAVERN=[
+"................................",
+".......ZZZ......................",
+".......sss......................",
+".......sss......................",
+".......sssqCCCCCCCCCCq..........",
+".........qCcqcCcqcCcqcq.........",
+"........qcccqcccqcccqccq........",
+".......qqqqqqqqqqqqqqqqqq.......",
+"......qcCcqcCcqcCcqcCcqcCq......",
+".....qqcccqcccqcccqcccqcccq.....",
+".....qqqqqqqqqqqqqqqqqqqqqq.....",
+"....qcCcqcCcqcCcqcCcqcCcqcCq....",
+"...qqcccqcccqcccqcccqcccqcccWWW.",
+"..qqqqqqqqqqqqqqqqqqqqqqqqqqqqW.",
+".qqqqqqqqqqqqqqqqqqqqqqqqqqqqqW.",
+"...Wwvwwwwvwwwwvwwwwvwwwwvwwyyy.",
+"...WwwwwwwwwwwwwwwwwwwwwwwwwyYyy",
+"...WWWWWWWWWWWWWWWWWWWWWWWWWyyyy",
+"...WwWyyyWwwvwwwwvwwwwWyyyWvyyy.",
+"...WwWyYyWwwwWWWWWWwwwWyYyWwW...",
+"...WWWyyyWWWWWWDDWWWWWWyyyWWW...",
+"...WvWyyyWwwwWDDDDWvwwWyyyWwW...",
+"...WwWWWWWwwwWDDDDWwwwWWWWWwW...",
+"...WWWWWWWWWWWDDDDWWWWWWWWWWW...",
+"...WwwvwwwwvwWDDDDWwwvwwwwvwW...",
+"...SsZsssSSSSWDDDDWSSSSZsssSs...",
+"...SsssssSyySWDDDDWSyySssssSs...",
+"...SsssssSyySWDDDDWSyySssssSs...",
+"...SSSSSSSSSSWDDDDWSSSSSSSSSS...",
+"...sssSsZsssSWDDDDWsZsssSsZss...",
+"................................",
+"................................"];
+const G_TAVERN_MAP={C:PAL.ch,D:PAL.D,S:PAL.R1,W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,c:PAL.Cg,q:PAL.F1,s:PAL.R2,v:PAL.wh,w:PAL.w,y:PAL.y};
+const G_TOWNHALL=[
+"................................",
+"...............Wyyyyyy..........",
+"...............WYyyyyy..........",
+"...............Wyyyyyy..........",
+"...............Wyyy.............",
+"...............W................",
+"...............W................",
+"...........RhhhhhhhhR...........",
+"..........RrRrhrRrhrRR..........",
+".........RrrRrrrRrrrRrR.........",
+"........RRRRRRRRRRRRRRRR........",
+"........RrRrhrRrhrRrhrRR........",
+".......RrrRrrrRrrrRrrrRrR.......",
+"......RRRRRRRRRRRRRRRRRRRR......",
+".....RhrRrhrRrhrRrhrRrhrRrR.....",
+"....RrrrRrrrRrrrRrrrRrrrRrrR....",
+"...RRRRRRRRRRRRRRRRRRRRRRRRRR...",
+"...RhrRrhrRrhrRrhrRrhrRrhrRrR...",
+"..RrrrRrrrRrrrRrrrRrrrRrrrRrrR..",
+".RRRRRRRRRRRRRRRRRRRRRRRRRRRRRR.",
+"..SsZsssSsZsssSsZsssSsZsssSsZs..",
+"..SsssssSsssssSsssssSsssssSsss..",
+"..SssSSSSSssssSyysssSsSSSSSsss..",
+"..SSSSyyySSSSSSSSSSSSSSyyySSSS..",
+"..sssSyYySsSSSDDDDSSssSyYySssS..",
+"..sssSyyySsSSDDDDDDSssSyyySssS..",
+"..sssSyyySsSSDDDDDDSssSyyySssS..",
+"..SSSSSSSSSSSDDDDDDSSSSSSSSSSS..",
+"..SsZsssSsZsSDDDDDDSSsZsssSsZs..",
+"..SsssssSsssSDDDDDDSSsssssSsss..",
+"..SsssssSsssSDDDDDDSSsssssSsss..",
+"..SSSSSSSSSSSDDDDDDSSSSSSSSSSS..",
+"..SSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+"....ZZZZZZZZZZZZZZZZZZZZZZZZ...."];
+const G_TOWNHALL_MAP={D:PAL.D,R:PAL.R,S:PAL.R1,W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,h:PAL.rh,r:PAL.r,s:PAL.R2,y:PAL.y};
+const G_FISHER=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"..........uBBBBu................",
+".........uBbubBbu...............",
+"........ubbbubbbuu..............",
+".......uuuuuuuuuuuu.............",
+"......ubBbubBbubBbuu............",
+".....uubbbubbbubbbubu...........",
+"....uuuuuuuuuuuuuuuuuu....W.....",
+"......wwwwvwwwwvwwww.....W.n....",
+"......wwwwwwwwwwwwww....W..n....",
+"......WWWWWWWWWiiiiW....W..e....",
+"......WyyWDDDWwi.i.w....W.......",
+"......WyyWDDDWw.i.iw....W.......",
+"......WWWWDDDWWiiiiW.WWWW.......",
+"......wwwWDDDWvwwwwv.wwww.......",
+"......wwwWDDDWwwwwww.WWWW.......",
+"......WWWWDDDWWWWWWW.wwww.......",
+"..wwwvwwwwvwwwwvwwwwvwwwwvwwww..",
+"..wwwwwwwwwwwwwwwwwwwwwwwwwwww..",
+"..WWWWWWWWWWWWWWWWWWWWWWWWWWWW..",
+"..WWWWWWWWWWWWWWWWWWWWWWWWWWWW..",
+"....W..........W...........W....",
+"....W..........W...........W....",
+"....W..........W...........W....",
+"....W..........W...........W....",
+"....W..........W...........W....",
+"....W..........W...........W....",
+"................................"];
+const G_FISHER_MAP={B:PAL.bh,D:PAL.D,W:PAL.Wd,b:PAL.Cb,e:PAL.Cr,i:PAL.TR,n:PAL.SN,u:PAL.W1,v:PAL.wh,w:PAL.w,y:PAL.y};
+const G_LUMBER=[
+"................................",
+"................................",
+"................................",
+"................................",
+"...DwwwwwwwwwwwwwwwwwwwwwwwwD...",
+"..DWDWwWDWwWDWwWDWwWDWwWDWwWDD..",
+".DWWDWWWDWWWDWWWDWWWDWWWDWWWDWD.",
+".DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD.",
+"DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+"...WD......................DW...",
+"...WD......................DW...",
+"...WD......................DW...",
+"...WD......................DW...",
+"...WD......................DW...",
+"...WD.......wwwwwwww.......DW...",
+"...WD.......wWwwwWww.......DW...",
+"...WD.......wwWwwwWw.......DW...",
+"...WD.......WWWWWWWW.......DW...",
+"...WD....wwww.wwww.wwww....DW...",
+"...WD....wWww.wWww.wWww....DW...",
+"...WD....wwWw.wwWw.wwWw....DW...",
+"...WD....WWWW.WWWW.WWWW....DW...",
+"...WD..wwww.wwww.wwww.wwww.DW...",
+"...WD..wWww.wWww.wWww.wWww.DW...",
+"...WD..wwWw.wwWw.wwWw.wwWw.DW...",
+"...WD..WWWW.WWWW.WWWW.WWWW.DW...",
+"...WD......................DW...",
+"...WD.DDDDDDDDDDDDDDDDDDDD.DW...",
+"...WDddddddddddddddddddddddDW...",
+".....dddddddddddddddddddddd.....",
+"...p.........................p..",
+"..g.g.......................g.g."];
+const G_LUMBER_MAP={D:PAL.D,W:PAL.Wd,d:PAL.DI,g:PAL.G1,p:PAL.G3,w:PAL.w};
+const G_FARM=[
+"................................",
+"......................RhhhhhhR..",
+".....................RhrRrhrRrR.",
+"....................RRRRRRRRRRRR",
+"......................wwwwwwww..",
+"......................WWWDDWWW..",
+"......................vwwDDvww..",
+"......................wwwDDwww..",
+"......................WWWDDWWW..",
+"..wwwwwwwwwwwwwwwwwwwwwwwwwwww..",
+"..DDDDDDDDDDDDDDDDDDDDDDDDDDDD..",
+"..DDpDDDpDDDpDDDpDDDpDDDpDDDpD..",
+"..ddgdddgdddgdddgdddgdddgdddgd..",
+"..dddddddddddddddddddddddddddd..",
+"..DDDDDDDDDDDDDDDDDDDDDDDDDDDD..",
+"..DDDDpDDDpDDDpDDDpDDDpDDDpDDDp.",
+"..ddddgdddgdddgdddgdddgdddgdddg.",
+"..dddddddddddddddddddddddddddd..",
+"..DDDDDDDDDDDDDDDDDDDDDDDDDDDD..",
+"..DDpDDDpDDDpDDDpDDDpDDDpDDDpD..",
+"..ddgdddgdddgdddgdddgdddgdddgd..",
+"..dddddddddddddddddddddddddddd..",
+"..DDDDDDDDDDDDDDDDDDDDDDDDDDDD..",
+"..DDDDpDDDpDDDpDDDpDDDpDDDpDDDp.",
+"..ddddgdddgdddgdddgdddgdddgdddg.",
+"..dddddddddddddddddddddddddddd..",
+"..DDDDDDDDDDDDDDDDDDDDDDDDDDDD..",
+"..DDpDDDpDDDpDDDpDDDpDDDpDDDpD..",
+"..ddgdddgdddgdddgdddgdddgdddgd..",
+"..dddddddddddddddddddddddddddd..",
+"..WWWWWWWWWWWWWWWWWWWWWWWWWWWW..",
+"................................"];
+const G_FARM_MAP={D:PAL.D,R:PAL.R,W:PAL.Wd,d:PAL.DI,g:PAL.G1,h:PAL.rh,p:PAL.G3,r:PAL.r,v:PAL.wh,w:PAL.w};
+const G_MINE=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+".........ZZZZZZZZZZZZZZ.........",
+".......ssssssssssssssssss.......",
+".....ZZZZZZZZZZZZZZZZZZZZZZ.....",
+"...SsZsssSsZsssSsZsssSsZsssSs...",
+"...SsssssSsssssSsssssSsssssSs...",
+"...SsssssSsssssSsssssSsssssSs...",
+"...SSSSSSSSSSSSSSSSSSSSSSSSSS...",
+"...sssSsZswwwwwwwwwwwwssSsZss...",
+"...sssSssssWWWWWWWWWWsssSssss...",
+"...sssSssssWkkkkkkkkWsssSssss...",
+"...SSSSSSSSWkkkyYkkkWSSSSSSSS...",
+"...SsZsssSsWkkkkkkkkWSsZsssSs...",
+"...SsssssSsWkkkkkkkkWSsssssSs...",
+"...SsssssSsWkkkkkkkkWSsssssSs...",
+"...SSSSSSSSWkkkkkkkkWSSSSSSSS...",
+"...sssSsZssWkkkkkkkkWsssSsZss...",
+"...sssSssssWkkkkkkkkWsssSssss...",
+"...sssSssssWkkkkkkkkWsssSssss...",
+"...SSSSSSSSWkkkkkkkkWSSZSZSSS...",
+"...SsZsssSsWkkkkkkkkWSsZZZsSs...",
+"...SsssssSsWkkkkkkkkWSssWssSs...",
+"...SsssssSsWkkkkkkkkWSssWssSs...",
+"...SSSSSSSSWkkkkkkkkWSSSWSSSS...",
+"..............D..D..............",
+".............WWWWWW.............",
+"............WWWWWWWW............",
+"................................"];
+const G_MINE_MAP={D:PAL.D,S:PAL.R1,W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,k:PAL.k,s:PAL.R2,w:PAL.w,y:PAL.y};
+const G_PORT=[
+"................................",
+"................................",
+"................................",
+"......uBBBBBBu..................",
+".....uBbubBbubu.................",
+"....ubbbubbbubbu................",
+"...uuuuuuuuuuuuuu...............",
+"..ubBbubBbubBbubBu..............",
+".uubbbubbbubbbubbbu...WWWWWWW...",
+"uuuuuuuuuuuuuuuuuuuu..WD....W...",
+"...wwvwwwwvwwwwvw.....WD....i...",
+"...wwwwwwwwwwwwww.....WD....i...",
+"...WWWWWWWWWWWWWW.....WD....i...",
+"...WyyWWWWWWvwwww.....WD...RRR..",
+"...WyyWWDDWWwwwww.....WD...RRR..",
+"...WWWWDDDDWWWWWW..WWWWD...RRR..",
+"...wvwWDDDDWwwvww..WWWWD........",
+"...wwwWDDDDWwwwww..WWWWD........",
+"...WWWWDDDDWWWWWW.RRRRWD........",
+"...wwwWDDDDWwwwwv.RrRRWD........",
+"...wwwWDDDDWwwwww.RRRRWD........",
+"...WWWWDDDDWWWWWW.RRRRWD........",
+".wwwwvwwwwvwwwwvwwwwvwwwwvwwwwv.",
+".wwwwwwwwwwwwwwwwwwwwwwwwwwwwww.",
+".WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW.",
+".WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW.",
+"...W..........W...........W.....",
+"...W..........W...........W.....",
+"...W..........W...........W.....",
+"...W..........W...........W.....",
+"...W..........W...........W.....",
+"................................"];
+const G_PORT_MAP={B:PAL.bh,D:PAL.D,R:PAL.R,W:PAL.Wd,b:PAL.Cb,i:PAL.TR,r:PAL.r,u:PAL.W1,v:PAL.wh,w:PAL.w,y:PAL.y};
+const G_GUILD=[
+"................................",
+"................................",
+"................................",
+"................................",
+".........RrrrrrrrrrrrrR.........",
+"........RereRereRereRerR........",
+".......RReeeReeeReeeReeeR.......",
+"......RRRRRRRRRRRRRRRRRRRR......",
+".....RRereRereRereRereRereR.....",
+"....ReReeeReeeReeeReeeReeeRR....",
+"...RRRRRRRRRRRRRRRRRRRRRRRRRR...",
+"..RRRRRRRRRRRRRRRRRRRRRRRRRRRR..",
+"....SsZsssSsZsssSsZsssSsZsss....",
+"....SsssssSsssssSsssssSsssss....",
+"....SsSSSSSsssssSssssSSSSSss....",
+"....SSSyyySSSSSSSSSSSSyyySSS....",
+"....ssSyYySssSsZsssSsSyYySsZ....",
+"....ssSyyySssSsssssSsSyyySss....",
+"....ssSSSSSssSsssssSsSSSSSss....",
+"....SSSSSSSSSSSSSSSSSSSSSSSS....",
+"....SsZsssSeeeeeeeeessSsZsss....",
+"....SsssssSeReReReRessSsssss....",
+"....SsssssSsSSDDDSSsssSsssss....",
+"....SSSSSSSSSDDDDDSSSSSSSSSS....",
+"....sssSsZssSDDDDDSSsZsssSsZ....",
+"....sssdssssSDDDDDSSsssssSss....",
+"....ssdwdsssSDDDDDSSssssWWWW....",
+"....SSdddSSSSDDDDDSSSSSSwwww....",
+"....SsdddsSsSDDDDDSsssSsWWWW....",
+"....SsdddsSsSDDDDDSsssSswwww....",
+"................................",
+"................................"];
+const G_GUILD_MAP={D:PAL.D,R:PAL.R,S:PAL.R1,W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,d:PAL.DI,e:PAL.Cr,r:PAL.r,s:PAL.R2,w:PAL.w,y:PAL.y};
+const G_ADVGUILD=[
+"................................",
+"................................",
+"................................",
+"...........DrrrrrrrrD...........",
+"..........DRDRrRDRrRDD..........",
+".........DRRDRRRDRRRDRD.........",
+"........DDDDDDDDDDDDDDDD........",
+"......DRrRDRrRDRrRDRrRDRrD......",
+".....DDRRRDRRRDRRRDRRRDRRRD.....",
+"....DDDDDDDDDDDDDDDDDDDDDDDD....",
+"...DDRrRDRrRDRrRDRrRDRrRDRrRD...",
+"..DDDDDDDDDDDDDDDDDDDDDDDDDDDD..",
+"....WvwwwwvwwwwvwwwwvwwwwvwW....",
+"....WwwwwwwwwweeeewwwwwwwwwW....",
+"....WWWWWWWWWWeeeeWWWWWWWWWW....",
+"....WwWWWWWwvweyeewwwWWWWWwW....",
+"....WwWyyyWwwweeeewwwWyyyWwW....",
+"....WWWyYyWWWWeeeeWWWWyYyWWW....",
+"....WwWyyyWwwweeeewvwWyyyWwW....",
+"....WwWWWWWwwwwwwwwwwWWWWWwW....",
+"....WWWWWWWWWWWWWWWWWWWWWWWW....",
+"....WwvwwwwvWWWWWWWwwvwwwnvW....",
+"....WwwwwwwwWWDDDWWwwwwwwZwW....",
+"....WWbbbbWWWDDDDDWWWWWWWZWW....",
+"....WwbBBbwwWDDDDDWwwwwvWWWW....",
+"....WwbbbbwwWDDDDDWwwwwwwZwW....",
+"....WWbbbbWWWDDDDDWWWWWWWZWW....",
+"....WvwbbwvwWDDDDDWwvwwwwZwW....",
+"....WwwwwwwwWDDDDDWwwwwwwwwW....",
+"....WWWWWWWWWDDDDDWWWWWWWWWW....",
+"................................",
+"................................"];
+const G_ADVGUILD_MAP={B:PAL.bh,D:PAL.D,R:PAL.R,W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,b:PAL.Cb,e:PAL.Cr,n:PAL.SN,r:PAL.r,v:PAL.wh,w:PAL.w,y:PAL.y};
+const G_CRAFTERS=[
+"........................m.......",
+".......................ZZZ......",
+".......................sss......",
+".......................sss......",
+".......................sss......",
+"..........SnnnnnnnnnnS.sss......",
+".........SnZSZnZSZnZSZS.........",
+"........SZZZSZZZSZZZSZZS........",
+".......SSSSSSSSSSSSSSSSSS.......",
+"......SZnZSZnZSZnZSZnZSZnS......",
+".....SSZZZSZZZSZZZSZZZSZZZS.....",
+"....SSSSSSSSSSSSSSSSSSSSSSSS....",
+"...SSZnZSZnZSZnZSZnZSZnZSZnZS...",
+"..SSSSSSSSSSSSSSSSSSSSSSSSSSSS..",
+"....SsssssSsssssSsssssSsssss....",
+"....SsssssSsssssSsssssSsssss....",
+"....SSSSSSSSSSSSSSSSSSSSSSSS....",
+"....sSyyySsssSsZsssSsZSyyySZ....",
+"....sSyYySsssSsssssSssSyYySs....",
+"....sSyyySsWWWWWWWWWWsSyyySs....",
+"....SSSSSSSWkkkkkkkkWSSSSSSS....",
+"....SsZsssSWkkkkkkkkWsSsZsss....",
+"....SsssssSWkkkkkkkkWsSsssss....",
+"....SsssssSWkkkkkkkkWsSsssss....",
+"....SSSSSSSWkkkkkkkkWSSSSSSS....",
+"....sssSsZsWkkffffkkWZsssSsZ....",
+"....sssSsssWkkfFFfkkWsskkkkkk...",
+"....sssSsssWkkfFFfkkWssskkkk....",
+"....SSSSSSSWkkkkkkkkWSSSSSSS....",
+"....SsZsssSWkkkkkkkkWsSsZSSs....",
+"................................",
+"................................"];
+const G_CRAFTERS_MAP={F:PAL.f2,S:PAL.R1,W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,f:PAL.f1,k:PAL.k,m:PAL.M1,n:PAL.SN,s:PAL.R2,y:PAL.y};
+const G_LIBRARY=[
+"................................",
+"................................",
+"................................",
+"..........uBBBBBBBBBBu..........",
+".........uBbubBbubBbubu.........",
+"........ubbbubbbubbbubbu........",
+".......uuuuuuuuuuuuuuuuuu.......",
+"......ubBbubBbubBbubBbubBu......",
+"......ubbbubbbubbbubbbubbu......",
+".....uuuuuuuuuuuuuuuuuuuuuu.....",
+"....ubBbubBbubBbubBbubBbubBu....",
+"...uubbbubbbubbbubbbubbbubbbu...",
+"..uuuuuuuuuuuuuuuuuuuuuuuuuuuu..",
+"....SsssssSsssssSsssssSsssss....",
+"....SsSSSSSsssssSssssSSSSSss....",
+"....SSSyyySSSSSSSSSSSSyyySSS....",
+"....ssSyYySssSsZsssSsSyYySsZ....",
+"....ssSyyySssSsssssSsSyyySss....",
+"....ssSyyySssSsysssSsSyyySss....",
+"....SSSyyySSnnnynnnnSSyyySSS....",
+"....SsSSSSSsnnnySnnnsSSSSSss....",
+"....SsssssSsssssSsssssSsssss....",
+"....SsssssSsSSSSSSSsssSsssss....",
+"....SSSSSSSSSSDDDSSSSSSSSSSS....",
+"....sssSsZssSDDDDDSSsZsssSsZ....",
+"....sssSssssSDDDDDSSsssssSss....",
+"....sssSssssSDDDDDSSsssssSss....",
+"....SSSSSSSSSDDDDDSSSSSSSSSS....",
+"....SsZsssSsSDDDDDSsssSsZsss....",
+"....SsssssSsSDDDDDSsssSsssss....",
+"....SSSSSSSSSSSSSSSSSSSSSSSS....",
+"................................"];
+const G_LIBRARY_MAP={B:PAL.bh,D:PAL.D,S:PAL.R1,Y:PAL.yl,Z:PAL.R3,b:PAL.Cb,n:PAL.SN,s:PAL.R2,u:PAL.W1,y:PAL.y};
+const G_KNOWLEDGE=[
+"................................",
+"...............GG...............",
+"..............GGGG..............",
+"..............GnGG..............",
+"..............GGGG..............",
+"..............uBBu..............",
+".............uBbubu.............",
+"............ubbbubbu............",
+"...........uuuuuuuuuu...........",
+"...........uBbubBbubu...........",
+"..........ubbbubbbubbu..........",
+".........uuuuuuuuuuuuuu.........",
+"..........ZZZZZZZZZZZZ..........",
+"...........SsssssSsss...........",
+"...........SSSSSSSSSs...........",
+"...........SSGGSSGGSS...........",
+"...........sSGGSSGGSS...........",
+"...........sSGGSSGGSS...........",
+"...........sSSSSSSSSS...........",
+"...........SSSSSSSSSS...........",
+"...........SsSSSSSSZs...........",
+"...........SsSyyyySss...........",
+"...........SsSyYyySss...........",
+"...........SSSyyyySSS...........",
+"...SsZsssSsssSSSSSSsSSsZsssSs...",
+"...SsssssSssssSsssssSSsssssSs...",
+"...SsSSSSSssssSsssssSSsSSSSSs...",
+"...SSSyySSSSSSSSSSSSSSSSyySSS...",
+"...ssSyySssSsSSDDSSZsssSyySss...",
+"...ssSSSSssSsSDDDDSssssSSSSss...",
+"...sssSssssSsSDDDDSsssssSssss...",
+"...SSSSSSSSSSSDDDDSSSSSSSSSSS...",
+".............SDDDDS.............",
+".............SDDDDS............."];
+const G_KNOWLEDGE_MAP={B:PAL.bh,D:PAL.D,G:PAL.GEM,S:PAL.R1,Y:PAL.yl,Z:PAL.R3,b:PAL.Cb,n:PAL.SN,s:PAL.R2,u:PAL.W1,y:PAL.y};
+const G_WATCHTOWER=[
+"................................",
+"..........DrrrrrrrrrrD...Weee...",
+"........DRrRDRrRDRrRDRrD.WRee...",
+".......DDRRRDRRRDRRRDRRRDW......",
+".....DDDDDDDDDDDDDDDDDDDDWD.....",
+".......wwwvwwwwvwwwwvwwww.......",
+".......wwwkkwwwwwwwkkwwww.......",
+".......WWWkkWWWWWWWkkWWWW.......",
+".......vwwkkvwwwwvwkkwvww.......",
+".......wwwwwwwwwwwwwwwwww.......",
+"......WWWWWWWWWWWWWWWWWWWW......",
+"........WD.....ww.....WD........",
+"........WD.....WW.....WD........",
+"........WW.....ww.....WD........",
+"........WDW....ww....WWD........",
+"........WD.W...WW...W.WD........",
+"........WD..W..ww..W..WD........",
+"........WD...W.ww.W...WD........",
+"........WD....WWWW....WD........",
+"........WD.....ww.....WD........",
+"........WDWWWWWwwWWWWWWD........",
+"........WD....WWWW....WD........",
+"........WD...W.ww.W...WD........",
+"........WD..W..ww..W..WD........",
+"........WD.W...WW...W.WD........",
+"........WDW....ww....WWD........",
+"........WD.....ww.....WD........",
+"........WD.....WW.....WD........",
+"........WD.....ww.....WD........",
+"........WD.....ww.....WD........",
+"........WD.....WW.....WD........",
+"................................"];
+const G_WATCHTOWER_MAP={D:PAL.D,R:PAL.R,W:PAL.Wd,e:PAL.Cr,k:PAL.k,r:PAL.r,v:PAL.wh,w:PAL.w};
+const G_SITE=[
+"................................",
+"................................",
+"................................",
+"...wD......................wD...",
+"...WDi.i.i.i.i.i.i.i.i.i.i.WD...",
+"...WD......................WD...",
+"...WD......................WD...",
+"...WD...............yw.....WD...",
+"...WD..............yw......WD...",
+"...WD.............yw.......WD...",
+".................yw.............",
+"................yw..............",
+"......dddddddddywddddddddd......",
+"......ddDdddddywddddddddDd......",
+"......dddDdddywddddddddddd......",
+"......ddddDdywdddddddddddd......",
+"......dddddywddddddddddddd......",
+"......dddddddDdddddddddddd......",
+"......dddwvwwwwvwwwwvddddd......",
+"......dddwwwwwwwwwwwwddddd......",
+"......dddWWWWWWWWWWWWddddd......",
+"......dddwwwvwwwwvwwwddddd......",
+"......dddDDDDDDDDDDDDddddd......",
+"...wD.ddddddddddddddddDddd.wD...",
+"...WDididididididididididi.WD...",
+"...WD.dddddddddddddddddddd.WD...",
+"...WD......................WD...",
+"...WD......................WD...",
+"...WD......................WD...",
+"...WD......................WD...",
+"................................",
+"................................"];
+const G_SITE_MAP={D:PAL.D,W:PAL.Wd,d:PAL.DI,i:PAL.TR,v:PAL.wh,w:PAL.w,y:PAL.y};
+const L_TOWER=[
+"................................",
+"................................",
+"................................",
+"............s....s..............",
+"............ss..sZs.............",
+"............sssSsss.............",
+".........SsssssSsss.............",
+".........SSSkkkSSSSSSSS.........",
+".........ssskkksssSsZss.........",
+".........sssSkssssSssss.........",
+".........sssSsksssSssss.........",
+".........SSSSSkSSSSSSSS.........",
+".........SsZsssksZsssSs.........",
+".........SsssssSskkssSs.........",
+".........SsssssSskkssSs.........",
+".........SSSSSSSSkkSSSS.........",
+".........sssSSSSSSSsZss.........",
+".........sssSskkkkSssss.........",
+".........sssSskkkkSssss.........",
+".........SSSSSkkkkSSSSS..Z......",
+".........SsZsskkkksssSsssss.....",
+"......ZZZZsssskkkksssSsssss.....",
+"......ZZZZ.............ssss.....",
+".......SSSSSSSSSSSSSSSSSSS......"];
+const L_TOWER_MAP={S:PAL.R1,Z:PAL.R3,k:PAL.k,s:PAL.R2};
+const L_NECRO=[
+"...............NN...............",
+"...............xx...............",
+"..............xxxx..............",
+"..............xxxx..............",
+".............xxxxxx.............",
+".............xxxxxx.............",
+"............xxxxxxxx............",
+"...........xxxxxxxxxx...........",
+"...........xmmmmmmmmx...........",
+"...........xxxxxxxxxx...........",
+"...........xxxxxxxxxx...........",
+"..........xmxNNxxNNxmx..........",
+"..........xmxNNxxNNxmx..........",
+"..........xxxNNxxNNxxx..........",
+"..........xmxxxxxxxxmx..........",
+"..........xmmmmmmmmmmx..........",
+"..........xmmmmmmmmmmx..........",
+".........xxxxxxxxxxxxxx.........",
+".........xmmmxNNNNxmmmx.........",
+".........xmmmxNNNNxmmmx.........",
+".........xmmmxxxxxxmmmx.........",
+".........xxxxxxxxxxxxxx.........",
+"........xmmmxxxxxxxxmmmx........",
+"........xmmmmkkkkkkmmmmx........",
+"........xmmmmkNkkNkmmmmx........",
+"........xxxxxkkkkkkxxxxx........",
+"........xmmmmkkkkkkmmmmx........",
+"........xmnmmkkkkkkmmnmx........",
+".........xxxxxxxxxxxxxx.........",
+"................................"];
+const L_NECRO_MAP={N:PAL.NEC,k:PAL.k,m:PAL.M1,n:PAL.SN,x:PAL.nec2};
+const L_CAMP=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"...D.D.D.D.D.D.D.D.D.D.D.D.D....",
+"...W.W.W.W.W.W.W.W.W.W.W.W.W....",
+"...W.W.W.W.W.W.W.W.W.W.W.W.W....",
+"...W.W.W.W.W.W.W.W.W.W.W.W.W....",
+"...W.W.W.W.W.W.W.W.W.WeW.W.W....",
+"...W.W.W.d.W.W.W.W.W.eee.W.W....",
+"........ddd.........RRRRR.......",
+"........DDD.........eeeee.......",
+".......ddddd.......eeeeeee......",
+"......ddddddd.....RRRRRRRRR.....",
+".....DDDkkkDDD...eeeekkkeeee....",
+".....dddkkkddd...eeeekkkeeee....",
+"....Zdddkkkdddd.RRRRRkkkRRRRR...",
+"...DwDDDkkkDDDDeeeeeekkkeeeeZe..",
+"....w.......................w...",
+"....w...........f...........w...",
+"....w..........F............w...",
+"....w..........ff...........w...",
+"....w..........ff...........w...",
+"....w.........W..W..........w...",
+"....w.........WWWW..........w...",
+"....w.......................w...",
+".......q........................",
+"......j.j................q......",
+"........................j.j....."];
+const L_CAMP_MAP={D:PAL.D,F:PAL.f2,R:PAL.R,W:PAL.Wd,Z:PAL.R3,d:PAL.DI,e:PAL.Cr,f:PAL.f1,j:PAL.F2,k:PAL.k,q:PAL.F1,w:PAL.w};
+const L_DEN=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"............p....p..............",
+"..........gggggggggggp..........",
+"........ggggddddddddgggg........",
+"........dddddddddddddddd........",
+"..wwwwwwwwwddddddddd.wwwwwwwww..",
+"..WWWWWWWWWWddddddddWWWWWWWWWW..",
+".........ddddkkkkkkddd..........",
+"........ddddkkkkkkkkddd.........",
+".......dddddkkkkkkkkdddd........",
+".....dddddddkkEkkEkkdddddd......",
+"....ddddddddkkkkkkkkddddddd.....",
+"...dddddddddkkkkkkkkdddddddd....",
+"..ddddddddddkkkkkkkkddddddddd...",
+".dddddddddddkkkkkkkkdddddddddd..",
+".......n....DDDDDDDD....n.......",
+".......nnn.............n.n......",
+"...............n................",
+"....q...........n...........q...",
+"...j.j.....................j.j..",
+"................................",
+"................................"];
+const L_DEN_MAP={D:PAL.D,E:PAL.BER,W:PAL.Wd,d:PAL.DI,g:PAL.G1,j:PAL.F2,k:PAL.k,n:PAL.SN,p:PAL.G3,q:PAL.F1,w:PAL.w};
+const L_CLIFF=[
+"................................",
+".....................Weeee......",
+".....................Weeee......",
+".....................WReee......",
+".....................W..........",
+"..........ZZZZZZZZZZ.W..........",
+"........ZZZZZZZZZZZZZWZ.........",
+".........sssssssssssss..........",
+"........sssssssssssssss.........",
+"........sssssssssssssss.........",
+"........sssssssssssssss.........",
+".......sssssssssssssssss........",
+".......sssssssssssssssss........",
+"......ZZZZZZZZssssssssss........",
+"......SsZsssSsZsssSsZsssSs......",
+"......SsssssSsssssSsssssSs......",
+".....sSsssssSsssssSsssssSs......",
+".....sSSSSSSSSSSSSSSZZZZZZZ.....",
+".....ssssSsZsssSsZsssSsZss......",
+"....sssssSssSSSSSSSSSSsssss.....",
+"....sssssSssskkkkkkksSsssss.....",
+"....sZZZZZZSSkkkkkkkSSSSSSs.....",
+"...sssSsZsssSkkkkkkkZsssSsss....",
+"...sssSsssssSkkkkkkkssssSsss....",
+"...sssSsssssSkkkkkkkssssSsss....",
+"..ssssSSSSSSSkkkkkkkSSSSSSsss...",
+"..sssssssSsZskkkkkkksSsZsssss...",
+"..sssssssSssskkkkkkksSsssssss...",
+".ssssssssSssskkkkkkksSssssssss..",
+"................................",
+"................................",
+"................................"];
+const L_CLIFF_MAP={R:PAL.R,S:PAL.R1,W:PAL.Wd,Z:PAL.R3,e:PAL.Cr,k:PAL.k,s:PAL.R2};
+const L_GRAVES=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................n...............",
+"................Z...............",
+"........n.....ZZZZZ.............",
+"........Z.......Z.......n.......",
+"......ZZZZZ.....Z.......Z.......",
+"........Z.......Z.....ZZZZZ.....",
+"........Z.......Z.......Z.......",
+"........Z.......Z.......Z.......",
+"........Z.......Z.......Z.......",
+"...W..W.ZW..W..WZ.W..W..Z..W....",
+"...WWWWWZWWWWWWWWWWWWWWWZWWWW...",
+"...W..W..W..W..W..W..W..W..W....",
+"...WqqWqqWqqWqqWqqWqqWqqWqqWq...",
+"...qqqqqqqqqqqqqqqqqqqqqqqqqq...",
+"...qqjqqqqqqqqqqqqqqqqjqjqjqq...",
+"...qqqqqqqqqqqqqqqqqqqqqqqqqq...",
+"...qqqqqqqqqqqqqqqqqqqqqqqqqq...",
+"...qqqqqjqjqjqqqqqqqqqqqqqqqq...",
+"...qqZZZqqqqqqqqqqqqZZZqqqqqq...",
+"...qqsssqqqqZZZqqqqqsssqqqqqq...",
+"...qqsssqqqqsssjqjqjsssqqqZZZ...",
+"...qqsssqqqqsssqqqqqsssqqqsss...",
+"...qqqqqqqqqsssqqqqqqqqqqqsss...",
+"...qqqqqqqqqqqqqqqqqqqqqqqqqq...",
+"................................",
+"................................"];
+const L_GRAVES_MAP={W:PAL.Wd,Z:PAL.R3,j:PAL.F2,n:PAL.SN,q:PAL.F1,s:PAL.R2};
+const F_BERRY=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"..........JJJjjqqq..............",
+"........JJJJJJJjjjjqqq..........",
+".......JJJJJJJJJjjjeqjjj........",
+"......JJJJJJJJJJJjjEjjjjjj......",
+".....jjJJJJJJJJJejjjjjjjjjj.....",
+".....jjjeJJJJJJjEjjjjjjjejj.....",
+"....qjjjEjJJJjjjjjjjjjjjEjjj....",
+"....qqjjjjjjejjjejjjjjjjjjj.....",
+"....qqqjjjjjEjjjEjjjejjjjjj.....",
+".....qqqjjejjjjjjjjjEjjejj......",
+".....qqqqqEqjjeqqqqqqjjEqq......",
+"......qqqqqqqqEqqqqqqqqqq.......",
+".......qqqqqqqqqqqqqqqqq........",
+".........qqqqqqqqqqqqq..........",
+".....p.......qqqqq.........p....",
+"....g.g...................g.g...",
+"................................",
+"................................",
+"................................"];
+const F_BERRY_MAP={E:PAL.BER,J:PAL.F3,e:PAL.Cr,g:PAL.G1,j:PAL.F2,p:PAL.G3,q:PAL.F1};
+const F_DEADFALL=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"......................www.......",
+"....................wwwWw.......",
+"..................wwdWWw........",
+".................wwddd..........",
+"...............wwwWddd..........",
+".....W.......wwwWWwddd...W......",
+"......W.....wwWWw..ddd...W......",
+"......W...wwwWw....ddd...W......",
+"......W.wwwWWw.....ddd...W......",
+"......WwwWWw.......ddd...W......",
+".www..WwWw.........ddd...W......",
+".wwwwwwwwwwwwwwwwwwwwwwwwwwww...",
+".wWwWWWWWWWWWWWWWWWWWWWWWWWWW...",
+".wDwWWWWWWWWWWWWWWWWWWWWWWWWW...",
+".wwwDDDDDDDDDDDDDDDDDDDDDDDDD...",
+".www............................",
+"................................",
+"...........................q....",
+"....q..........q..........j.j...",
+"...j.j........j.j...............",
+"................................",
+"................................",
+"................................"];
+const F_DEADFALL_MAP={D:PAL.D,W:PAL.Wd,d:PAL.DI,j:PAL.F2,q:PAL.F1,w:PAL.w};
+const F_RUBBLE=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"........................Z.......",
+"............ZZZZZZ..............",
+"............ssssss....ZZZZZ.....",
+"..........Z.ssssss....sssss.....",
+"............ssssss....sssss.....",
+"......ZZZZZZSSSSSS....SSSSS.....",
+"......ssssssss..................",
+"......ssssssss...ZZZZZZZ........",
+"...s..ssssssss...sssssss........",
+"......ssssssss...sssssss....s...",
+"......SSSSSSSS...sssssss........",
+"....ZZZZZ........SSSSSSS........",
+"....sssss...........ZZZZZZ......",
+"....sssss...........ssssss......",
+"....SSSSS......S....ssssss..p...",
+"....................SSSSSS.g.g..",
+"........p.......................",
+".......g.g......................",
+"................................"];
+const F_RUBBLE_MAP={S:PAL.R1,Z:PAL.R3,g:PAL.G1,p:PAL.G3,s:PAL.R2};
+const F_VEIN=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+".............n.n................",
+"..............n.................",
+"..............GG................",
+"..........n...GG................",
+"..........GG..GG...n............",
+".......G..GG..GG...GG...........",
+"..........GG..GG...GG..n........",
+"..........GG..GG...GG..GG.......",
+".........SGuSSGuS..GG..GG.G.....",
+"........SSSSSSSSSS.Gu..GG.......",
+"........SSSSSSSSSS.....Gu.......",
+".....G..SSSSSSSSSSSSSSSSSS......",
+"........SSSSSSSSSSSSSSSSSS......",
+"........SSSSSSSSSSSSSSSSSS......",
+"........SSSSSSSSSSSSSSSSSS..G...",
+"........SSSSSSSSSSSSSSSSSS......",
+"........kkkkkkkkkkkkkkkkkk......",
+"..................SSSSSSSS......",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................"];
+const F_VEIN_MAP={G:PAL.GEM,S:PAL.R1,k:PAL.k,n:PAL.SN,u:PAL.W1};
+const F_FISH=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"......................u.........",
+".....................n..........",
+"....................nnn.........",
+"...................n...n........",
+".........................A......",
+"..................A..AAAAA......",
+"...................AAA...AAA....",
+"...................A.......A....",
+"...................AAA...AAA....",
+".....................AAAAA......",
+"................................",
+"................................",
+".........AAA....................",
+".....AAAA...AAAA................",
+"....A..AAAAAAA..A...............",
+"....A..A.....A..A...............",
+"....A..AAAAAAA..A...............",
+".....AAAA...AAAA................",
+".........AAA....................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................"];
+const F_FISH_MAP={A:PAL.W3,n:PAL.SN,u:PAL.W1};
+const F_RUINS=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"......................ZZZZZZ....",
+".......................ZnnS.....",
+".......................ZssS.....",
+"....ZZZZZZ.............ZssS.....",
+".....ZnnS..............ZssS.....",
+".....ZssS..............ZssS.....",
+".....ZssS..............ZssS.....",
+".....ZssS..............ZssS.....",
+".....ZssS....ZZZZZZ....ZssS.....",
+".....ZssS.....ZnnS.....ZssS.....",
+".....ZssS.....ZssS.....ZssS.....",
+".....ZssS.....ZssS.....ZssS.....",
+".....ZssS.....ZssS.....ZssS.....",
+".....ZssS.....ZssS.....ZssS.....",
+".....ZssS...p.ZssS.....ZssS.....",
+".....ZssS..g.gZssS.....ZssS.....",
+".........ZZZZZZZZZZZZZZZ........",
+".........SSSSSSSSSSSSSSS........",
+"...p.....SSSSSSSSSSSSSSS....p...",
+"..g.gSSSSSSSSSSSSSSSSSSSSSSgSg..",
+"................................",
+"................................"];
+const F_RUINS_MAP={S:PAL.R1,Z:PAL.R3,g:PAL.G1,n:PAL.SN,p:PAL.G3,s:PAL.R2};
+const F_WHEAT=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"....YYY....YYY...YYY...YYY......",
+"...YYYy...YYYy..YYYy..YYYy......",
+"....yyyY...yyyY..yyyY..yyyY.....",
+"....yyy....yyy...yyy...yyy......",
+"...yyyy....yyyy.yyyy...yyyy.....",
+"....yyy....yyy...yyy...yyy......",
+"....yyy....yyy...yyy...yyy......",
+"....yyy....yyy...yyy...yyy......",
+"....yyy....yyy...yyy...yyy......",
+"..gggggggggggggggggggggggggggg..",
+"...qqqqqqqqqqqqqqqqqqqqqqqqqq...",
+"................................",
+"................................",
+"................................"];
+const F_WHEAT_MAP={Y:PAL.yl,g:PAL.G1,q:PAL.F1,y:PAL.y};
+const F_STUMP=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+".................p..............",
+".......vvWvv....g.g.............",
+"......vvwwwvv...................",
+"......wWWWWWD...................",
+"......wWWWWWD...d...............",
+"......wWWWWWD.......vvvWvv......",
+"......wWWWWWD......vvwwwwvv.....",
+".....WDDDDDDDW.....wWWWWWWD.....",
+"...................wWWWWWWD.....",
+".................d.wWWWWWWD.....",
+".........d.........wWWWWWWD.....",
+".............vvWv.WDDDDDDDDW....",
+"............vvwwvv..........p...",
+"............wWWWWD.........g.g..",
+"............wWWWWD..............",
+"....p.......wWWWWD..............",
+"...g.g.....WDDDDDDW.............",
+"................................",
+"................................"];
+const F_STUMP_MAP={D:PAL.D,W:PAL.Wd,d:PAL.DI,g:PAL.G1,p:PAL.G3,v:PAL.wh,w:PAL.w};
+const G_SHIP=[
+"....................",
+".........y..........",
+".........W..........",
+".........WnZ........",
+".........WnnZ.......",
+".........WnnnZ......",
+".........WnnnnZ.....",
+".........WnnnnnZ....",
+".........WnnnnnnZ...",
+".........WnnnnnnZ...",
+".........WnnnnnnZ...",
+".........WnnnnnnZ...",
+".........W..........",
+"..W...WW.W.......w..",
+"..Wwwwwwwwwwwwwww...",
+"...WWWWWWWWWWWWWW...",
+"....WWWWWWWWWWWW....",
+".....DDDDDDDDDD.....",
+"....................",
+"...................."];
+const G_SHIP_MAP={D:PAL.D,W:PAL.Wd,Z:PAL.R3,n:PAL.SN,w:PAL.w,y:PAL.y};
+const G_STAKE=[
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................",
+"...............w................",
+"...............WDeeeeeR.........",
+"...............WDeeeeee.........",
+"...............WDReeeee.........",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"...............WD...............",
+"..............DDDD..............",
+"................................",
+"................................",
+"................................",
+"................................",
+"................................"];
+const G_STAKE_MAP={D:PAL.D,R:PAL.R,W:PAL.Wd,e:PAL.Cr,w:PAL.w};
+const G_PENNANT=[
+".....v..........",
+".....WyyyyyY....",
+".....WyYyyyy....",
+".....Wyyyy......",
+".....Wyyyy......",
+".....Wy.........",
+".....W..........",
+".....W..........",
+".....W..........",
+".....W..........",
+".....W..........",
+".....W..........",
+".....W..........",
+"................",
+"................",
+"................"];
+const G_PENNANT_MAP={W:PAL.Wd,Y:PAL.yl,v:PAL.wh,y:PAL.y};
+const G_SMOKE0=[
+"................",
+"........n.......",
+"................",
+"........ZZZ.....",
+"........ZZZ.....",
+"......nnn.......",
+"......nnn.......",
+".......ZZZ......",
+".......ZZZ......",
+".....nnn........",
+".....nnn........",
+".......n........",
+"................",
+"......Z.........",
+"................",
+"................"];
+const G_SMOKE0_MAP={Z:PAL.R3,n:PAL.SN};
+const G_SMOKE1=[
+"................",
+".........n......",
+"................",
+"......ZZZ.......",
+"......ZZZ.......",
+".......nnn......",
+".......nnn......",
+".....ZZZ........",
+".....ZZZ........",
+".......nnn......",
+".......nnn......",
+"......n.........",
+"................",
+"........Z.......",
+"................",
+"................"];
+const G_SMOKE1_MAP={Z:PAL.R3,n:PAL.SN};
+const G_HAMMER0=[
+"................",
+"................",
+"................",
+"................",
+"................",
+"...nnnnn........",
+"...ZZZZZ........",
+"...ZZZZZ........",
+"........W.......",
+".........W......",
+"..........WW....",
+"............WY..",
+"............yW..",
+"...........y....",
+"................",
+"................"];
+const G_HAMMER0_MAP={W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,n:PAL.SN,y:PAL.y};
+const G_HAMMER1=[
+"................",
+"................",
+".......nZZ......",
+".......nZZ......",
+".......nZZ......",
+".......nZZ......",
+".......nZZ......",
+"........W.......",
+"........W.......",
+"........W.......",
+"........W.......",
+"........W....Y..",
+"........W...y...",
+"...........y....",
+"................",
+"................"];
+const G_HAMMER1_MAP={W:PAL.Wd,Y:PAL.yl,Z:PAL.R3,n:PAL.SN,y:PAL.y};
 
 function validateSprites(){
-  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_HUT,G_TENT,G_HOUSE2,G_TOWNHALL,G_TOWER,G_NECRO,G_GOBLIN,G_GOBSHAMAN,G_SKELETON,G_BEAST,G_FIREATR,G_MAGMAATR,G_NECRO_U};
+  const SIZES={
+    G_HUMAN:16,G_DWARF:16,G_ELF:16,G_TROLL:16,G_RAIDER:16,
+    G_GOBLIN:16,G_GOBSHAMAN:16,G_SKELETON:16,G_BEAST:16,G_FIREATR:16,G_MAGMAATR:16,G_NECRO_U:16,
+    G_HUT:32,G_HOUSE2:32,G_TENT:32,G_TAVERN:32,G_TOWNHALL:32,
+    G_FISHER:32,G_LUMBER:32,G_FARM:32,G_MINE:32,G_PORT:32,G_GUILD:32,G_ADVGUILD:32,
+    G_CRAFTERS:32,G_LIBRARY:32,G_KNOWLEDGE:32,G_WATCHTOWER:32,G_SITE:32,
+    L_TOWER:32,L_NECRO:32,L_CAMP:32,L_DEN:32,L_CLIFF:32,L_GRAVES:32,
+    F_BERRY:32,F_DEADFALL:32,F_RUBBLE:32,F_VEIN:32,F_FISH:32,F_RUINS:32,F_WHEAT:32,F_STUMP:32,
+    G_SHIP:20,G_STAKE:32,G_PENNANT:16,G_SMOKE0:16,G_SMOKE1:16,G_HAMMER0:16,G_HAMMER1:16
+  };
+  const all={G_HUMAN,G_DWARF,G_ELF,G_TROLL,G_RAIDER,
+    G_GOBLIN,G_GOBSHAMAN,G_SKELETON,G_BEAST,G_FIREATR,G_MAGMAATR,G_NECRO_U,
+    G_HUT,G_HOUSE2,G_TENT,G_TAVERN,G_TOWNHALL,
+    G_FISHER,G_LUMBER,G_FARM,G_MINE,G_PORT,G_GUILD,G_ADVGUILD,
+    G_CRAFTERS,G_LIBRARY,G_KNOWLEDGE,G_WATCHTOWER,G_SITE,
+    L_TOWER,L_NECRO,L_CAMP,L_DEN,L_CLIFF,L_GRAVES,
+    F_BERRY,F_DEADFALL,F_RUBBLE,F_VEIN,F_FISH,F_RUINS,F_WHEAT,F_STUMP,
+    G_SHIP,G_STAKE,G_PENNANT,G_SMOKE0,G_SMOKE1,G_HAMMER0,G_HAMMER1};
   const errs=[];
-  for(const n in all){
+  for(const n in SIZES){
     const g=all[n];
-    g.forEach((row,i)=>{if(row.length!==16)errs.push(n+' row '+i+' len '+row.length)});
+    if(!g){errs.push(n+' отсутствует');continue}
+    g.forEach((row,i)=>{if(row.length!==SIZES[n])errs.push(n+' row '+i+' len '+row.length)});
   }
   return errs;
 }
 function bobFrame(rows){
-  const blank='.'.repeat(16);
+  const blank='.'.repeat(rows[0].length);
   return [blank].concat(rows.slice(0,rows.length-1));
 }
 function terrPix(t,x,y,seed){
+  // Шум террейна для тайлов 28×32 (двойная плотность против старых 14×16).
   const h=hash2(x,y,seed);
   switch(t){
-    case T.WATER: if(h<0.05)return PAL.W3; if(h>0.93)return PAL.W1; return PAL.W2;
-    case T.GRASS: if(h<0.08)return PAL.G3; if(h>0.92)return PAL.G1; return PAL.G2;
-    case T.FOREST:{const b=hash2(x>>1,y>>1,seed+3);if(b<0.28)return PAL.F1;if(b>0.74&&h<0.5)return PAL.F3;return PAL.F2}
-    case T.ROCK: if(h<0.10)return PAL.R1; if(h>0.90)return PAL.R3; return PAL.R2;
-    case T.MTN:{const d=(x+y)&7;let c=(d<3)?PAL.M2:PAL.M1;
-      // снег больше не запечён в тайл: снежник даёт пояс E>=4.5 (гипсометрия §5)
-      if(h<0.07)c=PAL.M1;return c}
+    case T.WATER: if(h<0.035)return PAL.W3; if(h>0.95)return PAL.W1; return PAL.W2;
+    case T.GRASS: if(h<0.05)return PAL.G3; if(h>0.94)return PAL.G1; return PAL.G2;
+    case T.FOREST:{const b=hash2(x>>2,y>>2,seed+3);if(b<0.28)return PAL.F1;if(b>0.74&&h<0.5)return PAL.F3;return PAL.F2}
+    case T.ROCK: if(h<0.07)return PAL.R1; if(h>0.93)return PAL.R3; return PAL.R2;
+    case T.MTN:{const d=(x+y)&15;let c=(d<6)?PAL.M2:PAL.M1;if(h<0.05)c=PAL.M1;return c}
+    // снег гор — в decorTri (19_atlas) и в снежном поясе E>=4.5 (rl5), не в шуме
   }
   return '#f0f';
 }
-
-/* ================= ATLAS (browser only) ================= */
+/* ================= ATLAS (browser only) =================
+   Тайлы 28×32 на гекс (укрупнение мира ×2), здания 32px, юниты 16px
+   (рисуются в полгекса — экранная плотность совпадает). */
 let ATLAS=null,SPR={},ICONS={};
 function reg(name,x,y,w,h){
   SPR[name]={x,y,w,h,u0:x/ATLAS.W,u1:(x+w)/ATLAS.W,v1:1-y/ATLAS.H,v0:1-(y+h)/ATLAS.H};
@@ -4851,43 +5948,125 @@ function vgradeRegion(ctx,gx,gy,w,h,amt){
   }
   ctx.putImageData(img,gx,gy);
 }
-function drawGrid(ctx,gx,gy,rows,map){
+function drawGrid(ctx,gx,gy,rows,map,skip){
   for(let y=0;y<rows.length;y++){const row=rows[y];
     for(let x=0;x<row.length;x++){const ch=row[x];
       if(ch==='.')continue;
+      if(skip&&skip(x,y))continue;
       const col=map[ch]||'#f0f';
       ctx.fillStyle=col;ctx.fillRect(gx+x,gy+y,1,1);
     }
   }
 }
-/* --- Drop I v1.2: flat-top. Dual-triangle тайлы 14x16, ориентации 'r' ▶ / 'l' ◀.
-   Колонки odd-q со сдвигом вниз, шаг CW=14/16; у хекса две ГОРИЗОНТАЛЬНЫЕ грани.
+/* --- Drop I v1.2: flat-top. Dual-triangle тайлы 28x32, ориентации 'r' ▶ / 'l' ◀.
+   Колонки odd-q со сдвигом вниз, шаг CW=28/32; у хекса две ГОРИЗОНТАЛЬНЫЕ грани.
    Барицентрическая интерполяция трёх угловых бит; седловых неоднозначностей нет. --- */
-const TRIW=14,TRIH=16;
-function triBary(orr,pxx,pyy){
+const TRIW=28,TRIH=32;
+function triCorners(orr){
   // 'r' ▶: углы [TL, BL, апекс-право]; 'l' ◀: [TR, BR, апекс-лево]
-  const P=(orr==='r')?[[0,0],[0,16],[14,8]]:[[14,0],[14,16],[0,8]];
-  const [a,b,c]=P;
+  return (orr==='r')?[[0,0],[0,TRIH],[TRIW,TRIH/2]]:[[TRIW,0],[TRIW,TRIH],[0,TRIH/2]];
+}
+function triBary(orr,pxx,pyy){
+  const [a,b,c]=triCorners(orr);
   const den=(b[1]-c[1])*(a[0]-c[0])+(c[0]-b[0])*(a[1]-c[1]);
   const w0=((b[1]-c[1])*(pxx-c[0])+(c[0]-b[0])*(pyy-c[1]))/den;
   const w1=((c[1]-a[1])*(pxx-c[0])+(a[0]-c[0])*(pyy-c[1]))/den;
   return [w0,w1,1-w0-w1];
 }
+function triIns(orr){
+  return (x,y)=>{const w=triBary(orr,x+0.5,y+0.5);
+    return w[0]>=-0.045&&w[1]>=-0.045&&w[2]>=-0.045};
+}
+/* Декор террейна поверх шума: лес — ёлки, луга — пучки трав, скалы — валуны
+   и трещины, горы — гребни и снежники, вода — гребешки волн.
+   ins(x,y) — пиксель принадлежит этому террейну (маска перехода/треугольник). */
+function decorTri(ctx,x0,y0,t,seed,ins){
+  const put=(x,y,c)=>{if(x>=0&&y>=0&&x<TRIW&&y<TRIH&&ins(x,y)){ctx.fillStyle=c;ctx.fillRect(x0+x,y0+y,1,1)}};
+  const fits=(x,y,w,h)=>{if(x<0||y<0||x+w>TRIW||y+h>TRIH)return false;
+    for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++)if(!ins(xx,yy))return false;return true};
+  const rnd=(i,k)=>hash2(i,seed+k*17,809);
+  if(t===T.FOREST){
+    let n=0;
+    for(let i=0;i<18&&n<6;i++){
+      const tx=(rnd(i,1)*(TRIW-5))|0, ty=(rnd(i,2)*(TRIH-8))|0;
+      if(rnd(i,3)<0.55&&fits(tx,ty,5,8)){ // ель 5×8
+        put(tx+2,ty,PAL.F3);
+        put(tx+1,ty+1,PAL.F3);put(tx+2,ty+1,PAL.F3);put(tx+3,ty+1,PAL.F2);
+        put(tx+1,ty+2,PAL.F3);put(tx+2,ty+2,PAL.F2);put(tx+3,ty+2,PAL.F1);
+        for(let k=0;k<5;k++)put(tx+k,ty+3,k<2?PAL.F3:(k<4?PAL.F2:PAL.F1));
+        for(let k=0;k<5;k++)put(tx+k,ty+4,k<1?PAL.F2:(k<3?PAL.F2:PAL.F1));
+        put(tx+1,ty+5,PAL.F1);put(tx+2,ty+5,PAL.F1);put(tx+3,ty+5,PAL.F1);
+        put(tx+2,ty+6,PAL.D);
+        put(tx+1,ty+7,PAL.F1);put(tx+3,ty+7,PAL.F1); // тень у корня
+        n++;
+      }else if(fits(tx,ty,3,5)){ // ёлочка 3×5
+        put(tx+1,ty,PAL.F3);
+        put(tx,ty+1,PAL.F3);put(tx+1,ty+1,PAL.F2);put(tx+2,ty+1,PAL.F1);
+        put(tx,ty+2,PAL.F2);put(tx+1,ty+2,PAL.F2);put(tx+2,ty+2,PAL.F1);
+        put(tx+1,ty+3,PAL.F1);
+        put(tx+1,ty+4,PAL.D);
+        n++;
+      }
+    }
+  }else if(t===T.GRASS){
+    for(let i=0;i<5;i++){
+      const tx=1+(rnd(i,4)*(TRIW-2))|0, ty=1+(rnd(i,5)*(TRIH-3))|0;
+      if(!ins(tx,ty))continue;
+      put(tx,ty,PAL.G3);put(tx-1,ty+1,PAL.G1);put(tx+1,ty+1,PAL.G1);
+      if(rnd(i,6)<0.15)put(tx,ty-1,PAL.SN); // редкий цветок
+    }
+  }else if(t===T.ROCK){
+    for(let i=0;i<3;i++){
+      const tx=(rnd(i,7)*(TRIW-4))|0, ty=(rnd(i,8)*(TRIH-3))|0;
+      if(!fits(tx,ty,4,3))continue;
+      for(let k=0;k<4;k++)put(tx+k,ty,PAL.R3);
+      for(let k=0;k<4;k++)put(tx+k,ty+1,k===0?PAL.R3:PAL.R2);
+      for(let k=0;k<4;k++)put(tx+k,ty+2,PAL.R1);
+    }
+    for(let i=0;i<3;i++){ // трещины
+      const tx=1+(rnd(i,9)*(TRIW-4))|0,ty=1+(rnd(i,10)*(TRIH-4))|0;
+      put(tx,ty,PAL.R1);put(tx+1,ty+1,PAL.R1);put(tx+1,ty+2,PAL.R1);
+    }
+  }else if(t===T.MTN){
+    for(let i=0;i<3;i++){ // диагональные гребни
+      const tx=1+(rnd(i,11)*(TRIW-8))|0,ty=1+(rnd(i,12)*(TRIH-8))|0;
+      for(let k=0;k<5;k++){put(tx+k,ty+k,PAL.M2);put(tx+k,ty+k+1,PAL.M1)}
+    }
+    if(rnd(0,13)<0.55){ // снежник (не на каждом тайле; только целиком в маске)
+      const cx2=3+(rnd(1,13)*(TRIW-11))|0,cy2=2+(rnd(2,13)*(TRIH-8))|0;
+      if(fits(cx2,cy2,8,5)){
+        for(let oy=0;oy<5;oy++)for(let ox=0;ox<8;ox++){
+          const d=Math.abs(ox-3.5)/4+Math.abs(oy-2)/2.5;
+          if(d<1&&hash2(ox+cx2,oy+cy2,seed+31)<0.85)put(cx2+ox,cy2+oy,PAL.SN);
+        }
+      }
+    }
+  }else if(t===T.WATER){
+    for(let i=0;i<4;i++){ // гребешки волн
+      const tx=1+(rnd(i,14)*(TRIW-6))|0,ty=1+(rnd(i,15)*(TRIH-3))|0;
+      const len=2+(rnd(i,16)*3|0);
+      for(let k=0;k<len;k++)put(tx+k,ty,PAL.W3);
+      put(tx-1,ty+1,PAL.W1);
+    }
+  }
+}
 function paintTriFull(ctx,x0,y0,t,orr,variant){
+  const ins=triIns(orr);
   for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
-    const w=triBary(orr,x+0.5,y+0.5);
-    if(w[0]<-0.045||w[1]<-0.045||w[2]<-0.045)continue;
+    if(!ins(x,y))continue;
     ctx.fillStyle=terrPix(t,x+variant*97,y+variant*53,S?S.seed:7);
     ctx.fillRect(x0+x,y0+y,1,1);
   }
+  decorTri(ctx,x0,y0,t,t*29+variant*7+(orr==='r'?3:0),ins);
 }
 function paintTriTransition(ctx,x0,y0,t,orr,bits){
   const c=[bits&1,(bits>>1)&1,(bits>>2)&1];
-  const mask=new Uint8Array(TRIW*TRIH),ins=new Uint8Array(TRIW*TRIH);
+  const mask=new Uint8Array(TRIW*TRIH),insArr=new Uint8Array(TRIW*TRIH);
+  const insT=triIns(orr);
   for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
+    if(!insT(x,y))continue;
+    insArr[y*TRIW+x]=1;
     const w=triBary(orr,x+0.5,y+0.5);
-    if(w[0]<-0.045||w[1]<-0.045||w[2]<-0.045)continue;
-    ins[y*TRIW+x]=1;
     let v=w[0]*c[0]+w[1]*c[1]+w[2]*c[2];
     v+=hash2(x+t*31,y+bits*7+(orr==='r'?191:0),911)*0.30-0.15;
     mask[y*TRIW+x]=v>0.5?1:0;
@@ -4897,70 +6076,83 @@ function paintTriTransition(ctx,x0,y0,t,orr,bits){
     ctx.fillStyle=terrPix(t,x+bits*13,y+bits*29,S?S.seed:7);
     ctx.fillRect(x0+x,y0+y,1,1);
   }
+  decorTri(ctx,x0,y0,t,t*57+bits*11+(orr==='r'?5:0),(x,y)=>!!mask[y*TRIW+x]);
   ctx.fillStyle=OUTL[t];
   for(let y=0;y<TRIH;y++)for(let x=0;x<TRIW;x++){
     if(!mask[y*TRIW+x])continue;
     let edge=false;
-    if(x>0&&ins[y*TRIW+x-1]&&!mask[y*TRIW+x-1])edge=true;
-    if(x<TRIW-1&&ins[y*TRIW+x+1]&&!mask[y*TRIW+x+1])edge=true;
-    if(y>0&&ins[(y-1)*TRIW+x]&&!mask[(y-1)*TRIW+x])edge=true;
-    if(y<TRIH-1&&ins[(y+1)*TRIW+x]&&!mask[(y+1)*TRIW+x])edge=true;
+    if(x>0&&insArr[y*TRIW+x-1]&&!mask[y*TRIW+x-1])edge=true;
+    if(x<TRIW-1&&insArr[y*TRIW+x+1]&&!mask[y*TRIW+x+1])edge=true;
+    if(y>0&&insArr[(y-1)*TRIW+x]&&!mask[(y-1)*TRIW+x])edge=true;
+    if(y<TRIH-1&&insArr[(y+1)*TRIW+x]&&!mask[(y+1)*TRIW+x])edge=true;
     if(edge)ctx.fillRect(x0+x,y0+y,1,1);
   }
 }
 function paintRoadHex(ctx,x,y,mask){
-  // 6-битная маска мировых слотов N,S,NE,NW,SE,SW; спрайт 14x16 на клетку (flat-top).
-  const c1=PAL.DI,c2='#7d5f40';
-  const ends=[[7,0],[7,16],[14,4],[0,4],[14,12],[0,12]];
-  const lit=new Uint8Array(14*16);
-  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<14&&py2<16)lit[py2*14+px2]=1};
-  const blob=(cx2,cy2)=>{for(let oy=-1;oy<=2;oy++)for(let ox=-1;ox<=2;ox++)put(cx2+ox,cy2+oy)};
-  blob(6,7);
+  // 6-битная маска мировых слотов N,S,NE,NW,SE,SW; спрайт 28x32 на клетку (flat-top).
+  const c1=PAL.DI,c2='#7d5f40',c3='#5a4028';
+  const ends=[[14,0],[14,32],[28,8],[0,8],[28,24],[0,24]];
+  const lit=new Uint8Array(TRIW*TRIH);
+  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<TRIW&&py2<TRIH)lit[py2*TRIW+px2]=1};
+  const blob=(cx2,cy2)=>{for(let oy=-2;oy<=3;oy++)for(let ox=-2;ox<=3;ox++)put(cx2+ox,cy2+oy)};
+  blob(13,15);
   for(let b=0;b<6;b++)if(mask&(1<<b)){
-    const [ex,ey]=ends[b],steps=14;
+    const [ex,ey]=ends[b],steps=28;
     for(let i=0;i<=steps;i++){
       const t2=i/steps;
-      blob(Math.round(6+(ex-7)*t2),Math.round(7+(ey-8)*t2));
+      blob(Math.round(13+(ex-14)*t2),Math.round(15+(ey-16)*t2));
     }
   }
   ctx.fillStyle=c1;
-  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++)
-    if(lit[py2*14+px2])ctx.fillRect(x+px2,y+py2,1,1);
-  ctx.fillStyle=c2;
-  for(let i=0;i<10;i++){
-    const rx=hash2(i,mask,31)*14|0,ry=hash2(mask,i,77)*16|0;
-    if(lit[ry*14+rx])ctx.fillRect(x+rx,y+ry,1,1);
+  for(let py2=0;py2<TRIH;py2++)for(let px2=0;px2<TRIW;px2++)
+    if(lit[py2*TRIW+px2])ctx.fillRect(x+px2,y+py2,1,1);
+  // тёмная кромка обочины (внутри тайла; края тайла не трогаем — стыки бесшовны)
+  ctx.fillStyle=c3;
+  for(let py2=0;py2<TRIH;py2++)for(let px2=0;px2<TRIW;px2++){
+    if(!lit[py2*TRIW+px2])continue;
+    let edge=false;
+    if(px2>0&&!lit[py2*TRIW+px2-1])edge=true;
+    if(px2<TRIW-1&&!lit[py2*TRIW+px2+1])edge=true;
+    if(py2>0&&!lit[(py2-1)*TRIW+px2])edge=true;
+    if(py2<TRIH-1&&!lit[(py2+1)*TRIW+px2])edge=true;
+    if(edge)ctx.fillRect(x+px2,y+py2,1,1);
+  }
+  // камешки и выбоины
+  for(let i=0;i<26;i++){
+    const rx=hash2(i,mask,31)*TRIW|0,ry=hash2(mask,i,77)*TRIH|0;
+    if(lit[ry*TRIW+rx]){ctx.fillStyle=(i%3)?c2:c3;ctx.fillRect(x+rx,y+ry,1,1)}
   }
 }
 /* ---------- РЕКИ (v3): русло по dual-треугольникам ----------
    Река входит через ребро треугольника, идёт через центр и выходит через
    другое ребро (границы гексов). mask — 3 бита сторон (0:c0-c1,1:c1-c2,2:c2-c0).
-   tint — цвет берегов под террейн; w — класс ширины от потока (1..3, §6);
-   v — noise-вариант меандра (§8.4, noisy edges): изгиб живёт внутри тайла,
-   концы пришиты к серединам рёбер — стыки соседних тайлов сходятся всегда. */
+   tint — цвет берегов под террейн; w — класс ширины от потока (1..3, §6):
+   русло ~5/7/9px; v — noise-вариант меандра (§8.4, noisy edges): изгиб живёт
+   внутри тайла, концы пришиты к серединам рёбер — стыки тайлов сходятся всегда. */
 function paintRiverTri(ctx,x0,y0,orr,mask,tint,w,v){
   if(w===undefined)w=1;
   if(v===undefined)v=0;
-  const P=(orr==='r')?[[0,0],[0,16],[14,8]]:[[14,0],[14,16],[0,8]];
+  const P=triCorners(orr);
   const C=[(P[0][0]+P[1][0]+P[2][0])/3,(P[0][1]+P[1][1]+P[2][1])/3];
   const mids=[0,1,2].map(k=>[(P[k][0]+P[(k+1)%3][0])/2,(P[k][1]+P[(k+1)%3][1])/2]);
-  const ins=(px2,py2)=>{const w2=triBary(orr,px2+0.5,py2+0.5);
-    return w2[0]>=-0.045&&w2[1]>=-0.045&&w2[2]>=-0.045};
-  const lit=new Uint8Array(14*16);
-  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<14&&py2<16&&ins(px2,py2))lit[py2*14+px2]=1};
-  const rad=w>=3?2:(w===2?1.6:1);
+  const ins=triIns(orr);
+  const lit=new Uint8Array(TRIW*TRIH);
+  const put=(px2,py2)=>{if(px2>=0&&py2>=0&&px2<TRIW&&py2<TRIH&&ins(px2,py2))lit[py2*TRIW+px2]=1};
+  const rad=2+w; // taxicab-радиус: w1 ~5px, w2 ~7px, w3 ~9px
   const blob=(cx2,cy2)=>{const bx=Math.round(cx2),by=Math.round(cy2);
-    const r=Math.ceil(rad);
-    for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++)
-      if(ox*ox+oy*oy<=rad*rad+0.6)put(bx+ox,by+oy)};
+    const r=rad-1;
+    for(let oy=-r;oy<=r;oy++)for(let ox=-r;ox<=r;ox++){
+      if(Math.abs(ox)+Math.abs(oy)>rad)continue; // скруглённое русло
+      put(bx+ox,by+oy);
+    }};
   blob(C[0],C[1]);
   for(let k=0;k<3;k++)if(mask&(1<<k)){
-    const [ex,ey]=mids[k],steps=12;
+    const [ex,ey]=mids[k],steps=24;
     // перпендикулярный изгиб: 0 на концах, чтобы русла соседних тайлов сходились;
     // амплитуда зависит от noise-варианта, узкие реки петляют сильней
     const dx0=ex-C[0],dy0=ey-C[1],dl=Math.hypot(dx0,dy0)||1;
     const px3=-dy0/dl,py3=dx0/dl;
-    const amp=(hash2(k+1+v*17,mask*3+(orr==='r'?1:0),771)*2-1)*(w===1?2.4:(w===2?1.5:0.9));
+    const amp=(hash2(k+1+v*17,mask*3+(orr==='r'?1:0),771)*2-1)*(w===1?4.0:(w===2?2.6:1.6));
     for(let i=0;i<=steps;i++){
       const t2=i/steps;
       const off=Math.sin(t2*Math.PI)*amp;
@@ -4970,20 +6162,20 @@ function paintRiverTri(ctx,x0,y0,orr,mask,tint,w,v){
   // берега: пиксели рядом с водой, тон под террейн
   const bankC={};bankC[T.GRASS]=PAL.G1;bankC[T.FOREST]=PAL.F1;bankC[T.ROCK]=PAL.R1;bankC[T.MTN]=PAL.M1;
   ctx.fillStyle=bankC[tint]||PAL.G1;
-  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
-    if(lit[py2*14+px2]||!ins(px2,py2))continue;
+  for(let py2=0;py2<TRIH;py2++)for(let px2=0;px2<TRIW;px2++){
+    if(lit[py2*TRIW+px2]||!ins(px2,py2))continue;
     let near=false;
     for(const[ox,oy]of[[1,0],[-1,0],[0,1],[0,-1]]){
       const qx=px2+ox,qy=py2+oy;
-      if(qx>=0&&qx<14&&qy>=0&&qy<16&&lit[qy*14+qx])near=true;
+      if(qx>=0&&qx<TRIW&&qy>=0&&qy<TRIH&&lit[qy*TRIW+qx])near=true;
     }
     if(near)ctx.fillRect(x0+px2,y0+py2,1,1);
   }
   // вода с бликами
-  for(let py2=0;py2<16;py2++)for(let px2=0;px2<14;px2++){
-    if(!lit[py2*14+px2])continue;
+  for(let py2=0;py2<TRIH;py2++)for(let px2=0;px2<TRIW;px2++){
+    if(!lit[py2*TRIW+px2])continue;
     const h=hash2(px2+mask*7,py2+tint*13,313);
-    ctx.fillStyle=h<0.12?PAL.W3:(h>0.9?PAL.W1:PAL.W2);
+    ctx.fillStyle=h<0.10?PAL.W3:(h>0.92?PAL.W1:PAL.W2);
     ctx.fillRect(x0+px2,y0+py2,1,1);
   }
 }
@@ -5011,6 +6203,16 @@ function paintReliefTri(ctx,x0,y0,orr,bits,L){
     else if(L===4)col=h<0.12?PAL.M3:PAL.M2;               // верхний склон
     else col=h<0.14?PAL.M3:PAL.SN;                        // снежник (E>=4.5)
     if(col){ctx.fillStyle=col;ctx.fillRect(x0+x,y0+y,1,1)}
+  }
+  if(L===3||L===4){ // диагональные гребни в стиле decorTri, тон по поясу
+    const hi=(L===3)?PAL.M2:PAL.M3,lo=(L===3)?PAL.M1:PAL.M2;
+    for(let i=0;i<3;i++){
+      const tx=1+((hash2(i,L*7+bits,821)*(TRIW-8))|0),ty=1+((hash2(L,i*13+bits,823)*(TRIH-8))|0);
+      for(let k=0;k<5;k++){
+        if(mask[(ty+k)*TRIW+tx+k]){ctx.fillStyle=hi;ctx.fillRect(x0+tx+k,y0+ty+k,1,1)}
+        if(ty+k+1<TRIH&&mask[(ty+k+1)*TRIW+tx+k]){ctx.fillStyle=lo;ctx.fillRect(x0+tx+k,y0+ty+k+1,1,1)}
+      }
+    }
   }
   if(L>=3){ // crease: тёмная кромка пояса
     ctx.fillStyle=L===5?PAL.M3:PAL.o;
@@ -5041,236 +6243,56 @@ function paintBiomeTri(ctx,x0,y0,orr,bits,bio){
     if(col){ctx.fillStyle=col;ctx.fillRect(x0+x,y0+y,1,1)}
   }
 }
-function paintRiverMouth(ctx,x,y){ // устье: пена впадения (8x8, оверлей)
-  for(let py=0;py<8;py++)for(let px=0;px<8;px++){
-    const d=Math.hypot(px-3.5,py-3.5);
-    if(d>3.8)continue;
+function paintRiverMouth(ctx,x,y){ // устье: пена впадения (16x16, оверлей)
+  for(let py=0;py<16;py++)for(let px=0;px<16;px++){
+    const d=Math.hypot(px-7.5,py-7.5);
+    if(d>7.6)continue;
     const h=hash2(px,py,881);
-    if(h<0.45){ctx.fillStyle=h<0.2?PAL.SN:PAL.W3;ctx.fillRect(x+px,y+py,1,1)}
+    if(h<0.45-d*0.03){ctx.fillStyle=h<0.18?PAL.SN:PAL.W3;ctx.fillRect(x+px,y+py,1,1)}
   }
 }
-function paintWaterfall(ctx,x,y){ // исток: белопенный сброс (10x12, оверлей)
-  for(let py=0;py<8;py++)for(let px=2;px<8;px++){
-    const h=hash2(px,py,551);
-    ctx.fillStyle=h<0.3?PAL.SN:(h<0.65?PAL.W3:PAL.W2);
-    ctx.fillRect(x+px,y+py,1,1);
+function paintWaterfall(ctx,x,y){ // исток: белопенный сброс (20x24, оверлей)
+  for(let py=0;py<17;py++){ // струи с рваным краем
+    const wob=Math.round(hash2(0,py>>2,559)*2-1);
+    const x0=7+wob,x1=13+wob;
+    for(let px=x0;px<=x1;px++){
+      const h=hash2(px,py,551);
+      ctx.fillStyle=h<0.35?PAL.SN:(h<0.7?PAL.W3:PAL.W2);
+      ctx.fillRect(x+px,y+py,1,1);
+    }
   }
-  for(let px=0;px<10;px++){
-    if(hash2(px,9,552)<0.7){ctx.fillStyle=PAL.SN;ctx.fillRect(x+px,y+8,1,1)}
-    if(hash2(px,10,553)<0.45){ctx.fillStyle=PAL.W3;ctx.fillRect(x+px,y+9,1,1)}
-  }
-}
-function paintBridge(ctx,x,y){
-  // деревянный настил через русло; дорога рисуется поверх
-  for(let py=5;py<11;py++)for(let px=0;px<14;px++){
-    ctx.fillStyle=((px+ (py&1)*2)%4===0)?PAL.D:PAL.Wd;
-    ctx.fillRect(x+px,y+py,1,1);
-  }
-  ctx.fillStyle=PAL.o;
-  for(let px=0;px<14;px++){ctx.fillRect(x+px,y+4,1,1);ctx.fillRect(x+px,y+11,1,1)}
-}
-function paintFull(ctx,x0,y0,t,variant){
-  for(let y=0;y<16;y++)for(let x=0;x<16;x++){
-    ctx.fillStyle=terrPix(t,x+variant*97,y+variant*53,S?S.seed:7);
-    ctx.fillRect(x0+x,y0+y,1,1);
+  for(let py=15;py<24;py++)for(let px=0;px<20;px++){ // пена у подножия
+    const dx=(px-10)/9,dy=(py-19)/4.5;
+    const d=dx*dx+dy*dy;
+    if(d>1)continue;
+    const h=hash2(px,py,553);
+    if(h<0.8-d*0.6){ctx.fillStyle=h<0.32?PAL.SN:PAL.W3;ctx.fillRect(x+px,y+py,1,1)}
   }
 }
-function px(ctx,ox,oy,x,y,c){ctx.fillStyle=c;ctx.fillRect(ox+x,oy+y,1,1)}
-function rect(ctx,ox,oy,x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(ox+x,oy+y,w,h)}
-function paintBerry(ctx,x,y){
-  rect(ctx,x,y,4,8,8,5,PAL.F2);rect(ctx,x,y,5,7,6,1,PAL.F3);rect(ctx,x,y,5,13,6,1,PAL.F1);
-  px(ctx,x,y,6,9,PAL.BER);px(ctx,x,y,9,10,PAL.BER);px(ctx,x,y,7,11,PAL.BER);px(ctx,x,y,10,8,PAL.BER);
-}
-function paintDeadfall(ctx,x,y){
-  rect(ctx,x,y,2,9,12,2,PAL.Wd);rect(ctx,x,y,2,8,12,1,PAL.w);
-  rect(ctx,x,y,4,5,2,8,PAL.DI);rect(ctx,x,y,9,4,2,9,PAL.Wd);
-  px(ctx,x,y,1,9,PAL.o);px(ctx,x,y,14,10,PAL.o);
-}
-function paintRubble(ctx,x,y){
-  rect(ctx,x,y,3,9,5,4,PAL.R2);rect(ctx,x,y,3,9,5,1,PAL.R3);
-  rect(ctx,x,y,9,10,4,3,PAL.R1);rect(ctx,x,y,6,6,3,3,PAL.R2);
-}
-function paintVein(ctx,x,y){
-  px(ctx,x,y,4,4,PAL.GEM);px(ctx,x,y,5,5,PAL.GEM);
-  px(ctx,x,y,10,7,PAL.GEM);px(ctx,x,y,11,6,PAL.GEM);
-  px(ctx,x,y,6,11,PAL.GEM);px(ctx,x,y,7,12,PAL.GEM);
-  px(ctx,x,y,12,12,PAL.GEM);px(ctx,x,y,3,9,PAL.GEM);
-}
-function paintFish(ctx,x,y){
-  rect(ctx,x,y,3,6,5,1,PAL.W3);rect(ctx,x,y,8,9,5,1,PAL.W3);
-  px(ctx,x,y,6,11,PAL.SN);px(ctx,x,y,7,12,PAL.SN);px(ctx,x,y,8,11,PAL.SN);
-}
-function paintRuins(ctx,x,y){
-  rect(ctx,x,y,3,6,3,8,PAL.R3);rect(ctx,x,y,3,6,3,1,PAL.SN);
-  rect(ctx,x,y,10,9,3,5,PAL.R2);rect(ctx,x,y,7,13,6,1,PAL.R1);
-  px(ctx,x,y,11,8,PAL.R3);
-}
-function paintSite(ctx,x,y){
-  rect(ctx,x,y,1,1,3,4,PAL.Wd);rect(ctx,x,y,12,1,3,4,PAL.Wd);
-  rect(ctx,x,y,1,11,3,4,PAL.Wd);rect(ctx,x,y,12,11,3,4,PAL.Wd);
-  rect(ctx,x,y,1,1,3,1,PAL.w);rect(ctx,x,y,12,1,3,1,PAL.w);
-  for(let i=0;i<12;i++){px(ctx,x,y,2+i,13-i,PAL.y);px(ctx,x,y,2+i,14-i,PAL.w)}
-  rect(ctx,x,y,4,6,8,3,PAL.DI);rect(ctx,x,y,4,6,8,1,'#7d5f40');
-}
-function paintFarm(ctx,x,y){
-  for(let ry=4;ry<14;ry++){
-    const c=(ry%2===0)?PAL.DI:'#5a4028';
-    rect(ctx,x,y,2,ry,12,1,c);
+function paintBridge(ctx,x,y,dx,dy){
+  // Настил ВДОЛЬ оси дороги, пересекающей речное ребро. (dx,dy) — вектор оси
+  // в пикселях тайла (y вниз): N-S (0,-1), NE-SW (7,-4), NW-SE (7,4) — те же
+  // направления, что у слотов paintRoadHex. Доски поперёк хода, по бокам
+  // тёмная кромка-перила; тайл 28×32 кладётся квадом CW×1 на середину ребра.
+  const cx=14,cy=16;
+  const L=Math.hypot(dx,dy);dx/=L;dy/=L;
+  const nx=-dy,ny=dx; // поперёк хода
+  const halfLen=10.5,halfW=4.5;
+  for(let yy=0;yy<TRIH;yy++)for(let xx=0;xx<TRIW;xx++){
+    const rx=xx+0.5-cx,ry=yy+0.5-cy;
+    const u=rx*dx+ry*dy,v=rx*nx+ry*ny;
+    const au=Math.abs(u),av=Math.abs(v);
+    if(au>halfLen)continue;
+    if(av<=halfW){ // полотно из досок
+      const seam=(Math.floor(u+halfLen)%3===0);       // шов между досками
+      const board=Math.floor(v+halfW)%4===1;          // блик доски
+      ctx.fillStyle=seam?PAL.D:(av>halfW-1?PAL.Wd:(board?PAL.wh:PAL.w));
+      ctx.fillRect(x+xx,y+yy,1,1);
+    }else if(av<=halfW+1.3){ // кромка-перила с усиленными концами
+      ctx.fillStyle=(au>halfLen-2)?PAL.Wd:PAL.o;
+      ctx.fillRect(x+xx,y+yy,1,1);
+    }
   }
-  for(let i=0;i<8;i++){
-    const sx=3+((i*3)%11),sy=5+((i*5)%8);
-    px(ctx,x,y,sx,sy,PAL.G3);
-  }
-  rect(ctx,x,y,2,3,12,1,PAL.w);
-}
-function paintMine(ctx,x,y){
-  rect(ctx,x,y,2,6,12,9,PAL.R2);rect(ctx,x,y,3,5,10,1,PAL.R3);
-  rect(ctx,x,y,4,4,8,1,PAL.R3);
-  rect(ctx,x,y,6,8,4,7,PAL.k);
-  rect(ctx,x,y,5,7,6,1,PAL.Wd);
-  rect(ctx,x,y,5,8,1,7,PAL.Wd);rect(ctx,x,y,10,8,1,7,PAL.Wd);
-}
-function paintCamp(ctx,x,y){
-  for(let i=0;i<5;i++){rect(ctx,x,y,3+i,10-i,1,i+1,PAL.DI);rect(ctx,x,y,8-i,10-i,1,i+1,PAL.Wd)}
-  for(let i=0;i<4;i++){rect(ctx,x,y,9+i,12-i,1,i+1,PAL.Cr);rect(ctx,x,y,14-i,12-i,1,i+1,PAL.R)}
-  px(ctx,x,y,5,12,PAL.y);px(ctx,x,y,6,13,PAL.r);px(ctx,x,y,5,13,PAL.r);
-}
-function paintDen(ctx,x,y){
-  // звериное логово (п.11): тёмная нора под корягой, кости у входа
-  rect(ctx,x,y,3,8,10,6,PAL.DI);rect(ctx,x,y,4,9,8,4,PAL.k);
-  rect(ctx,x,y,2,7,12,1,PAL.Wd);px(ctx,x,y,2,6,PAL.Wd);px(ctx,x,y,13,6,PAL.Wd);
-  px(ctx,x,y,5,13,PAL.SN);px(ctx,x,y,6,14,PAL.SN);px(ctx,x,y,10,13,PAL.SN);
-  px(ctx,x,y,11,14,PAL.SN);px(ctx,x,y,8,14,PAL.SN);
-}
-function paintCliff(ctx,x,y){
-  rect(ctx,x,y,3,7,10,8,PAL.R1);rect(ctx,x,y,4,6,8,1,PAL.R2);
-  rect(ctx,x,y,5,5,5,1,PAL.R2);rect(ctx,x,y,6,9,2,2,PAL.k);
-  rect(ctx,x,y,11,2,1,5,PAL.Wd);rect(ctx,x,y,12,2,3,2,PAL.Cr);
-}
-function paintGraves(ctx,x,y){
-  rect(ctx,x,y,2,10,12,5,PAL.F1);
-  const cross=(cx,cy)=>{rect(ctx,x,y,cx,cy,1,4,PAL.R3);rect(ctx,x,y,cx-1,cy+1,3,1,PAL.R3)};
-  cross(4,7);cross(8,6);cross(12,8);
-}
-function paintFisher(ctx,x,y){
-  rect(ctx,x,y,2,10,12,2,PAL.w);rect(ctx,x,y,2,12,12,1,PAL.Wd);
-  rect(ctx,x,y,3,13,1,3,PAL.Wd);rect(ctx,x,y,12,13,1,3,PAL.Wd);rect(ctx,x,y,7,13,1,3,PAL.Wd);
-  rect(ctx,x,y,4,4,7,6,PAL.w);
-  rect(ctx,x,y,3,3,9,2,PAL.Cb);rect(ctx,x,y,4,2,7,1,PAL.Cb);rect(ctx,x,y,3,5,9,1,PAL.W1);
-  rect(ctx,x,y,6,6,2,4,PAL.D);
-  rect(ctx,x,y,13,8,1,4,PAL.Wd);px(ctx,x,y,13,7,PAL.r);
-}
-function paintLumber(ctx,x,y){
-  rect(ctx,x,y,2,3,12,1,PAL.w);rect(ctx,x,y,2,4,12,2,PAL.Wd);
-  rect(ctx,x,y,2,6,1,7,PAL.Wd);rect(ctx,x,y,13,6,1,7,PAL.Wd);
-  rect(ctx,x,y,4,11,8,2,PAL.w);rect(ctx,x,y,5,9,6,2,PAL.Wd);rect(ctx,x,y,6,7,4,2,PAL.w);
-  px(ctx,x,y,4,11,PAL.DI);px(ctx,x,y,11,11,PAL.DI);px(ctx,x,y,5,9,PAL.DI);px(ctx,x,y,10,9,PAL.DI);
-  rect(ctx,x,y,3,13,10,1,PAL.o);
-}
-function paintPort(ctx,x,y){
-  rect(ctx,x,y,1,9,14,2,PAL.w);rect(ctx,x,y,1,11,14,1,PAL.Wd);
-  rect(ctx,x,y,2,12,1,4,PAL.Wd);rect(ctx,x,y,13,12,1,4,PAL.Wd);rect(ctx,x,y,7,12,1,4,PAL.Wd);
-  rect(ctx,x,y,2,3,8,6,PAL.w);rect(ctx,x,y,1,2,10,2,PAL.Cb);rect(ctx,x,y,2,1,8,1,PAL.Cb);
-  rect(ctx,x,y,4,5,2,4,PAL.D);
-  rect(ctx,x,y,11,4,1,5,PAL.Wd);rect(ctx,x,y,12,5,3,1,PAL.Wd);px(ctx,x,y,14,6,PAL.y);
-  rect(ctx,x,y,11,10,2,2,PAL.R);px(ctx,x,y,13,10,PAL.R);
-}
-function paintGuild(ctx,x,y){
-  rect(ctx,x,y,2,4,12,10,PAL.R2);rect(ctx,x,y,2,4,12,1,PAL.R3);
-  rect(ctx,x,y,1,3,14,1,PAL.R);rect(ctx,x,y,2,2,12,1,PAL.R);
-  rect(ctx,x,y,6,8,4,6,PAL.k);rect(ctx,x,y,5,7,6,1,PAL.Wd);
-  rect(ctx,x,y,3,5,2,2,PAL.y);rect(ctx,x,y,11,5,2,2,PAL.y);
-  rect(ctx,x,y,2,14,12,1,PAL.R1);
-}
-function paintAdvGuild(ctx,x,y){
-  rect(ctx,x,y,2,5,12,9,PAL.w);rect(ctx,x,y,2,5,12,1,PAL.Wd);
-  rect(ctx,x,y,1,4,14,1,PAL.R);rect(ctx,x,y,2,3,12,1,PAL.R);rect(ctx,x,y,3,2,10,1,PAL.r);
-  rect(ctx,x,y,6,9,4,5,PAL.k);rect(ctx,x,y,5,8,6,1,PAL.Wd);
-  rect(ctx,x,y,3,6,2,3,PAL.Cr);px(ctx,x,y,3,6,PAL.y);px(ctx,x,y,4,7,PAL.y);
-  rect(ctx,x,y,11,6,1,3,PAL.R3);px(ctx,x,y,11,5,PAL.R3);px(ctx,x,y,12,6,PAL.Wd);
-  rect(ctx,x,y,2,14,12,1,PAL.Wd);
-}
-function paintShip(ctx,x,y,fade){
-  const put=(px2,py2,c)=>{if(fade&&((px2+py2)&1))return;ctx.fillStyle=c;ctx.fillRect(x+px2,y+py2,1,1)};
-  for(let i=0;i<10;i++)put(3+i,11,PAL.Wd);
-  for(let i=0;i<8;i++)put(4+i,12,PAL.D);
-  for(let i=0;i<6;i++)put(5+i,13,PAL.o);
-  for(let yy=3;yy<=9;yy++)for(let xx=0;xx<Math.min(6,yy-1);xx++)put(7+xx,yy,PAL.SN);
-  put(7,2,PAL.y);
-  for(let yy=2;yy<=11;yy++)put(6,yy,PAL.Wd);
-}
-function paintCrafters(ctx,x,y){
-  rect(ctx,x,y,2,6,12,8,PAL.R1);rect(ctx,x,y,2,6,12,1,PAL.w);
-  rect(ctx,x,y,1,4,14,2,PAL.R3);rect(ctx,x,y,3,3,10,1,PAL.R3);
-  rect(ctx,x,y,6,9,4,5,PAL.k);
-  rect(ctx,x,y,3,8,2,2,PAL.y);rect(ctx,x,y,11,8,2,2,PAL.y);
-  rect(ctx,x,y,12,1,2,3,PAL.D);px(ctx,x,y,12,0,PAL.Cb);
-  px(ctx,x,y,7,12,'#ff9a3d');px(ctx,x,y,8,12,'#ffd23d');
-  rect(ctx,x,y,2,14,12,1,PAL.o);
-}
-function paintStake(ctx,x,y){
-  rect(ctx,x,y,7,6,1,7,PAL.Wd);
-  rect(ctx,x,y,8,6,3,2,PAL.Cr);
-  px(ctx,x,y,7,13,PAL.o);
-}
-function paintPennant(ctx,x,y){
-  rect(ctx,x,y,3,1,1,6,PAL.Wd);
-  rect(ctx,x,y,4,1,3,2,PAL.y);px(ctx,x,y,4,3,PAL.y);
-}
-function paintHammer(ctx,x,y,f){
-  if(f===0){rect(ctx,x,y,2,3,3,2,PAL.R3);rect(ctx,x,y,4,5,2,3,PAL.Wd)}
-  else{rect(ctx,x,y,4,2,2,3,PAL.R3);rect(ctx,x,y,3,5,2,3,PAL.Wd)}
-  px(ctx,x,y,6,7,PAL.y);
-}
-function paintSmoke(ctx,x,y,f){
-  const c1=PAL.SN,c2=PAL.R3;
-  if(f===0){px(ctx,x,y,3,6,c2);px(ctx,x,y,4,5,c1);px(ctx,x,y,3,4,c1);px(ctx,x,y,4,3,c2);px(ctx,x,y,5,2,c1);px(ctx,x,y,4,1,c2)}
-  else{px(ctx,x,y,4,6,c2);px(ctx,x,y,3,5,c1);px(ctx,x,y,4,4,c1);px(ctx,x,y,3,3,c2);px(ctx,x,y,4,2,c1);px(ctx,x,y,5,1,c2)}
-}
-function paintWheat(ctx,x,y){
-  for(let i=0;i<6;i++){
-    const sx=3+((i*2)%10),h=4+(i%3);
-    rect(ctx,x,y,sx,12-h,1,h,PAL.y);
-    px(ctx,x,y,sx,11-h,'#f4e08a');
-  }
-  rect(ctx,x,y,2,12,12,1,PAL.G1);
-}
-function paintStump(ctx,x,y){
-  rect(ctx,x,y,4,9,3,3,PAL.Wd);rect(ctx,x,y,4,9,3,1,PAL.w);
-  rect(ctx,x,y,10,11,2,2,PAL.Wd);px(ctx,x,y,10,11,PAL.w);
-  px(ctx,x,y,7,13,PAL.DI);px(ctx,x,y,3,12,PAL.DI);
-}
-function paintWatchtower(ctx,x,y){
-  rect(ctx,x,y,4,2,8,1,PAL.R);rect(ctx,x,y,5,1,6,1,PAL.R);
-  rect(ctx,x,y,4,3,8,3,PAL.w);rect(ctx,x,y,4,3,8,1,PAL.Wd);
-  px(ctx,x,y,6,4,PAL.k);px(ctx,x,y,9,4,PAL.k);
-  rect(ctx,x,y,3,6,10,1,PAL.Wd);
-  rect(ctx,x,y,4,7,1,8,PAL.Wd);rect(ctx,x,y,11,7,1,8,PAL.Wd);
-  rect(ctx,x,y,5,9,6,1,PAL.Wd);rect(ctx,x,y,5,12,6,1,PAL.Wd);
-  px(ctx,x,y,12,1,PAL.y);px(ctx,x,y,13,2,PAL.r);
-}
-function paintLibrary(ctx,x,y){
-  // v2.1: библиотека — каменный корпус, синяя черепица учёных, раскрытая книга над входом
-  rect(ctx,x,y,3,5,10,9,PAL.R2);rect(ctx,x,y,3,5,10,1,PAL.R3);
-  rect(ctx,x,y,2,3,12,2,PAL.Cb);rect(ctx,x,y,4,2,8,1,PAL.Cb);rect(ctx,x,y,2,5,12,1,PAL.W1);
-  rect(ctx,x,y,7,9,3,5,PAL.k);rect(ctx,x,y,6,8,5,1,PAL.Wd);
-  rect(ctx,x,y,4,7,2,2,PAL.y);rect(ctx,x,y,11,7,2,2,PAL.y);
-  rect(ctx,x,y,6,4,2,1,PAL.SN);rect(ctx,x,y,9,4,2,1,PAL.SN);px(ctx,x,y,8,4,PAL.y);
-  rect(ctx,x,y,3,13,10,1,PAL.R1);
-}
-function paintKnowledge(ctx,x,y){
-  // v2.1: башня знаний (тир 2) — шпиль с самоцветом и крылья-архивы; силуэт выше библиотеки
-  rect(ctx,x,y,5,7,6,9,PAL.R2);rect(ctx,x,y,5,7,6,1,PAL.R3);
-  rect(ctx,x,y,4,6,8,1,PAL.R3);
-  rect(ctx,x,y,5,3,6,3,PAL.Cb);rect(ctx,x,y,6,2,4,1,PAL.Cb);
-  px(ctx,x,y,7,1,PAL.GEM);px(ctx,x,y,8,1,PAL.GEM);px(ctx,x,y,7,0,PAL.GEM);px(ctx,x,y,8,0,PAL.GEM);
-  rect(ctx,x,y,7,4,2,1,PAL.GEM);
-  px(ctx,x,y,6,9,PAL.y);px(ctx,x,y,9,9,PAL.y);
-  rect(ctx,x,y,7,13,2,3,PAL.k);rect(ctx,x,y,6,12,4,1,PAL.Wd);
-  rect(ctx,x,y,2,13,3,3,PAL.R1);rect(ctx,x,y,11,13,3,3,PAL.R1);
-  rect(ctx,x,y,2,13,3,1,PAL.R3);rect(ctx,x,y,11,13,3,1,PAL.R3);
-  px(ctx,x,y,3,14,PAL.y);px(ctx,x,y,12,14,PAL.y);
-  rect(ctx,x,y,4,16,8,1,PAL.o);
 }
 function paintIcon(name){
   const cv=document.createElement('canvas');cv.width=12;cv.height=12;
@@ -5288,7 +6310,7 @@ function paintIcon(name){
 }
 function buildAtlas(){
   const t0=performance.now();
-  ATLAS={W:256,H:1024,cur:{x:0,y:0,rowH:0}};
+  ATLAS={W:512,H:2048,cur:{x:0,y:0,rowH:0}}; // 2048: рельеф+биомы+реки w/v не влезали в 1024
   const cv=document.createElement('canvas');cv.width=ATLAS.W;cv.height=ATLAS.H;
   const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
   ATLAS.cv=cv;ATLAS.ctx=ctx;SPR={};
@@ -5309,7 +6331,7 @@ function buildAtlas(){
         const p=place(TRIW,TRIH);paintTriTransition(ctx,p.x,p.y,t,orr,bits);reg('tri'+t+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
       }
   }
-  // units
+  // units (16×16: на карте пол-гекса, в бою холст 16×16)
   for(const race of RACES){
     const g=UNIT_GRIDS[race],m=UNIT_MAPS[race];
     let p=place(16,16);drawGrid(ctx,p.x,p.y,g,m);
@@ -5332,84 +6354,71 @@ function buildAtlas(){
    c2.fillStyle='rgba(10,8,14,0.22)';
    c2.beginPath();c2.ellipse(ps.x+8,ps.y+8,6.6,3.1,0,0,Math.PI*2);c2.fill();
    reg('shadow',ps.x,ps.y,16,16)}
-  // buildings: distinct silhouettes
-  let p=place(16,16);drawGrid(ctx,p.x,p.y,G_HUT,HUT_MAPS.hut);reg('b_hut',p.x,p.y,16,16);
-  p=place(16,16);drawGrid(ctx,p.x,p.y,G_HOUSE2,HOUSE2_MAP);reg('b_house2',p.x,p.y,16,16);
-  p=place(16,16);drawGrid(ctx,p.x,p.y,G_TENT,TENT_MAP);reg('b_tent',p.x,p.y,16,16);
-  p=place(16,16);paintFisher(ctx,p.x,p.y);reg('b_fisher',p.x,p.y,16,16);
-  p=place(16,16);paintLumber(ctx,p.x,p.y);reg('b_lumber',p.x,p.y,16,16);
-  p=place(16,16);drawGrid(ctx,p.x,p.y,G_TAVERN,TAVERN_MAP);
-  rect(ctx,p.x,p.y,14,9,2,2,PAL.y);px(ctx,p.x,p.y,14,8,PAL.Wd);
-  reg('b_tavern',p.x,p.y,16,16);
-  p=place(16,16);paintFarm(ctx,p.x,p.y);
-  rect(ctx,p.x,p.y,11,3,4,1,PAL.r);rect(ctx,p.x,p.y,11,4,4,3,PAL.w);px(ctx,p.x,p.y,12,5,PAL.D);
-  reg('b_farm',p.x,p.y,16,16);
-  p=place(8,8);paintSmoke(ctx,p.x,p.y,0);reg('fx_0',p.x,p.y,8,8);
-  p=place(8,8);paintSmoke(ctx,p.x,p.y,1);reg('fx_1',p.x,p.y,8,8);
-  p=place(8,8);paintHammer(ctx,p.x,p.y,0);reg('fxh_0',p.x,p.y,8,8);
-  p=place(8,8);paintHammer(ctx,p.x,p.y,1);reg('fxh_1',p.x,p.y,8,8);
-  p=place(16,16);paintPort(ctx,p.x,p.y);reg('b_port',p.x,p.y,16,16);
-  p=place(16,16);paintGuild(ctx,p.x,p.y);reg('b_guild',p.x,p.y,16,16);
-  p=place(16,16);paintAdvGuild(ctx,p.x,p.y);reg('b_advguild',p.x,p.y,16,16);
-  p=place(8,8);paintPennant(ctx,p.x,p.y);reg('pennant',p.x,p.y,8,8);
-  p=place(16,16);paintStake(ctx,p.x,p.y);reg('stake',p.x,p.y,16,16);
-  p=place(16,16);paintCrafters(ctx,p.x,p.y);reg('b_crafters',p.x,p.y,16,16);
-  p=place(16,16);paintShip(ctx,p.x,p.y,false);reg('ship0',p.x,p.y,16,16);
-  p=place(16,16);paintShip(ctx,p.x,p.y,true);reg('ship1',p.x,p.y,16,16);
-  p=place(16,16);
-  for(let yy=0;yy<16;yy++)for(let xx=0;xx<16;xx++){
-    const h=hash2(xx,yy,404);
-    if(h<0.55){ctx.fillStyle=(h<0.15)?'#000000':PAL.o;ctx.fillRect(p.x+xx,p.y+yy,1,1)}
+  // здания/логовища/фичи: детальные гриды 32px
+  const GRIDS=[
+    ['b_hut',G_HUT,G_HUT_MAP],['b_house2',G_HOUSE2,G_HOUSE2_MAP],
+    ['b_tent',G_TENT,G_TENT_MAP],['b_fisher',G_FISHER,G_FISHER_MAP],
+    ['b_lumber',G_LUMBER,G_LUMBER_MAP],['b_tavern',G_TAVERN,G_TAVERN_MAP],
+    ['b_farm',G_FARM,G_FARM_MAP],['b_mine',G_MINE,G_MINE_MAP],
+    ['b_site',G_SITE,G_SITE_MAP],['b_townhall',G_TOWNHALL,G_TOWNHALL_MAP],
+    ['b_tower',G_WATCHTOWER,G_WATCHTOWER_MAP],['b_port',G_PORT,G_PORT_MAP],
+    ['b_guild',G_GUILD,G_GUILD_MAP],['b_advguild',G_ADVGUILD,G_ADVGUILD_MAP],
+    ['b_crafters',G_CRAFTERS,G_CRAFTERS_MAP],['b_library',G_LIBRARY,G_LIBRARY_MAP],
+    ['b_knowledge',G_KNOWLEDGE,G_KNOWLEDGE_MAP],
+    ['l_tower',L_TOWER,L_TOWER_MAP],['l_necro',L_NECRO,L_NECRO_MAP],
+    ['l_camp',L_CAMP,L_CAMP_MAP],['l_den',L_DEN,L_DEN_MAP],
+    ['l_cliff',L_CLIFF,L_CLIFF_MAP],['l_graves',L_GRAVES,L_GRAVES_MAP],
+    ['f_1',F_BERRY,F_BERRY_MAP],['f_2',F_DEADFALL,F_DEADFALL_MAP],
+    ['f_3',F_RUBBLE,F_RUBBLE_MAP],['f_4',F_VEIN,F_VEIN_MAP],
+    ['f_5',F_FISH,F_FISH_MAP],['f_6',F_RUINS,F_RUINS_MAP],
+    ['f_7',F_WHEAT,F_WHEAT_MAP],['f_8',F_STUMP,F_STUMP_MAP],
+    ['stake',G_STAKE,G_STAKE_MAP],['pennant',G_PENNANT,G_PENNANT_MAP],
+    ['fx_0',G_SMOKE0,G_SMOKE0_MAP],['fx_1',G_SMOKE1,G_SMOKE1_MAP],
+    ['fxh_0',G_HAMMER0,G_HAMMER0_MAP],['fxh_1',G_HAMMER1,G_HAMMER1_MAP]
+  ];
+  for(const [k,g,m] of GRIDS){
+    const w=g[0].length,h=g.length;
+    const p=place(w,h);drawGrid(ctx,p.x,p.y,g,m);reg(k,p.x,p.y,w,h);
   }
-  reg('ash',p.x,p.y,16,16);
-  p=place(16,16);paintMine(ctx,p.x,p.y);reg('b_mine',p.x,p.y,16,16);
-  p=place(16,16);paintSite(ctx,p.x,p.y);reg('b_site',p.x,p.y,16,16);
-  p=place(16,17);drawGrid(ctx,p.x,p.y,G_TOWNHALL,TH_MAP);reg('b_townhall',p.x,p.y,16,17);
-  // lairs
-  p=place(16,12);drawGrid(ctx,p.x,p.y,G_TOWER,TOWER_MAP);reg('l_tower',p.x,p.y,16,12);
-  p=place(16,15);drawGrid(ctx,p.x,p.y,G_NECRO,NECRO_MAP);reg('l_necro',p.x,p.y,16,15);
-  p=place(16,16);paintCamp(ctx,p.x,p.y);reg('l_camp',p.x,p.y,16,16);
-  p=place(16,16);paintDen(ctx,p.x,p.y);reg('l_den',p.x,p.y,16,16);
-  p=place(16,16);paintCliff(ctx,p.x,p.y);reg('l_cliff',p.x,p.y,16,16);
-  p=place(16,16);paintGraves(ctx,p.x,p.y);reg('l_graves',p.x,p.y,16,16);
-  // features
-  p=place(16,16);paintBerry(ctx,p.x,p.y);reg('f_1',p.x,p.y,16,16);
-  p=place(16,16);paintDeadfall(ctx,p.x,p.y);reg('f_2',p.x,p.y,16,16);
-  p=place(16,16);paintRubble(ctx,p.x,p.y);reg('f_3',p.x,p.y,16,16);
-  p=place(16,16);paintVein(ctx,p.x,p.y);reg('f_4',p.x,p.y,16,16);
-  p=place(16,16);paintFish(ctx,p.x,p.y);reg('f_5',p.x,p.y,16,16);
-  p=place(16,16);paintRuins(ctx,p.x,p.y);reg('f_6',p.x,p.y,16,16);
-  p=place(16,16);paintWheat(ctx,p.x,p.y);reg('f_7',p.x,p.y,16,16);
-  p=place(16,16);paintStump(ctx,p.x,p.y);reg('f_8',p.x,p.y,16,16);
-  p=place(16,16);paintWatchtower(ctx,p.x,p.y);reg('b_tower',p.x,p.y,16,16);
-  p=place(16,16);paintLibrary(ctx,p.x,p.y);reg('b_library',p.x,p.y,16,16);
-  p=place(16,17);paintKnowledge(ctx,p.x,p.y);reg('b_knowledge',p.x,p.y,16,17);
-  for(let m=0;m<64;m++){p=place(14,16);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,14,16)}
-  // реки v3: тинт берегов x маска x ширина потока x noise-вариант меандра
+  // корабль: целый и «затухающий» (дизеринг для дальнего рейса)
+  {let p=place(20,20);drawGrid(ctx,p.x,p.y,G_SHIP,G_SHIP_MAP);reg('ship0',p.x,p.y,20,20);
+   p=place(20,20);drawGrid(ctx,p.x,p.y,G_SHIP,G_SHIP_MAP,(x,y)=>((x+y)&1)===1);reg('ship1',p.x,p.y,20,20)}
+  // пепелище (оверлей руин; разреженный — силуэт здания должен угадываться)
+  {const p=place(32,32);
+   for(let yy=0;yy<32;yy++)for(let xx=0;xx<32;xx++){
+     const h=hash2(xx,yy,404);
+     if(h<0.42){ctx.fillStyle=(h<0.10)?'#000000':PAL.o;ctx.fillRect(p.x+xx,p.y+yy,1,1)}
+   }
+   reg('ash',p.x,p.y,32,32)}
+  for(let m=0;m<64;m++){const p=place(TRIW,TRIH);paintRoadHex(ctx,p.x,p.y,m);reg('road_'+m,p.x,p.y,TRIW,TRIH)}
+  // реки v3: тинт берегов x маска x ширина потока (w1..3) x noise-вариант меандра
   for(const t of [T.GRASS,T.FOREST,T.ROCK,T.MTN])
     for(const orr of ['l','r'])
       for(let m=1;m<8;m++)
         for(let w=1;w<=3;w++)
           for(let v=0;v<2;v++){
-            p=place(14,16);paintRiverTri(ctx,p.x,p.y,orr,m,t,w,v);
-            reg('rt_'+t+'_'+orr+'_'+m+'_w'+w+'_v'+v,p.x,p.y,14,16);
+            const p=place(TRIW,TRIH);paintRiverTri(ctx,p.x,p.y,orr,m,t,w,v);
+            reg('rt_'+t+'_'+orr+'_'+m+'_w'+w+'_v'+v,p.x,p.y,TRIW,TRIH);
           }
   // гипсометрические пояса рельефа (L2..L5) и биом-тинты (степь/болотина)
   for(const L of [2,3,4,5])
     for(const orr of ['l','r'])
       for(let bits=1;bits<8;bits++){
-        p=place(TRIW,TRIH);paintReliefTri(ctx,p.x,p.y,orr,bits,L);
+        const p=place(TRIW,TRIH);paintReliefTri(ctx,p.x,p.y,orr,bits,L);
         reg('rl'+L+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
       }
   for(const bio of [BIO.STEPPE,BIO.SWAMP])
     for(const orr of ['l','r'])
       for(let bits=1;bits<8;bits++){
-        p=place(TRIW,TRIH);paintBiomeTri(ctx,p.x,p.y,orr,bits,bio);
+        const p=place(TRIW,TRIH);paintBiomeTri(ctx,p.x,p.y,orr,bits,bio);
         reg('bio'+bio+'_'+orr+'_'+bits,p.x,p.y,TRIW,TRIH);
       }
-  p=place(8,8);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,8,8);
-  p=place(10,12);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,10,12);
-  p=place(14,16);paintBridge(ctx,p.x,p.y);reg('bridge',p.x,p.y,14,16);
+  {let p=place(16,16);paintRiverMouth(ctx,p.x,p.y);reg('r_mouth',p.x,p.y,16,16);
+   p=place(20,24);paintWaterfall(ctx,p.x,p.y);reg('r_falls',p.x,p.y,20,24);
+   // мосты по осям дорог: вертикаль N-S и две диагонали (подъём/спуск вправо)
+   p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y,0,-1);reg('bridge_v',p.x,p.y,TRIW,TRIH);
+   p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y,7,-4);reg('bridge_ne',p.x,p.y,TRIW,TRIH);
+   p=place(TRIW,TRIH);paintBridge(ctx,p.x,p.y,7,4);reg('bridge_se',p.x,p.y,TRIW,TRIH)}
   for(const k of ['b_hut','b_house2','b_tent','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }
@@ -5418,7 +6427,6 @@ function buildAtlas(){
   if(ATLAS.cur.y+ATLAS.cur.rowH>ATLAS.H)console.warn('[Марка] АТЛАС ПЕРЕПОЛНЕН:',ATLAS.cur.y+ATLAS.cur.rowH,'>',ATLAS.H);
   S.atlasMs=performance.now()-t0;
 }
-
 /* ================= RENDER (browser only) ================= */
 let R=null;
 function makeBatch(){return {pos:[],uv:[],idx:[]}}
@@ -5607,7 +6615,13 @@ function buildRoads(){
       if(!S.road[a]||!S.road[c2])continue;
       const ax=a%S.W,ay=(a/S.W)|0,bx2=c2%S.W,by2=(c2/S.W)|0;
       const mx=(WXC(ax)+WXC(bx2))/2,my=(WYCC(ax,ay)+WYCC(bx2,by2))/2;
-      bQuad(b,mx-0.42,my-0.34,mx+0.42,my+0.34,SPR['bridge']);
+      // настил вдоль оси дороги между гексами: N-S либо одна из диагоналей
+      let key='bridge_v';
+      if(ax!==bx2){
+        const rise=(WYCC(bx2,by2)-WYCC(ax,ay))*(WXC(bx2)-WXC(ax))>0; // подъём вправо
+        key=rise?'bridge_ne':'bridge_se';
+      }
+      bQuad(b,mx-CW*0.5,my-0.5,mx+CW*0.5,my+0.5,SPR[key]);
     }
   }
   for(const pl of S.roadPlans)
@@ -5685,7 +6699,7 @@ function buildStatics(){
   }
   for(const L of S.lairs){
     if(L.dead)continue;
-    const spr=SPR['l_'+L.id],h=spr.h/16;
+    const spr=SPR['l_'+L.id],h=spr.h/32; // 32 px на гекс
     const cx=WXC(L.x),yb=WYCC(L.x,L.y)-0.5;
     bQuad(b,cx-0.5,yb,cx+0.5,yb+h,spr);
   }
@@ -5698,7 +6712,7 @@ function buildBuildings(){
   for(const bd of S.buildings){
     const spr=bd.built?((bd.type==='library'&&(bd.tier||1)>=2)?SPR['b_knowledge']:
       ((bd.type==='hut'&&(bd.tier||1)>=2)?SPR['b_house2']:SPR['b_'+bd.type])):SPR['b_site'];
-    const h=spr.h/16;
+    const h=spr.h/32; // 32 px на гекс
     const cx=WXC(bd.x),yb=WYCC(bd.x,bd.y)-0.5;
     bQuad(b,cx-0.5,yb,cx+0.5,yb+h,spr);
     if(bd.built&&(bd.ruined||bd.abandoned)){
@@ -5813,7 +6827,7 @@ function fillFx(){
     const i=idx(b.x,b.y);
     if(!S.visible[i]&&!S.explored[i]&&!S.revealAll)continue;
     const spr=SPR[sprKey];
-    const bh=(SPR['b_'+b.type]?SPR['b_'+b.type].h:16)/16;
+    const bh=(SPR['b_'+b.type]?SPR['b_'+b.type].h:32)/32;
     const cx=WXC(b.x),yb=WYCC(b.x,b.y)-0.5;
     const x0=cx-0.08,x1=cx+0.42;
     const y0=yb+bh-0.12,y1=y0+0.5;
