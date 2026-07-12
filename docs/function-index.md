@@ -156,7 +156,7 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 canvas-атлас: отрисовка тайлов/зданий/иконок, buildAtlas (browser only)
 
-`ATLAS` · `loadUnitImages()` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triCorners()` · `triBary()` · `triIns()` · `decorTri()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverTri()` · `paintReliefTri()` · `paintBiomeTri()` · `paintRiverMouth()` · `paintWaterfall()` · `paintBridge()` · `paintIcon()` · `buildAtlas()`
+`ATLAS` · `computeUnitCrops()` · `loadUnitImages()` · `reg()` · `outlineRegion()` · `vgradeRegion()` · `drawGrid()` · `TRIW` · `triCorners()` · `triBary()` · `triIns()` · `decorTri()` · `paintTriFull()` · `paintTriTransition()` · `paintRoadHex()` · `paintRiverTri()` · `paintReliefTri()` · `paintBiomeTri()` · `paintRiverMouth()` · `paintWaterfall()` · `paintBridge()` · `paintIcon()` · `buildAtlas()`
 
 ## src/20_render.js
 

@@ -1,7 +1,41 @@
 /* ================= ATLAS (browser only) =================
    Тайлы 28×32 на гекс (укрупнение мира ×2), здания 32px, юниты 16px
    (рисуются в полгекса — экранная плотность совпадает). */
-let ATLAS=null,SPR={},ICONS={},UNIT_IMGS=null;
+let ATLAS=null,SPR={},ICONS={},UNIT_IMGS=null,UNIT_CROPS=null;
+/* Кроп PNG-юнитов (v2.2): холсты PixelLab на 25-40% больше арта (запас под
+   размах анимаций; у разных персонажей 56/60/64px). Прозрачные поля не несём
+   в атлас: считаем bbox по альфе, ЕДИНЫЙ на группу «раса_анимация» (юнион по
+   всем кадрам и направлениям — иначе анимация дёргалась бы), якорь — низ bbox
+   (ноги) и центр холста по X. */
+function computeUnitCrops(imgs){
+  const cv=document.createElement('canvas');cv.width=64;cv.height=64;
+  const c2=cv.getContext('2d',{willReadFrequently:true});
+  const groups={};
+  for(const key in imgs){
+    const im=imgs[key];
+    c2.clearRect(0,0,64,64);
+    c2.drawImage(im,0,0);
+    const d=c2.getImageData(0,0,im.width,im.height).data;
+    let x0=im.width,y0=im.height,x1=-1,y1=-1;
+    for(let y=0;y<im.height;y++)for(let x=0;x<im.width;x++){
+      if(d[(y*im.width+x)*4+3]>8){
+        if(x<x0)x0=x;if(x>x1)x1=x;
+        if(y<y0)y0=y;if(y>y1)y1=y;
+      }
+    }
+    if(x1<0){x0=0;y0=0;x1=im.width-1;y1=im.height-1}
+    const g=key.split('_').slice(0,2).join('_'); // "race_anim"
+    const b=groups[g]||(groups[g]={x0:1e9,y0:1e9,x1:-1,y1:-1,cw:im.width,ch:im.height});
+    b.x0=Math.min(b.x0,x0);b.y0=Math.min(b.y0,y0);
+    b.x1=Math.max(b.x1,x1);b.y1=Math.max(b.y1,y1);
+  }
+  const out={};
+  for(const g in groups){
+    const b=groups[g];
+    out[g]={x:b.x0,y:b.y0,w:b.x1-b.x0+1,h:b.y1-b.y0+1,cw:b.cw,ch:b.ch};
+  }
+  return out;
+}
 /* PNG-спрайты юнитов (PixelLab, вшиты сборкой в UNIT_PNG): декодируем base64
    в Image ОДИН раз до boot() — buildAtlas синхронный и рисует уже готовые. */
 function loadUnitImages(){
@@ -22,7 +56,11 @@ function loadUnitImages(){
         rec[anim][slot].forEach((b,f)=>add(race+'_'+anim+'_'+slot+'_'+f,b));
     }
   }
-  return Promise.all(jobs).then(()=>{UNIT_IMGS=imgs;return imgs});
+  return Promise.all(jobs).then(()=>{
+    UNIT_IMGS=imgs;
+    UNIT_CROPS=computeUnitCrops(imgs);
+    return imgs;
+  });
 }
 function reg(name,x,y,w,h){
   SPR[name]={x,y,w,h,u0:x/ATLAS.W,u1:(x+w)/ATLAS.W,v1:1-y/ATLAS.H,v0:1-(y+h)/ATLAS.H};
@@ -524,13 +562,23 @@ function buildAtlas(){
   for(const k of ['b_hut','b_house2','b_tent','b_fisher','b_lumber','b_tavern','b_farm','b_mine','b_townhall','b_tower','b_port','b_guild','b_advguild','b_crafters','b_library','b_knowledge']){
     const sp=SPR[k];if(sp)outlineRegion(ctx,sp.x,sp.y,sp.w,sp.h);
   }
-  // PNG-юниты PixelLab (56x56, арт 32px): idle/walk/work x 6 гекс-сторон.
+  // PNG-юниты PixelLab (арт 32px): idle/walk/work x 6 гекс-сторон, в атлас
+  // кладём ОБРЕЗАННЫЙ bbox (кроп единый на группу — см. computeUnitCrops).
   // ASCII-гриды u_* выше остаются как фолбэк (headless/фейл декода).
   if(UNIT_IMGS)for(const key in UNIT_IMGS){
     const im=UNIT_IMGS[key];
-    const p2=place(im.width,im.height);
-    ctx.drawImage(im,p2.x,p2.y);
-    reg('up_'+key,p2.x,p2.y,im.width,im.height);
+    const c=UNIT_CROPS&&UNIT_CROPS[key.split('_').slice(0,2).join('_')];
+    if(c){
+      const p2=place(c.w,c.h);
+      ctx.drawImage(im,c.x,c.y,c.w,c.h,p2.x,p2.y,c.w,c.h);
+      reg('up_'+key,p2.x,p2.y,c.w,c.h);
+      const sp=SPR['up_'+key];
+      sp.cx=c.x;sp.cy=c.y;sp.cw=c.w;sp.chh=c.h;sp.canW=c.cw;sp.canH=c.ch;
+    }else{
+      const p2=place(im.width,im.height);
+      ctx.drawImage(im,p2.x,p2.y);
+      reg('up_'+key,p2.x,p2.y,im.width,im.height);
+    }
   }
   SPR['l_ruins']=SPR['f_6']; // логово «Древние руины» рисуется спрайтом фичи руин
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),

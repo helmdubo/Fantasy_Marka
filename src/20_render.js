@@ -453,13 +453,21 @@ function unitSprPick(race,moving,working,dirX,dirY,lastSlot,id){
   return spr?{spr,slot}:null; // null -> ASCII-фолбэк
 }
 const UNIT_SCALE={troll:1.5}; // тролль — здоровяк: в полтора роста остальных
-// квад PNG-юнита: холст 56px (арт 32px по центру), ноги ~на прежней базовой линии
+// квад PNG-юнита. Обрезанный спрайт (spr.cw есть): размер от ПИКСЕЛЯ АРТА
+// (0.95wu на 56px холста — одна плотность у всех, чей бы холст ни был),
+// якорь — низ bbox (ноги) на прежней базовой линии и центр холста по X.
 function pushUnitQuad(n,wx,wy,spr,scale){
   const s=scale||1;
-  const h=0.95*s,hw=0.475*s;
-  const y0=wy-0.44-0.214*h,y1=y0+h;
+  let x0,x1,y0,y1;
+  if(spr.cw){
+    const K=(0.95/56)*s;
+    x0=wx+(spr.cx-spr.canW/2)*K;x1=x0+spr.cw*K;
+    y0=wy-0.44;y1=y0+spr.chh*K;
+  }else{
+    const h=0.95*s,hw=0.475*s;
+    y0=wy-0.44-0.214*h;y1=y0+h;x0=wx-hw;x1=wx+hw;
+  }
   const o=n*12,uo=n*8;
-  const x0=wx-hw,x1=wx+hw;
   R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
   R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
   R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
