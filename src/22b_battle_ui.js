@@ -10,19 +10,66 @@ function btUnitGrid(c){
   const M={GOBLIN_MAP,GOBSHAMAN_MAP,RAIDER_MAP,SKELETON_MAP,NECRO_U_MAP,BEAST_MAP,FIREATR_MAP,MAGMAATR_MAP};
   return {grid:G[c.def.grid],map:M[c.def.map]};
 }
+/* PNG-арт боя (v2.3): idle-портрет + покадровые attack/hurt/death.
+   flip=1 у врагов: кадры сгенерированы в SE (прайор «атака вправо»),
+   на экране зеркалятся — враг смотрит влево, замах уходит в героев. */
+function btArtOf(c){
+  if(!BT_IMGS)return null;
+  const a=BT_IMGS[c.side==='party'?(c.uref&&c.uref.race):c.key];
+  return (a&&a.idle)?a:null;
+}
+function drawBtUnit(c){
+  const cv=c._cv,ctx=cv.getContext('2d');
+  ctx.imageSmoothingEnabled=false;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const a=c._anim,art=c._art;
+  let im=art.idle;
+  if(a.name!=='idle'&&art[a.name])
+    im=art[a.name][Math.min(a.f,art[a.name].length-1)]||art.idle;
+  if(!im)return;
+  const dx=((cv.width-im.width)/2)|0,dy=cv.height-im.height;
+  if(art.flip){ctx.save();ctx.translate(cv.width,0);ctx.scale(-1,1);ctx.drawImage(im,dx,dy);ctx.restore()}
+  else ctx.drawImage(im,dx,dy);
+}
+function btPlay(c,name){
+  if(!c._art||!c._art[name])return;
+  if(c._anim&&c._anim.name==='death')return; // труп не дёргаем
+  c._anim={name,f:0};drawBtUnit(c);
+}
+function btAnimTick(bt){
+  for(const c of bt.party.concat(bt.enemies)){
+    if(!c._art||c._anim.name==='idle')continue;
+    const len=(c._art[c._anim.name]||[]).length;
+    c._anim.f++;
+    if(c._anim.f>=len){
+      if(c._anim.name==='death')c._anim.f=len-1; // последний кадр = труп
+      else c._anim={name:'idle',f:0};
+    }
+    drawBtUnit(c);
+  }
+}
 function btUnitCard(c){
   const div=document.createElement('div');
   div.className='bt-unit';
-  const cv=document.createElement('canvas');cv.width=16;cv.height=16;
-  const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
-  const g=btUnitGrid(c);
-  if(g.grid)drawGrid(ctx,0,0,g.grid,g.map);
-  if(c.side==='enemy'){ // враг смотрит влево
-    const flip=document.createElement('canvas');flip.width=16;flip.height=16;
-    const fx=flip.getContext('2d');fx.imageSmoothingEnabled=false;
-    fx.translate(16,0);fx.scale(-1,1);fx.drawImage(cv,0,0);
-    cv.getContext('2d').clearRect(0,0,16,16);
-    cv.getContext('2d').drawImage(flip,0,0);
+  const cv=document.createElement('canvas');
+  const art=btArtOf(c);
+  if(art){
+    cv.width=64;cv.height=64;
+    cv.style.width='64px';cv.style.height='64px';
+    c._art=art;c._anim={name:'idle',f:0};c._cv=cv;
+    drawBtUnit(c);
+  }else{ // фолбэк: старые ASCII-гриды
+    cv.width=16;cv.height=16;
+    const ctx=cv.getContext('2d');ctx.imageSmoothingEnabled=false;
+    const g=btUnitGrid(c);
+    if(g.grid)drawGrid(ctx,0,0,g.grid,g.map);
+    if(c.side==='enemy'){ // враг смотрит влево
+      const flip=document.createElement('canvas');flip.width=16;flip.height=16;
+      const fx=flip.getContext('2d');fx.imageSmoothingEnabled=false;
+      fx.translate(16,0);fx.scale(-1,1);fx.drawImage(cv,0,0);
+      cv.getContext('2d').clearRect(0,0,16,16);
+      cv.getContext('2d').drawImage(flip,0,0);
+    }
   }
   div.appendChild(cv);
   const nm=document.createElement('div');nm.className='nm';nm.textContent=c.name;div.appendChild(nm);
@@ -48,6 +95,12 @@ function btAct(bt,att,foes){
   att._struck=true;
   btStrike(bt,att,foes,tempo);
   att.cd=0;
+  // покадровые анимации: атакующий машет, цель дёргается/падает замертво
+  btPlay(att,'attack');
+  for(const e of bt.events)if(e.t==='hit'){
+    const t=bt.party.concat(bt.enemies).find(x=>x.name===e.b);
+    if(t)btPlay(t,e.kill?'death':'hurt');
+  }
   if(!btAlive(bt.enemies).length){bt.over=true;bt.win=true}
   else{
     const alive=btAlive(bt.party);
@@ -135,6 +188,7 @@ function openBattleScreen(bt,done){
         for(const h of bt.party)
           if(h.hp>0)h.cd=Math.min(h.cdMax,h.cd+dt);
         if(bt.elapsed>90&&!bt.over){bt.over=true;bt.retreat=true} // затяжной бой — отход
+        btAnimTick(bt); // покадровые анимации карточек (~10 fps)
         btRender(bt);
       }
     }

@@ -150,7 +150,7 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 АВТОГЕНЕРИРУЕТСЯ build.mjs из assets/pixellab/characters: base64 PNG юнитов (idle/walk/work x 6 гекс-сторон)
 
-`UNIT_PNG`
+`UNIT_PNG` · `BT_PNG` · `BLD_PNG` · `SHIP_PNG`
 
 ## src/19_atlas.js
 
@@ -180,7 +180,7 @@ DOM UI: панели, дебаг, пати-окно, инспектор, updateU
 
 экран боя (п.11, browser only): карточки рядов, лог, отступление
 
-`BTUI` · `btUnitGrid()` · `btUnitCard()` · `btAct()` · `btRender()` · `openBattleScreen()`
+`BTUI` · `btUnitGrid()` · `btArtOf()` · `drawBtUnit()` · `btPlay()` · `btAnimTick()` · `btUnitCard()` · `btAct()` · `btRender()` · `openBattleScreen()`
 
 ## src/23_main.js
 

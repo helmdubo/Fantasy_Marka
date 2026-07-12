@@ -222,6 +222,28 @@ Wang-тайлсеты из части 1b — только референсы (к
   старый мгновенный stepBattleRound — ядро общее. Дальше — эволюция в
   пошаговый режим с решениями игрока.
 
+### Часть 4: полный арт-пак PixelLab + анимированный бой (v2.3)
+
+- **Враги боя** (7: goblin/gobshaman/skeleton/necromancer/beast/fireatr/
+  magmaatr): v3-персонажи + attack/hurt/death ТОЛЬКО в south-east
+  (`assets/pixellab/enemies/<key>/`). ВАЖНЫЙ УРОК: у модели прайор «атака
+  вправо» — SW-анимации махали за спину; генерим SE и ЗЕРКАЛИМ при выводе
+  (флаг flip в BT_PNG). bandit = raider (его SW-боёвка, без флипа).
+  У beast (quadruped, шаблон dog) hurt — v3-кастом (taking-punch не lёг).
+- **Экран боя анимирован**: карточки рисуют PNG-кадры (idle/attack/hurt/
+  death) в canvas 64px; атака проигрывается при ударе, hurt у цели, death
+  остаётся на последнем кадре (труп). Фолбэк — старые ASCII-гриды.
+  Данные: BT_PNG/BT_IMGS (мимо атласа), сборка в genUnitsPng.
+- **Здания**: 18 map-объектов одного стиля 32px (`assets/pixellab/buildings/`),
+  в атласе перекрывают гриды (b_*). Слабые: mine (мелковата), port —
+  кандидаты на перегенерацию. Map-объекты PixelLab живут 8 часов — качать
+  сразу после генерации.
+- **Shade** — теневой налётчик набегов: только walk×6 (characters/shade);
+  тёмные логова (graves/necro/den/ruins) шлют shade, людские — raider.
+- **Корабль** (`assets/pixellab/ship.png`, 40×32 side view): ship0 + ship1
+  (дизеринг-фейд) в атласе из PNG.
+- index.html ≈ 2.0MB (embed 1.6MB). Расход PixelLab: 290 генераций из 2000.
+
 ## Крупные правила мира
 
 - Масштаб: карта 64×64, гексы визуально ×2 (`ZOOMS [4,6,8]`), юниты рисуются

@@ -58,9 +58,11 @@ export const MANIFEST = [
 // Файл генерируется при каждой сборке; в репо коммитится вместе с index.html.
 function genUnitsPng() {
   const base = path.join(ROOT, 'assets', 'pixellab', 'characters');
-  const RACES = ['human', 'dwarf', 'elf', 'troll', 'raider'];
+  const RACES = ['human', 'dwarf', 'elf', 'troll', 'raider', 'shade'];
   const SLOTS = { n: 'north', s: 'south', ne: 'north-east', nw: 'north-west', se: 'south-east', sw: 'south-west' };
   const b64 = (p) => fs.readFileSync(p).toString('base64');
+  const frames = (ad) => fs.readdirSync(ad).filter(f => f.endsWith('.png')).sort()
+    .map(f => b64(path.join(ad, f)));
   const out = {};
   for (const r of RACES) {
     const dir = path.join(base, r);
@@ -73,17 +75,54 @@ function genUnitsPng() {
     for (const anim of ['walk', 'work']) {
       for (const [slot, full] of Object.entries(SLOTS)) {
         const ad = path.join(dir, 'animations', anim, full);
-        if (!fs.existsSync(ad)) continue;
-        rec[anim][slot] = fs.readdirSync(ad).filter(f => f.endsWith('.png')).sort()
-          .map(f => b64(path.join(ad, f)));
+        if (fs.existsSync(ad)) rec[anim][slot] = frames(ad);
       }
     }
     if (!Object.keys(rec.work).length) delete rec.work;
     out[r] = rec;
   }
-  const js = '/* АВТОГЕНЕРИРОВАНО build.mjs из assets/pixellab/characters — НЕ ПРАВИТЬ РУКАМИ.\n' +
-    '   base64 PNG юнитов: idle (6 гекс-ротаций) + кадры walk/work по направлениям. */\n' +
-    'const UNIT_PNG=' + JSON.stringify(out) + ';\n';
+  // Боевые кадры (экран боя): герои — SE (смотрят вправо), враги — SE,
+  // зеркалятся при выводе (у модели прайор «атака вправо»); raider-как-bandit — SW.
+  const bt = {};
+  const btEntry = (dir, side) => {
+    const rec = {};
+    const rot = path.join(dir, side === 'south-east' ? 'se.png' : 'sw.png');
+    if (fs.existsSync(rot)) rec.idle = b64(rot);
+    for (const anim of ['attack', 'hurt', 'death']) {
+      const ad = path.join(dir, 'animations', anim, side);
+      if (fs.existsSync(ad)) rec[anim] = frames(ad);
+    }
+    return Object.keys(rec).length ? rec : null;
+  };
+  for (const r of ['human', 'dwarf', 'elf', 'troll']) {
+    const e = btEntry(path.join(base, r), 'south-east');
+    if (e) bt[r] = e;
+  }
+  { const e = btEntry(path.join(base, 'raider'), 'south-west'); if (e) bt.bandit = e; }
+  const edir = path.join(ROOT, 'assets', 'pixellab', 'enemies');
+  if (fs.existsSync(edir))
+    for (const k of fs.readdirSync(edir)) {
+      const d = path.join(edir, k);
+      if (!fs.statSync(d).isDirectory()) continue;
+      const e = btEntry(d, 'south-east');
+      if (e) { e.flip = 1; bt[k] = e; } // SE-кадры зеркалятся: враг смотрит влево
+    }
+  // Здания (один стиль, 32px) и корабль
+  const bld = {};
+  const bdir = path.join(ROOT, 'assets', 'pixellab', 'buildings');
+  if (fs.existsSync(bdir))
+    for (const f of fs.readdirSync(bdir))
+      if (f.endsWith('.png')) bld[f.replace('.png', '')] = b64(path.join(bdir, f));
+  const shipP = path.join(ROOT, 'assets', 'pixellab', 'ship.png');
+  const ship = fs.existsSync(shipP) ? b64(shipP) : null;
+  const js = '/* АВТОГЕНЕРИРОВАНО build.mjs из assets/pixellab — НЕ ПРАВИТЬ РУКАМИ.\n' +
+    '   UNIT_PNG: юниты карты (idle 6 ротаций + walk/work). BT_PNG: боевые кадры\n' +
+    '   (idle/attack/hurt/death, одна сторона; flip=1 — зеркалить при выводе).\n' +
+    '   BLD_PNG: здания 32px. SHIP_PNG: корабль. */\n' +
+    'const UNIT_PNG=' + JSON.stringify(out) + ';\n' +
+    'const BT_PNG=' + JSON.stringify(bt) + ';\n' +
+    'const BLD_PNG=' + JSON.stringify(bld) + ';\n' +
+    'const SHIP_PNG=' + JSON.stringify(ship) + ';\n';
   fs.writeFileSync(path.join(SRC, '18c_units_png.js'), js);
   return js.length;
 }

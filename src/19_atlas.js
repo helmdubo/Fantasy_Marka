@@ -1,7 +1,8 @@
 /* ================= ATLAS (browser only) =================
    Тайлы 28×32 на гекс (укрупнение мира ×2), здания 32px, юниты 16px
    (рисуются в полгекса — экранная плотность совпадает). */
-let ATLAS=null,SPR={},ICONS={},UNIT_IMGS=null,UNIT_CROPS=null;
+let ATLAS=null,SPR={},ICONS={},UNIT_IMGS=null,UNIT_CROPS=null,
+  BT_IMGS=null,BLD_IMGS=null,SHIP_IMG=null;
 /* Кроп PNG-юнитов (v2.2): холсты PixelLab на 25-40% больше арта (запас под
    размах анимаций; у разных персонажей 56/60/64px). Прозрачные поля не несём
    в атлас: считаем bbox по альфе, ЕДИНЫЙ на группу «раса_анимация» (юнион по
@@ -56,9 +57,40 @@ function loadUnitImages(){
         rec[anim][slot].forEach((b,f)=>add(race+'_'+anim+'_'+slot+'_'+f,b));
     }
   }
-  return Promise.all(jobs).then(()=>{
+  // боевые кадры (экран боя рисует их напрямую в canvas карточек, мимо атласа)
+  const bt={},btJobs=[];
+  const addBt=(obj,prop,b)=>{btJobs.push(new Promise((res)=>{
+    const im=new Image();
+    im.onload=()=>{obj[prop]=im;res()};im.onerror=()=>res();
+    im.src='data:image/png;base64,'+b;
+  }))};
+  if(typeof BT_PNG!=='undefined')for(const k in BT_PNG){
+    const src=BT_PNG[k],rec={flip:!!src.flip};
+    if(src.idle)addBt(rec,'idle',src.idle);
+    for(const anim of ['attack','hurt','death']){
+      if(!src[anim])continue;
+      rec[anim]=new Array(src[anim].length);
+      src[anim].forEach((b,f)=>addBt(rec[anim],f,b));
+    }
+    bt[k]=rec;
+  }
+  // здания и корабль
+  const bld={},bldJobs=[];
+  if(typeof BLD_PNG!=='undefined')for(const k in BLD_PNG)
+    bldJobs.push(new Promise((res)=>{
+      const im=new Image();
+      im.onload=()=>{bld[k]=im;res()};im.onerror=()=>res();
+      im.src='data:image/png;base64,'+BLD_PNG[k];
+    }));
+  const shipJob=(typeof SHIP_PNG!=='undefined'&&SHIP_PNG)?new Promise((res)=>{
+    const im=new Image();
+    im.onload=()=>{SHIP_IMG=im;res()};im.onerror=()=>res();
+    im.src='data:image/png;base64,'+SHIP_PNG;
+  }):Promise.resolve();
+  return Promise.all(jobs.concat(btJobs,bldJobs,[shipJob])).then(()=>{
     UNIT_IMGS=imgs;
     UNIT_CROPS=computeUnitCrops(imgs);
+    BT_IMGS=bt;BLD_IMGS=bld;
     return imgs;
   });
 }
@@ -580,8 +612,29 @@ function buildAtlas(){
       reg('up_'+key,p2.x,p2.y,im.width,im.height);
     }
   }
+  // PNG-здания PixelLab (один стиль, 32px): перекрывают ASCII-гриды выше;
+  // гриды остаются фолбэком, если PNG не декодировался
+  if(BLD_IMGS)for(const k in BLD_IMGS){
+    const im=BLD_IMGS[k];
+    const p2=place(im.width,im.height);
+    ctx.drawImage(im,p2.x,p2.y);
+    reg('b_'+k,p2.x,p2.y,im.width,im.height);
+  }
+  // корабль PixelLab: целый + «затухающий» для дальнего плеча рейса
+  if(SHIP_IMG){
+    let p2=place(SHIP_IMG.width,SHIP_IMG.height);
+    ctx.drawImage(SHIP_IMG,p2.x,p2.y);
+    reg('ship0',p2.x,p2.y,SHIP_IMG.width,SHIP_IMG.height);
+    p2=place(SHIP_IMG.width,SHIP_IMG.height);
+    ctx.drawImage(SHIP_IMG,p2.x,p2.y);
+    const dImg=ctx.getImageData(p2.x,p2.y,SHIP_IMG.width,SHIP_IMG.height);
+    for(let y2=0;y2<SHIP_IMG.height;y2++)for(let x2=0;x2<SHIP_IMG.width;x2++)
+      if((x2+y2)&1)dImg.data[(y2*SHIP_IMG.width+x2)*4+3]=0; // дизеринг-прозрачность
+    ctx.putImageData(dImg,p2.x,p2.y);
+    reg('ship1',p2.x,p2.y,SHIP_IMG.width,SHIP_IMG.height);
+  }
   SPR['l_ruins']=SPR['f_6']; // логово «Древние руины» рисуется спрайтом фичи руин
-  SPR['b_tradepost']=SPR['b_tradepost']||SPR['b_guild']; // v2.3: до интеграции PNG-здания
+  SPR['b_tradepost']=SPR['b_tradepost']||SPR['b_guild']; // фолбэк, если PNG-здания нет
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),
     stone:paintIcon('stone'),gems:paintIcon('gems'),pop:paintIcon('pop'),ammo:paintIcon('ammo')};
   if(ATLAS.cur.y+ATLAS.cur.rowH>ATLAS.H)console.warn('[Марка] АТЛАС ПЕРЕПОЛНЕН:',ATLAS.cur.y+ATLAS.cur.rowH,'>',ATLAS.H);

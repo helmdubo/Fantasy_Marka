@@ -525,11 +525,14 @@ function fillUnits(alpha){
     const x=lerp(w.px,w.x,alpha),y=lerp(w.py,w.y,alpha);
     const mdx=w.x-w.px,mdy=w.y-w.py;
     const moving=Math.abs(mdx)+Math.abs(mdy)>0.001;
+    // v2.3: тёмные логова шлют теневых налётчиков (shade), людские — разбойников
+    const L=S.lairs[w.li];
+    const wrace=(L&&{graves:1,necro:1,den:1,ruins:1}[L.id])?'shade':'raider';
     for(let k=0;k<Math.min(w.size,3);k++){
       if(n>=96)break;
       const ox=(k===1?-0.35:(k===2?0.35:0)),oy=(k>0?0.25:0);
       const wx=x*CW+ox,wy=(S.H-y)-zig(x-0.5)+oy;
-      const pick=unitSprPick('raider',moving,false,mdx,mdy,w.sprSlot,k);
+      const pick=unitSprPick(wrace,moving,false,mdx,mdy,w.sprSlot,k);
       if(pick){
         w.sprSlot=pick.slot;
         pushUnitQuad(n,wx,wy,pick.spr);
@@ -588,7 +591,8 @@ function fillUnits(alpha){
     const wx=sh.x*CW,wy=(S.H-sh.y)-zig(sh.x-0.5);
     const bob=0.06*Math.sin(S.time*4+sh.x);
     const o=n*12,uo=n*8;
-    const x0=wx-0.34,x1=wx+0.34,y0=wy-0.4+bob,y1=wy+0.28+bob;
+    // PNG-корабль 40x32: держим пропорции (0.68x0.54wu)
+    const x0=wx-0.34,x1=wx+0.34,y0=wy-0.33+bob,y1=wy+0.21+bob;
     R.uPos[o]=x0;R.uPos[o+1]=y0;R.uPos[o+2]=0;
     R.uPos[o+3]=x1;R.uPos[o+4]=y0;R.uPos[o+5]=0;
     R.uPos[o+6]=x1;R.uPos[o+7]=y1;R.uPos[o+8]=0;
