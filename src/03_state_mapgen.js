@@ -177,7 +177,7 @@ function genFeatures(){
   }
 }
 function genLairs(){
-  for(const def of LAIR_DEFS){
+  for(const def of LAIR_DEFS)for(let k=0;k<(def.n||1);k++){
     let placed=false;
     for(let relax=0;relax<3&&!placed;relax++){
       for(let tryn=0;tryn<600&&!placed;tryn++){

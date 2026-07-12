@@ -102,19 +102,19 @@ job pool: rebuildJobs, pick/assign/release, harvestCycle, дороги, complete
 
 автостроитель: siteOk, settleThink, research, стартовые площадки, апгрейды
 
-`countB()` · `countLive()` · `countActive()` · `houseCapOf()` · `housingCap()` · `tryUpgradeHut()` · `NEAR_ROAD_TYPES` · `influenceAnchors()` · `inInfluence()` · `siteOk()` · `engineTarget()` · `researchNext()` · `typeUnlocked()` · `researchCycle()` · `tryLibraryTier2()` · `stockWorld()` · `pendingConstructionNeed()` · `stockWorldAvailable()` · `activeConstructionCount()` · `constructionCap()` · `costOf()` · `canPayWorld()` · `resScore()` · `PROD_TYPES` · `withBridgedPass()` · `tryPlace()` · `nearestRoadTarget()` · `buildRoad()` · `finishBuilding()` · `forestInInfluence()` · `anySite()` · `bestSiteScore()` · `constructionOpen()` · `tryPlaceIfOpen()` · `settleThink()` · `tryUpgrade()`
+`countB()` · `countLive()` · `countActive()` · `houseCapOf()` · `housingCap()` · `tryUpgradeHut()` · `NEAR_ROAD_TYPES` · `influenceAnchors()` · `inInfluence()` · `siteOk()` · `engineTarget()` · `researchNext()` · `typeUnlocked()` · `researchCycle()` · `tryLibraryTier2()` · `stockWorld()` · `pendingConstructionNeed()` · `stockWorldAvailable()` · `activeConstructionCount()` · `constructionCap()` · `costOf()` · `canPayWorld()` · `resScore()` · `PROD_TYPES` · `withBridgedPass()` · `tryPlace()` · `nearestRoadTarget()` · `buildRoad()` · `finishBuilding()` · `forestInInfluence()` · `anySite()` · `bestSiteScore()` · `constructionOpen()` · `tryPlaceIfOpen()` · `settleThink()` · `towerPopNeed()` · `towerPlaceable()` · `togglePlaceTower()` · `tryPlaceTowerAt()` · `tryUpgrade()`
 
 ## src/13_heroes_pop.js
 
 герои (makeHero, слоты пати), иммиграция/отток, крафт и покупка снаряжения
 
-`NAME_SYL` · `heroName()` · `makeHero()` · `heroCount()` · `slotOf()` · `slotReady()` · `readySlots()` · `activeSlot()` · `formSlot()` · `disbandSlot()` · `breakSlotByDeath()` · `freeHeroes()` · `arriveSettler()` · `leaveSettler()` · `buyGear()` · `craftDaily()`
+`NAME_SYL` · `heroName()` · `makeHero()` · `addHeroXp()` · `heroCount()` · `slotOf()` · `slotReady()` · `readySlots()` · `activeSlot()` · `formSlot()` · `disbandSlot()` · `breakSlotByDeath()` · `freeHeroes()` · `arriveSettler()` · `leaveSettler()` · `buyGear()` · `craftDaily()`
 
 ## src/14_port_trade.js
 
 порт: корабли, автоимпорт; ежедневная торговля tradeDaily; сквоттеры
 
-`shipHold()` · `portImportNeed()` · `goldLoaded()` · `sailReady()` · `returnPortShip()` · `startPortSail()` · `orderShip()` · `launchShip()` · `tradeDaily()` · `SQUATS` · `squatDaily()`
+`shipHold()` · `portImportNeed()` · `goldLoaded()` · `sailReady()` · `returnPortShip()` · `startPortSail()` · `orderShip()` · `launchShip()` · `tradeDaily()` · `tradepostDaily()` · `SQUATS` · `squatDaily()`
 
 ## src/15_raids.js
 

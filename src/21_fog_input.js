@@ -223,9 +223,16 @@ function updatePinOutline(){
 }
 function pickPin(mx,my){
   // фаза scout: тап по карте выбирает место ратуши
+  // (фикс: screenToCell возвращает {cx,cy}, а не {x,y} — тап не срабатывал)
   if(S.phase==='scout'){
     const c=screenToCell(mx,my);
-    if(c&&inMap(c.x,c.y))placeTownhall(c.x,c.y);
+    if(c&&inMap(c.cx,c.cy))placeTownhall(c.cx,c.cy);
+    return;
+  }
+  // режим ручной установки вышки (v2.3): тап по клетке ставит фундамент
+  if(S.placeMode==='tower'){
+    const c=screenToCell(mx,my);
+    if(c&&inMap(c.cx,c.cy))tryPlaceTowerAt(c.cx,c.cy);
     return;
   }
   const {cx,cy}=screenToCell(mx,my);

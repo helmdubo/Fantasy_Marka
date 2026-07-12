@@ -101,7 +101,7 @@ function onNewDay(){
     else if(b.type==='library')consumeBuildingUpkeep(b,CFG.UPKEEP.libraryDaily,'паёк книжников');
   }
   brewDaily();
-  tradeDaily();
+  tradeDaily();tradepostDaily();
   craftDaily();
   S.hungryDays=S.hungry?S.hungryDays+1:0;
   if(S.phase!=='scout'&&!S.hungry&&S.day>=4&&housingCap()-S.settlers.length>=1&&bandIdx('food')>=2){

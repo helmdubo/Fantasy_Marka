@@ -148,6 +148,10 @@ input[type=text]{background:#171209;border:2px solid var(--edge);color:var(--tx)
         <button id="spd2">×2</button>
         <button id="spd4">×4</button>
       </div>
+      <div class="ptitle">Указы</div>
+      <div id="decrees">
+        <button id="btnTower">🗼 Вышка</button>
+      </div>
       <div class="ptitle">Новый мир</div>
       <div id="seedbox">
         <input type="text" id="seed" placeholder="сид">
@@ -228,6 +232,11 @@ const CFG={
     {id:'ward',name:'Оберег горного сердца',atk:0,hp:6,gems:2,price:14},
     {id:'rod',name:'Жезл граней',atk:3,hp:0,gems:3,price:22},
     {id:'aegis',name:'Эгида глубин',atk:0,hp:10,gems:3,price:24}],
+  // v2.3: простое оружие — куёт ремесленник из дерева/камня (без самоцветов)
+  WEAPONS:[
+    {id:'sword',name:'Кованый меч',atk:1,hp:0,cost:{wood:2,stone:3},price:8},
+    {id:'waraxe',name:'Боевой топор',atk:2,hp:0,cost:{wood:3,stone:5},price:12},
+    {id:'pike',name:'Пика со щитком',atk:1,hp:3,cost:{wood:5,stone:2},price:10}],
   CRAFT_EVERY:3,
   STAGES:{tower:['Двор','Залы','Вершина'],camp:['Частокол','Шатры'],
     cliff:['Тропа','Гнездо'],graves:['Ограда','Склепы','Алтарь'],
@@ -243,17 +252,18 @@ const CFG={
     CLSW:{dwarf:['tank','bruiser'],elf:['mage','bruiser'],troll:['tank','tank','bruiser'],human:['tank','bruiser','mage','support']},
     THIEF:{human:0.15,dwarf:0.10,elf:0.25,troll:0.08}}, TOWER_SIGHT:2, ROAD_SPEED:1.25,
   VISION_BLD:2, INFLUENCE:12, TOWER_INFLUENCE:7, FEAR_R:3, SCOUT_R:12, // вышка: 12*0.6≈7 (−40%)
+  TOWER_POP_STEP:6, // v2.3: n-я вышка (ставит игрок) требует n*6 жителей
   THRIFT:{human:1.0,dwarf:1.5,elf:0.9,troll:0.6},
   LVL_NAMES:['Нет','Скудно','Хватает','Много','Избыток'],
   LVL_COLORS:['#d05a4e','#d0894e','#c9b458','#8fbf5a','#eec658'],
   FOOD_DAYS:[1,3,7,14],
   BANDS:{wood:[1,12,30,70],stone:[1,12,36,100],gems:[1,2,5,10]},
   WORK:{build:4,clear:5,ruins:6,patrol:3,pave:2,harvest:3},
-  COSTS:{hut:{wood:6},farm:{wood:6},fisher:{wood:8},lumber:{wood:8},mine:{wood:8},tavern:{wood:14,stone:8,food:4},tower:{wood:8,food:4},port:{wood:20,stone:14},guild:{wood:8,stone:6},advguild:{wood:12,stone:10},crafters:{wood:14,stone:18,gems:1},library:{wood:26,stone:18}},
-  GATE:{hut:{wood:1},farm:{wood:1},fisher:{wood:1},lumber:{wood:1},mine:{wood:1},tavern:{wood:2,stone:1,food:1},tower:{wood:2,food:1},port:{wood:2,stone:1},guild:{wood:1,stone:1},advguild:{wood:2,stone:1},crafters:{wood:2,stone:2,gems:1},library:{wood:2,stone:2}},
+  COSTS:{hut:{wood:6},farm:{wood:6},fisher:{wood:8},lumber:{wood:8},mine:{wood:8},tavern:{wood:14,stone:8,food:4},tower:{wood:8,food:4},port:{wood:20,stone:14},guild:{wood:8,stone:6},advguild:{wood:12,stone:10},crafters:{wood:14,stone:18,gems:1},library:{wood:26,stone:18},tradepost:{wood:10,stone:4}},
+  GATE:{hut:{wood:1},farm:{wood:1},fisher:{wood:1},lumber:{wood:1},mine:{wood:1},tavern:{wood:2,stone:1,food:1},tower:{wood:2,food:1},port:{wood:2,stone:1},guild:{wood:1,stone:1},advguild:{wood:2,stone:1},crafters:{wood:2,stone:2,gems:1},library:{wood:2,stone:2},tradepost:{wood:1}},
   BUILD_WORK:3, BUILD_EVERY:1,
   HOUSE:{townhall:3,hut:2,tavern:1,tent:4},
-  BNAME:{townhall:'Ратуша',tent:'Палатка переселенцев',hut:'Лачуга',farm:'Ферма',fisher:'Рыбацкий причал',lumber:'Лесопилка',mine:'Шахта',tavern:'Таверна',tower:'Дозорная вышка',port:'Порт',guild:'Торговая гильдия',advguild:'Гильдия авантюристов',crafters:'Гильдия ремесленников',library:'Библиотека'},
+  BNAME:{townhall:'Ратуша',tent:'Палатка переселенцев',hut:'Лачуга',farm:'Ферма',fisher:'Рыбацкий причал',lumber:'Лесопилка',mine:'Шахта',tavern:'Таверна',tower:'Дозорная вышка',port:'Порт',guild:'Торговая гильдия',advguild:'Гильдия авантюристов',crafters:'Гильдия ремесленников',library:'Библиотека',tradepost:'Торговый пост'},
   RUINS_GOLD:8,
   UPKEEP:{mine:{wood:0.2}, portSail:{wood:1}, portTradeWoodPerBatch:0.25, towerDaily:{food:1,wood:0.25}, libraryDaily:{food:1}},
   // v2.1: локальные припасы зданий. Расход идёт из b.store; пополняет складской
@@ -281,13 +291,14 @@ const FNAME=['','Ягодник','Бурелом (завал)','Каменная
 const RACES=['human','dwarf','elf','troll'];
 const RNAME={human:'Человек',dwarf:'Гном',elf:'Эльф',troll:'Тролль'};
 const ACTNAME={idle:'без дела',goto:'в пути',work:'работает'};
+// v2.3: n — сколько таких логовищ сеять (карте нужно больше энкаунтеров)
 const LAIR_DEFS=[
-  {id:'tower', name:'Заброшенная башня', tier:1, ring:[12,20], terr:[T.GRASS]},
-  {id:'camp',  name:'Лагерь в чащобе',   tier:1, ring:[13,22], terr:[T.FOREST]},
-  {id:'den',   name:'Звериное логово',   tier:1, ring:[11,20], terr:[T.FOREST]}, // п.11: лесной энкаунтер со зверями
-  {id:'cliff', name:'Скалистый утёс',    tier:2, ring:[20,30], terr:[T.ROCK,T.GRASS]},
-  {id:'graves',name:'Заброшенное кладбище',tier:2, ring:[20,30], terr:[T.GRASS]},
-  {id:'necro', name:'Башня некроманта',  tier:3, ring:[32,90], terr:[T.GRASS,T.ROCK]},
+  {id:'tower', name:'Заброшенная башня', tier:1, ring:[12,20], terr:[T.GRASS], n:2},
+  {id:'camp',  name:'Лагерь в чащобе',   tier:1, ring:[13,22], terr:[T.FOREST], n:2},
+  {id:'den',   name:'Звериное логово',   tier:1, ring:[11,20], terr:[T.FOREST], n:2}, // п.11: лесной энкаунтер со зверями
+  {id:'cliff', name:'Скалистый утёс',    tier:2, ring:[20,30], terr:[T.ROCK,T.GRASS], n:2},
+  {id:'graves',name:'Заброшенное кладбище',tier:2, ring:[20,30], terr:[T.GRASS], n:2},
+  {id:'necro', name:'Башня некроманта',  tier:3, ring:[32,90], terr:[T.GRASS,T.ROCK], n:1},
 ];
 
 /* ================= CORE ================= */
@@ -1522,7 +1533,7 @@ function genFeatures(){
   }
 }
 function genLairs(){
-  for(const def of LAIR_DEFS){
+  for(const def of LAIR_DEFS)for(let k=0;k<(def.n||1);k++){
     let placed=false;
     for(let relax=0;relax<3&&!placed;relax++){
       for(let tryn=0;tryn<600&&!placed;tryn++){
@@ -3113,7 +3124,7 @@ function tryUpgradeHut(){
   S.dbgBuilder='дом (тир 2)';
   return true;
 }
-const NEAR_ROAD_TYPES={hut:1,tavern:1,advguild:1,guild:1,crafters:1};
+const NEAR_ROAD_TYPES={hut:1,tavern:1,advguild:1,guild:1,crafters:1,tradepost:1};
 // v2.1: зона застройки = радиус ратуши (INFLUENCE) + радиусы действующих дозорных
 // вышек (TOWER_INFLUENCE, на 40% меньше). Экспансия — цепочкой вышек к фронтиру.
 function influenceAnchors(){
@@ -3401,7 +3412,7 @@ function finishBuilding(b){
   b.built=true;S.bldDirty=true;
   S.road[idx(b.x,b.y)]=1;S.roadDirty=true;
   recomputeRoadConn();
-  if(b.type==='farm'||b.type==='fisher'||b.type==='lumber'||b.type==='mine'||b.type==='tower'||b.type==='port'||b.type==='guild'||b.type==='library'){
+  if(b.type==='farm'||b.type==='fisher'||b.type==='lumber'||b.type==='mine'||b.type==='tower'||b.type==='port'||b.type==='guild'||b.type==='library'||b.type==='tradepost'){
     buildRoad(b);
     log('🛤 Проложена дорога: '+CFG.BNAME[b.type].toLowerCase()+' — ратуша.');
   }
@@ -3530,9 +3541,8 @@ function settleThink(){
     if(put(t)){S.rebuildCd[t]=S.day;S.dbgBuilder='замена заброшенного: '+t;return}
   }
 
-  // 5. watchtower and mid-tier stone sinks. v2.1: вышки — цепочка экспансии,
-  // каждая добавляет зону застройки (−40% от ратуши) и дневную разведку.
-  if(prodN>=2&&countB('tower')<1+Math.floor(S.settlers.length/6)&&put('tower'))return;
+  // 5. v2.3: вышки строит ИГРОК (кнопка «Вышка», n-я требует n×6 жителей) —
+  // экспансия через решения игрока; автостроитель их больше не закладывает.
   if(S.settlers.length>=5&&countB('tavern')===0&&put('tavern'))return;
   if(S.settlers.length>=8&&countB('tavern',true)>0&&countB('advguild')===0&&put('advguild'))return;
   if(countB('advguild',true)>0&&countB('crafters')===0&&stockWorld('gems')>=2&&put('crafters'))return;
@@ -3541,10 +3551,39 @@ function settleThink(){
   if((surplus||S.day>=18)&&countB('port')===0&&countB('guild')===0){
     if(put('port')||put('guild'))return;
   }
+  // 6b. торговый пост (v2.3): малая караванная точка — когда излишки есть,
+  // а большой торговой трубы ещё нет (или к ней очередь).
+  if((surplus||S.day>=14)&&countLive('tradepost')===0&&countActive('guild')===0&&put('tradepost')){
+    S.dbgBuilder='торговый пост';return;
+  }
 
   // 7. tier upgrades consume stone deliberately.
   if(L('wood')>=3&&L('stone')>=2&&tryUpgrade())return;
   S.dbgBuilder=placed?('выдано разрешений: '+placed):('нужд нет ('+S.day+'д)');
+}
+/* ---------- РУЧНЫЕ ВЫШКИ (v2.3): экспансия через игрока ---------- */
+function towerPopNeed(){return (countB('tower')+1)*CFG.TOWER_POP_STEP}
+function towerPlaceable(){
+  return S.phase==='play'&&S.settlers.length>=towerPopNeed()&&canPayWorld('tower');
+}
+function togglePlaceTower(){
+  if(S.placeMode==='tower'){S.placeMode=null;S.uiDirty=true;return}
+  if(S.settlers.length<towerPopNeed()){
+    log('🗼 Для '+(countB('tower')+1)+'-й вышки нужно '+towerPopNeed()+' жителей (сейчас '+S.settlers.length+').');
+    return;
+  }
+  if(!canPayWorld('tower')){log('🗼 Не хватает ресурсов на вышку.');return}
+  S.placeMode='tower';S.uiDirty=true;
+  log('🗼 Выбери разведанную клетку в зоне влияния — там встанет вышка (повторный тап по кнопке — отмена).');
+}
+function tryPlaceTowerAt(x,y){
+  if(!towerPlaceable()){S.placeMode=null;S.uiDirty=true;return false}
+  if(!siteOk('tower',x,y)){log('🚫 Здесь вышку не поставить: нужна разведанная свободная клетка в зоне влияния, вдали от других вышек.');return false}
+  placeBuilding('tower',x,y,false); // need/got заполняет placeBuilding
+  S.placeMode=null;
+  log('🗼 Губернатор размечает вышку — артель понесёт материалы.');
+  computeLevels();S.uiDirty=true;
+  return true;
 }
 function tryUpgrade(){
   let best=null;
@@ -3582,9 +3621,23 @@ function makeHero(u){
   const cls=clsArr[(S.rng()*clsArr.length)|0];
   const C=CFG.HERO.CLS[cls];
   u.hero={name:heroName(u.race),cls,hp:C.hp,maxHp:C.hp,atk:C.atk,
+    lvl:1,xp:0, // v2.3: опыт за убитых врагов, уровни дают +HP/+атаку
     thief:S.rng()<CFG.HERO.THIEF[u.race]};
   u.idleDays=0;
   log('🗡 В гильдию вступает '+u.hero.name+' ('+RNAME[u.race].toLowerCase()+'-'+C.nm.toLowerCase()+(u.hero.thief?', черта «Вор»':'')+').');
+}
+/* v2.3: опыт героя. Порог уровня растёт (lvl*20), уровень даёт +4 HP и +1 атаки. */
+function addHeroXp(u,v){
+  const h=u.hero;if(!h||v<=0)return;
+  h.lvl=h.lvl||1;h.xp=(h.xp||0)+v;
+  let need=h.lvl*20;
+  while(h.xp>=need){
+    h.xp-=need;h.lvl++;
+    h.maxHp+=4;h.hp=Math.min(h.maxHp,h.hp+4);h.atk+=1;
+    log('⭐ '+h.name+' достигает '+h.lvl+'-го уровня! (+4 HP, +1 атака)');
+    need=h.lvl*20;
+  }
+  S.uiDirty=true;
 }
 function heroCount(){return S.settlers.filter(u=>u.hero).length}
 function slotOf(uid){return S.partySlots.find(sl=>sl.heroes.indexOf(uid)>=0)}
@@ -3684,21 +3737,54 @@ function buyGear(u){
     S.uiDirty=true;
     return;
   }
+  // v2.3: класс-предпочтений не нашлось — берём любое доступное (в т.ч. кованое оружие)
+  for(let si=0;si<S.showcase.length;si++){
+    const it=S.showcase[si];
+    if(u.hero.items.some(x=>x.id===it.id)||u.wallet<it.price)continue;
+    u.wallet-=it.price;S.gold+=it.price;S.itemsSold++;
+    {const cb=S.buildings.find(b=>b.built&&b.type==='crafters');
+     if(cb){addResourcePopup('gold',it.price,cb.x,cb.y);addInfoPopup('⚔ '+it.price+'з',cb.x,cb.y,'info')}}
+    S.showcase.splice(si,1);
+    u.hero.items.push(it);
+    u.hero.maxHp+=it.hp||0;u.hero.hp+=it.hp||0;
+    log('🛒 '+u.hero.name+' берёт «'+it.name+'» за '+it.price+' з.');
+    S.uiDirty=true;
+    return;
+  }
 }
 function craftDaily(){
   const cb=S.buildings.find(b=>b.built&&!b.ruined&&connected(b)&&b.type==='crafters');
   if(!cb)return;
   S.craftT=(S.craftT||0)+1;
   if(S.craftT<CFG.CRAFT_EVERY)return;
-  if(S.showcase.length>=4)return;
-  const affordable=CFG.ITEMS.filter(it=>S.stock.gems>=it.gems&&!S.showcase.some(x=>x.id===it.id));
-  if(!affordable.length)return;
-  const it=affordable[(S.rng()*affordable.length)|0];
-  S.stock.gems-=it.gems;addResourcePopup('gems',-it.gems,cb.x,cb.y);S.craftT=0;
-  S.showcase.push(Object.assign({},it));
-  addInfoPopup('⚒ '+it.name.split(' ')[0],cb.x,cb.y,'info');
-  log('⚒ Ремесленники создали «'+it.name+'» ('+it.gems+' самоцв.) — выставлено в витрину за '+it.price+' з.');
-  computeLevels();
+  S.craftT=0;
+  let crafted=false;
+  // самоцветные артефакты — как раньше
+  if(S.showcase.length<5){
+    const affordable=CFG.ITEMS.filter(it=>S.stock.gems>=it.gems&&!S.showcase.some(x=>x.id===it.id));
+    if(affordable.length){
+      const it=affordable[(S.rng()*affordable.length)|0];
+      S.stock.gems-=it.gems;addResourcePopup('gems',-it.gems,cb.x,cb.y);
+      S.showcase.push(Object.assign({},it));
+      addInfoPopup('⚒ '+it.name.split(' ')[0],cb.x,cb.y,'info');
+      log('⚒ Ремесленники создали «'+it.name+'» ('+it.gems+' самоцв.) — в витрину за '+it.price+' з.');
+      crafted=true;
+    }
+  }
+  // v2.3: торговля оружием — кузня куёт из дерева/камня, без самоцветов
+  if(S.showcase.length<5){
+    const wpn=CFG.WEAPONS.filter(it=>!S.showcase.some(x=>x.id===it.id)&&
+      Object.entries(it.cost).every(([r,v])=>(S.stock[r]||0)>=v));
+    if(wpn.length){
+      const it=wpn[(S.rng()*wpn.length)|0];
+      for(const r in it.cost){S.stock[r]-=it.cost[r];addResourcePopup(r,-it.cost[r],cb.x,cb.y)}
+      S.showcase.push(Object.assign({},it));
+      addInfoPopup('⚔ '+it.name.split(' ')[0],cb.x,cb.y,'info');
+      log('⚔ Кузня выковала «'+it.name+'» — в витрину за '+it.price+' з.');
+      crafted=true;
+    }
+  }
+  if(crafted)computeLevels();
 }
 /* ---------- ПОРТ И КОРАБЛЬ (пп. 3-4) ----------
    Порт сам по себе в море не выходит: нужен корабль. Корабль закладывается
@@ -3841,6 +3927,26 @@ function tradeDaily(){
   if(sold>0)log('🐎 Караваны гильдии вывезли излишки ('+sold+' ед) — казна пополнена.');
   if(bought>0)log('📦 Закуплено у королевства '+bought+' ед — из казны.');
   if(sold||bought)computeLevels();
+}
+/* v2.3: торговый пост — малая караванная точка. Торгует излишками как
+   гильдия, но вполовину объёма и по худшему курсу; работает и без гильдии. */
+function tradepostDaily(){
+  let sold=0;
+  for(const tp of S.buildings){
+    if(!tp.built||tp.ruined||tp.abandoned||tp.type!=='tradepost'||!connected(tp))continue;
+    for(const r of ['food','wood','stone','gems']){
+      if(S.policy[r]!=='export')continue;
+      const thr=(r==='food')?S.settlers.length*CFG.FOOD_DAYS[3]:CFG.BANDS[r][3];
+      const ex=Math.floor(S.stock[r]-thr);
+      if(ex<=0)continue;
+      const q=Math.min(ex,Math.ceil(CFG.TRADE_Q/2));
+      const g=q*CFG.PRICE[r]*0.25;
+      S.stock[r]-=q;addResourcePopup(r,-q,tp.x,tp.y);
+      S.gold+=g;addResourcePopup('gold',g,tp.x,tp.y);
+      S.tradeGold+=g;sold+=q;
+    }
+  }
+  if(sold>0){log('🛒 Торговый пост сторговал излишки ('+sold+' ед) заезжим купцам.');computeLevels()}
 }
 const SQUATS=[
   {id:'camp',name:'Разбойничий притон'},
@@ -4210,15 +4316,15 @@ function goBack(gain){
    заклинатели бьют любой ряд, саппорт лечит. Раунды периодические.
    Одно ядро на всех: headless/autoQuest прокручивает бой мгновенно,
    в браузере экран боя (22b_battle_ui) анимирует те же раунды. */
-const ENEMY_DEFS={
-  goblin:    {nm:'Гоблин',          row:'front', hpW:1.0, atkW:1.0, grid:'G_GOBLIN',    map:'GOBLIN_MAP'},
-  gobshaman: {nm:'Гоблин-шаман',    row:'back',  hpW:0.7, atkW:1.3, grid:'G_GOBSHAMAN', map:'GOBSHAMAN_MAP', caster:true},
-  bandit:    {nm:'Разбойник',       row:'front', hpW:1.1, atkW:1.1, grid:'G_RAIDER',    map:'RAIDER_MAP'},
-  skeleton:  {nm:'Скелет',          row:'front', hpW:0.9, atkW:0.9, grid:'G_SKELETON',  map:'SKELETON_MAP'},
-  necromancer:{nm:'Некромант',      row:'back',  hpW:0.8, atkW:1.6, grid:'G_NECRO_U',   map:'NECRO_U_MAP', caster:true},
-  beast:     {nm:'Лютый зверь',     row:'front', hpW:1.2, atkW:1.2, grid:'G_BEAST',     map:'BEAST_MAP'},
-  fireatr:   {nm:'Огненный атронах',row:'back',  hpW:1.0, atkW:1.8, grid:'G_FIREATR',   map:'FIREATR_MAP', caster:true},
-  magmaatr:  {nm:'Магмовый атронах',row:'front', hpW:1.6, atkW:1.2, grid:'G_MAGMAATR',  map:'MAGMAATR_MAP'},
+const ENEMY_DEFS={ // xp (v2.3): опыт за убийство, делится на выживших героев
+  goblin:    {nm:'Гоблин',          row:'front', hpW:1.0, atkW:1.0, xp:4,  grid:'G_GOBLIN',    map:'GOBLIN_MAP'},
+  gobshaman: {nm:'Гоблин-шаман',    row:'back',  hpW:0.7, atkW:1.3, xp:6,  grid:'G_GOBSHAMAN', map:'GOBSHAMAN_MAP', caster:true},
+  bandit:    {nm:'Разбойник',       row:'front', hpW:1.1, atkW:1.1, xp:5,  grid:'G_RAIDER',    map:'RAIDER_MAP'},
+  skeleton:  {nm:'Скелет',          row:'front', hpW:0.9, atkW:0.9, xp:4,  grid:'G_SKELETON',  map:'SKELETON_MAP'},
+  necromancer:{nm:'Некромант',      row:'back',  hpW:0.8, atkW:1.6, xp:9,  grid:'G_NECRO_U',   map:'NECRO_U_MAP', caster:true},
+  beast:     {nm:'Лютый зверь',     row:'front', hpW:1.2, atkW:1.2, xp:6,  grid:'G_BEAST',     map:'BEAST_MAP'},
+  fireatr:   {nm:'Огненный атронах',row:'back',  hpW:1.0, atkW:1.8, xp:10, grid:'G_FIREATR',   map:'FIREATR_MAP', caster:true},
+  magmaatr:  {nm:'Магмовый атронах',row:'front', hpW:1.6, atkW:1.2, xp:12, grid:'G_MAGMAATR',  map:'MAGMAATR_MAP'},
 };
 // составы врагов: по типу логова и этапу (или этажу шахты для delve)
 const BATTLE_COMPS={
@@ -4252,13 +4358,15 @@ function makeBattle(opts){
     cd:0,cdMax:CD_CLS[u.hero.cls]||2.8,
     caster:u.hero.cls==='mage',healer:u.hero.cls==='support',uref:u}));
   const comp=battleComp(L.id,stageIdx);
-  const ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
+  // v2.3: бои заметно жёстче (были «супер лёгкие») — компенсируется
+  // уровнями героев и кованым оружием ремесленника
+  const ehp=L.str*9*mul, eatk=L.str*1.25*Math.sqrt(mul);
   let hpW=0,atkW=0;
   for(const k of comp){hpW+=ENEMY_DEFS[k].hpW;atkW+=ENEMY_DEFS[k].atkW}
   const enemies=comp.map(k=>{const d=ENEMY_DEFS[k];
     const hp=Math.max(3,Math.round(ehp*d.hpW/hpW));
     return {side:'enemy',name:d.nm,key:k,row:d.row,hp,maxHp:hp,
-      atk:eatk*d.atkW/atkW,cd:0,cdMax:(d.caster?4.0:3.1)+(S.rng()*0.6-0.3),
+      atk:eatk*d.atkW/atkW,cd:0,cdMax:(d.caster?3.6:2.8)+(S.rng()*0.6-0.3),
       caster:!!d.caster,def:d};
   });
   return {party,enemies,round:0,over:false,win:false,retreat:false,
@@ -4291,6 +4399,8 @@ function btStrike(bt,att,foes,mulDmg){
   if(!t)return;
   const dmg=att.atk*(mulDmg||1);
   t.hp-=dmg;
+  // v2.3: опыт за убитого врага (btPickTarget не бьёт мёртвых — без даблкаунта)
+  if(t.hp<=0&&t.side==='enemy'&&t.def)bt.xp=(bt.xp||0)+(t.def.xp||5);
   bt.events.push({t:'hit',a:att.name,b:t.name,v:dmg,kill:t.hp<=0});
 }
 function stepBattleRound(bt){
@@ -4318,6 +4428,15 @@ function finishBattle(bt){
   // перенести исход на героев: HP, лечение знахаря, гибель
   for(const c of bt.party)if(c.uref&&c.uref.hero)c.uref.hero.hp=Math.max(0,c.hp);
   const hs=partyHeroes();
+  // v2.3: опыт за убитых врагов делится между ВЫЖИВШИМИ героями
+  if(bt.xp>0){
+    const alive=hs.filter(u=>u.hero.hp>0);
+    if(alive.length){
+      const share=Math.max(1,Math.round(bt.xp/alive.length));
+      for(const u of alive)addHeroXp(u,share);
+      log('📈 Опыт боя: '+bt.xp+' (по '+share+' на выжившего).');
+    }
+  }
   if(bt.win){
     const healed=partyHerbHeal(hs);
     if(healed>=3)log('🌿 Знахарь отряда перевязывает раны (+'+healed.toFixed(0)+' HP).');
@@ -4447,7 +4566,7 @@ function onNewDay(){
     else if(b.type==='library')consumeBuildingUpkeep(b,CFG.UPKEEP.libraryDaily,'паёк книжников');
   }
   brewDaily();
-  tradeDaily();
+  tradeDaily();tradepostDaily();
   craftDaily();
   S.hungryDays=S.hungry?S.hungryDays+1:0;
   if(S.phase!=='scout'&&!S.hungry&&S.day>=4&&housingCap()-S.settlers.length>=1&&bandIdx('food')>=2){
@@ -6584,6 +6703,7 @@ function buildAtlas(){
     }
   }
   SPR['l_ruins']=SPR['f_6']; // логово «Древние руины» рисуется спрайтом фичи руин
+  SPR['b_tradepost']=SPR['b_tradepost']||SPR['b_guild']; // v2.3: до интеграции PNG-здания
   ICONS={gold:paintIcon('gold'),food:paintIcon('food'),wood:paintIcon('wood'),
     stone:paintIcon('stone'),gems:paintIcon('gems'),pop:paintIcon('pop'),ammo:paintIcon('ammo')};
   if(ATLAS.cur.y+ATLAS.cur.rowH>ATLAS.H)console.warn('[Марка] АТЛАС ПЕРЕПОЛНЕН:',ATLAS.cur.y+ATLAS.cur.rowH,'>',ATLAS.H);
@@ -7420,9 +7540,16 @@ function updatePinOutline(){
 }
 function pickPin(mx,my){
   // фаза scout: тап по карте выбирает место ратуши
+  // (фикс: screenToCell возвращает {cx,cy}, а не {x,y} — тап не срабатывал)
   if(S.phase==='scout'){
     const c=screenToCell(mx,my);
-    if(c&&inMap(c.x,c.y))placeTownhall(c.x,c.y);
+    if(c&&inMap(c.cx,c.cy))placeTownhall(c.cx,c.cy);
+    return;
+  }
+  // режим ручной установки вышки (v2.3): тап по клетке ставит фундамент
+  if(S.placeMode==='tower'){
+    const c=screenToCell(mx,my);
+    if(c&&inMap(c.cx,c.cy))tryPlaceTowerAt(c.cx,c.cy);
     return;
   }
   const {cx,cy}=screenToCell(mx,my);
@@ -7742,8 +7869,9 @@ function renderParty(){
     const items=(u.hero.items||[]).map(i=>i.name.split(' ')[0]).join(', ');
     hh+='<div class="row"><label style="display:flex;gap:6px;align-items:center'+(inSlot?';opacity:.5':'')+'">'+
       '<input type="checkbox" data-hid="'+u.id+'"'+(PICK.has(u.id)?' checked':'')+(inSlot||u.inside===-2?' disabled':'')+'>'+
-      '<span><b>'+u.hero.name+'</b> · '+CFG.HERO.CLS[u.hero.cls].nm.toLowerCase()+(u.hero.thief?' · вор':'')+
-      ' · HP '+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+(items?'<br><span style="font-size:10px;color:var(--gold)">'+items+'</span>':'')+
+      '<span><b>'+u.hero.name+'</b> · ур.'+(u.hero.lvl||1)+' '+CFG.HERO.CLS[u.hero.cls].nm.toLowerCase()+(u.hero.thief?' · вор':'')+
+      ' · HP '+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+
+      ' · оп '+(u.hero.xp||0)+'/'+((u.hero.lvl||1)*20)+(items?'<br><span style="font-size:10px;color:var(--gold)">'+items+'</span>':'')+
       (inSlot?'<br><span style="font-size:10px;color:var(--dim)">'+inSlot.name+'</span>':'')+'</span></label></div>';
   }
   el('party_heroes').innerHTML=hh||'<div class="row" style="color:var(--dim)">Героев пока нет — гильдия наймёт засидевшихся.</div>';
@@ -7827,6 +7955,7 @@ function buildUI(){
   el('spd1').onclick=()=>setSpeed(1);
   el('spd2').onclick=()=>setSpeed(2);
   el('spd4').onclick=()=>setSpeed(4);
+  {const tb=el('btnTower');if(tb)tb.onclick=()=>togglePlaceTower()} // v2.3: вышки ставит игрок
   el('seed').value=S.seedStr;
   el('btnNew').onclick=()=>{
     let v=el('seed').value.trim();
@@ -7855,6 +7984,12 @@ function updateUI(fps){
   el('st_hero').style.cursor='pointer';
   el('st_heroN').textContent=hn+(S.party?'·⚔':'');
   el('rolename').textContent=S.role+(S.hungry?' · ГОЛОД!':'');
+  {const tb=el('btnTower');
+   if(tb){
+     tb.textContent=(S.placeMode==='tower')?'🗼 Тап по карте…':'🗼 Вышка ('+towerPopNeed()+'ж)';
+     tb.classList.toggle('on',S.placeMode==='tower');
+     tb.disabled=(S.phase!=='play')||(!towerPlaceable()&&S.placeMode!=='tower');
+   }}
   for(const r of ['food','wood','stone','gems']){
     const lv=S.lvl[r]||0;
     const w=el('lv_'+r);
@@ -7917,7 +8052,7 @@ function updateInspector(){
       '<div class="row">выносливость <b>'+(u.stam|0)+'</b><div class="stambar"><div style="width:'+(u.stam|0)+'%;background:'+(u.stam<CFG.STAM_LOW?'#d05a4e':'#8fbf5a')+'"></div></div></div>'+
       '<div class="row">ход '+RC.move+' · работа '+RC.work+' · стройка '+RC.build+' · разведка '+RC.scout+'</div>'+
       (topSkills(u,3).length?'<div class="row">⭐ навыки: <b>'+topSkills(u,3).join(' · ')+'</b></div>':'')+
-      (u.hero?('<div class="row">'+CFG.HERO.CLS[u.hero.cls].nm+(u.hero.thief?' · черта «Вор»':'')+' · HP <b>'+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+'</b></div>'):'');
+      (u.hero?('<div class="row">'+CFG.HERO.CLS[u.hero.cls].nm+' ур.'+(u.hero.lvl||1)+(u.hero.thief?' · черта «Вор»':'')+' · HP <b>'+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+'</b> · оп '+(u.hero.xp||0)+'/'+((u.hero.lvl||1)*20)+'</div>'):'');
   }else if(S.pin.kind==='bld'){
     const b=S.buildings[S.pin.id];
     if(!b){S.pin=null;box.style.display='none';return}

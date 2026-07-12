@@ -14,9 +14,23 @@ function makeHero(u){
   const cls=clsArr[(S.rng()*clsArr.length)|0];
   const C=CFG.HERO.CLS[cls];
   u.hero={name:heroName(u.race),cls,hp:C.hp,maxHp:C.hp,atk:C.atk,
+    lvl:1,xp:0, // v2.3: опыт за убитых врагов, уровни дают +HP/+атаку
     thief:S.rng()<CFG.HERO.THIEF[u.race]};
   u.idleDays=0;
   log('🗡 В гильдию вступает '+u.hero.name+' ('+RNAME[u.race].toLowerCase()+'-'+C.nm.toLowerCase()+(u.hero.thief?', черта «Вор»':'')+').');
+}
+/* v2.3: опыт героя. Порог уровня растёт (lvl*20), уровень даёт +4 HP и +1 атаки. */
+function addHeroXp(u,v){
+  const h=u.hero;if(!h||v<=0)return;
+  h.lvl=h.lvl||1;h.xp=(h.xp||0)+v;
+  let need=h.lvl*20;
+  while(h.xp>=need){
+    h.xp-=need;h.lvl++;
+    h.maxHp+=4;h.hp=Math.min(h.maxHp,h.hp+4);h.atk+=1;
+    log('⭐ '+h.name+' достигает '+h.lvl+'-го уровня! (+4 HP, +1 атака)');
+    need=h.lvl*20;
+  }
+  S.uiDirty=true;
 }
 function heroCount(){return S.settlers.filter(u=>u.hero).length}
 function slotOf(uid){return S.partySlots.find(sl=>sl.heroes.indexOf(uid)>=0)}
@@ -116,19 +130,52 @@ function buyGear(u){
     S.uiDirty=true;
     return;
   }
+  // v2.3: класс-предпочтений не нашлось — берём любое доступное (в т.ч. кованое оружие)
+  for(let si=0;si<S.showcase.length;si++){
+    const it=S.showcase[si];
+    if(u.hero.items.some(x=>x.id===it.id)||u.wallet<it.price)continue;
+    u.wallet-=it.price;S.gold+=it.price;S.itemsSold++;
+    {const cb=S.buildings.find(b=>b.built&&b.type==='crafters');
+     if(cb){addResourcePopup('gold',it.price,cb.x,cb.y);addInfoPopup('⚔ '+it.price+'з',cb.x,cb.y,'info')}}
+    S.showcase.splice(si,1);
+    u.hero.items.push(it);
+    u.hero.maxHp+=it.hp||0;u.hero.hp+=it.hp||0;
+    log('🛒 '+u.hero.name+' берёт «'+it.name+'» за '+it.price+' з.');
+    S.uiDirty=true;
+    return;
+  }
 }
 function craftDaily(){
   const cb=S.buildings.find(b=>b.built&&!b.ruined&&connected(b)&&b.type==='crafters');
   if(!cb)return;
   S.craftT=(S.craftT||0)+1;
   if(S.craftT<CFG.CRAFT_EVERY)return;
-  if(S.showcase.length>=4)return;
-  const affordable=CFG.ITEMS.filter(it=>S.stock.gems>=it.gems&&!S.showcase.some(x=>x.id===it.id));
-  if(!affordable.length)return;
-  const it=affordable[(S.rng()*affordable.length)|0];
-  S.stock.gems-=it.gems;addResourcePopup('gems',-it.gems,cb.x,cb.y);S.craftT=0;
-  S.showcase.push(Object.assign({},it));
-  addInfoPopup('⚒ '+it.name.split(' ')[0],cb.x,cb.y,'info');
-  log('⚒ Ремесленники создали «'+it.name+'» ('+it.gems+' самоцв.) — выставлено в витрину за '+it.price+' з.');
-  computeLevels();
+  S.craftT=0;
+  let crafted=false;
+  // самоцветные артефакты — как раньше
+  if(S.showcase.length<5){
+    const affordable=CFG.ITEMS.filter(it=>S.stock.gems>=it.gems&&!S.showcase.some(x=>x.id===it.id));
+    if(affordable.length){
+      const it=affordable[(S.rng()*affordable.length)|0];
+      S.stock.gems-=it.gems;addResourcePopup('gems',-it.gems,cb.x,cb.y);
+      S.showcase.push(Object.assign({},it));
+      addInfoPopup('⚒ '+it.name.split(' ')[0],cb.x,cb.y,'info');
+      log('⚒ Ремесленники создали «'+it.name+'» ('+it.gems+' самоцв.) — в витрину за '+it.price+' з.');
+      crafted=true;
+    }
+  }
+  // v2.3: торговля оружием — кузня куёт из дерева/камня, без самоцветов
+  if(S.showcase.length<5){
+    const wpn=CFG.WEAPONS.filter(it=>!S.showcase.some(x=>x.id===it.id)&&
+      Object.entries(it.cost).every(([r,v])=>(S.stock[r]||0)>=v));
+    if(wpn.length){
+      const it=wpn[(S.rng()*wpn.length)|0];
+      for(const r in it.cost){S.stock[r]-=it.cost[r];addResourcePopup(r,-it.cost[r],cb.x,cb.y)}
+      S.showcase.push(Object.assign({},it));
+      addInfoPopup('⚔ '+it.name.split(' ')[0],cb.x,cb.y,'info');
+      log('⚔ Кузня выковала «'+it.name+'» — в витрину за '+it.price+' з.');
+      crafted=true;
+    }
+  }
+  if(crafted)computeLevels();
 }

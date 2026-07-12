@@ -22,7 +22,7 @@ function tryUpgradeHut(){
   S.dbgBuilder='дом (тир 2)';
   return true;
 }
-const NEAR_ROAD_TYPES={hut:1,tavern:1,advguild:1,guild:1,crafters:1};
+const NEAR_ROAD_TYPES={hut:1,tavern:1,advguild:1,guild:1,crafters:1,tradepost:1};
 // v2.1: зона застройки = радиус ратуши (INFLUENCE) + радиусы действующих дозорных
 // вышек (TOWER_INFLUENCE, на 40% меньше). Экспансия — цепочкой вышек к фронтиру.
 function influenceAnchors(){
@@ -310,7 +310,7 @@ function finishBuilding(b){
   b.built=true;S.bldDirty=true;
   S.road[idx(b.x,b.y)]=1;S.roadDirty=true;
   recomputeRoadConn();
-  if(b.type==='farm'||b.type==='fisher'||b.type==='lumber'||b.type==='mine'||b.type==='tower'||b.type==='port'||b.type==='guild'||b.type==='library'){
+  if(b.type==='farm'||b.type==='fisher'||b.type==='lumber'||b.type==='mine'||b.type==='tower'||b.type==='port'||b.type==='guild'||b.type==='library'||b.type==='tradepost'){
     buildRoad(b);
     log('🛤 Проложена дорога: '+CFG.BNAME[b.type].toLowerCase()+' — ратуша.');
   }
@@ -439,9 +439,8 @@ function settleThink(){
     if(put(t)){S.rebuildCd[t]=S.day;S.dbgBuilder='замена заброшенного: '+t;return}
   }
 
-  // 5. watchtower and mid-tier stone sinks. v2.1: вышки — цепочка экспансии,
-  // каждая добавляет зону застройки (−40% от ратуши) и дневную разведку.
-  if(prodN>=2&&countB('tower')<1+Math.floor(S.settlers.length/6)&&put('tower'))return;
+  // 5. v2.3: вышки строит ИГРОК (кнопка «Вышка», n-я требует n×6 жителей) —
+  // экспансия через решения игрока; автостроитель их больше не закладывает.
   if(S.settlers.length>=5&&countB('tavern')===0&&put('tavern'))return;
   if(S.settlers.length>=8&&countB('tavern',true)>0&&countB('advguild')===0&&put('advguild'))return;
   if(countB('advguild',true)>0&&countB('crafters')===0&&stockWorld('gems')>=2&&put('crafters'))return;
@@ -450,10 +449,39 @@ function settleThink(){
   if((surplus||S.day>=18)&&countB('port')===0&&countB('guild')===0){
     if(put('port')||put('guild'))return;
   }
+  // 6b. торговый пост (v2.3): малая караванная точка — когда излишки есть,
+  // а большой торговой трубы ещё нет (или к ней очередь).
+  if((surplus||S.day>=14)&&countLive('tradepost')===0&&countActive('guild')===0&&put('tradepost')){
+    S.dbgBuilder='торговый пост';return;
+  }
 
   // 7. tier upgrades consume stone deliberately.
   if(L('wood')>=3&&L('stone')>=2&&tryUpgrade())return;
   S.dbgBuilder=placed?('выдано разрешений: '+placed):('нужд нет ('+S.day+'д)');
+}
+/* ---------- РУЧНЫЕ ВЫШКИ (v2.3): экспансия через игрока ---------- */
+function towerPopNeed(){return (countB('tower')+1)*CFG.TOWER_POP_STEP}
+function towerPlaceable(){
+  return S.phase==='play'&&S.settlers.length>=towerPopNeed()&&canPayWorld('tower');
+}
+function togglePlaceTower(){
+  if(S.placeMode==='tower'){S.placeMode=null;S.uiDirty=true;return}
+  if(S.settlers.length<towerPopNeed()){
+    log('🗼 Для '+(countB('tower')+1)+'-й вышки нужно '+towerPopNeed()+' жителей (сейчас '+S.settlers.length+').');
+    return;
+  }
+  if(!canPayWorld('tower')){log('🗼 Не хватает ресурсов на вышку.');return}
+  S.placeMode='tower';S.uiDirty=true;
+  log('🗼 Выбери разведанную клетку в зоне влияния — там встанет вышка (повторный тап по кнопке — отмена).');
+}
+function tryPlaceTowerAt(x,y){
+  if(!towerPlaceable()){S.placeMode=null;S.uiDirty=true;return false}
+  if(!siteOk('tower',x,y)){log('🚫 Здесь вышку не поставить: нужна разведанная свободная клетка в зоне влияния, вдали от других вышек.');return false}
+  placeBuilding('tower',x,y,false); // need/got заполняет placeBuilding
+  S.placeMode=null;
+  log('🗼 Губернатор размечает вышку — артель понесёт материалы.');
+  computeLevels();S.uiDirty=true;
+  return true;
 }
 function tryUpgrade(){
   let best=null;

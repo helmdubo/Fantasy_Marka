@@ -31,6 +31,11 @@ const CFG={
     {id:'ward',name:'Оберег горного сердца',atk:0,hp:6,gems:2,price:14},
     {id:'rod',name:'Жезл граней',atk:3,hp:0,gems:3,price:22},
     {id:'aegis',name:'Эгида глубин',atk:0,hp:10,gems:3,price:24}],
+  // v2.3: простое оружие — куёт ремесленник из дерева/камня (без самоцветов)
+  WEAPONS:[
+    {id:'sword',name:'Кованый меч',atk:1,hp:0,cost:{wood:2,stone:3},price:8},
+    {id:'waraxe',name:'Боевой топор',atk:2,hp:0,cost:{wood:3,stone:5},price:12},
+    {id:'pike',name:'Пика со щитком',atk:1,hp:3,cost:{wood:5,stone:2},price:10}],
   CRAFT_EVERY:3,
   STAGES:{tower:['Двор','Залы','Вершина'],camp:['Частокол','Шатры'],
     cliff:['Тропа','Гнездо'],graves:['Ограда','Склепы','Алтарь'],
@@ -46,17 +51,18 @@ const CFG={
     CLSW:{dwarf:['tank','bruiser'],elf:['mage','bruiser'],troll:['tank','tank','bruiser'],human:['tank','bruiser','mage','support']},
     THIEF:{human:0.15,dwarf:0.10,elf:0.25,troll:0.08}}, TOWER_SIGHT:2, ROAD_SPEED:1.25,
   VISION_BLD:2, INFLUENCE:12, TOWER_INFLUENCE:7, FEAR_R:3, SCOUT_R:12, // вышка: 12*0.6≈7 (−40%)
+  TOWER_POP_STEP:6, // v2.3: n-я вышка (ставит игрок) требует n*6 жителей
   THRIFT:{human:1.0,dwarf:1.5,elf:0.9,troll:0.6},
   LVL_NAMES:['Нет','Скудно','Хватает','Много','Избыток'],
   LVL_COLORS:['#d05a4e','#d0894e','#c9b458','#8fbf5a','#eec658'],
   FOOD_DAYS:[1,3,7,14],
   BANDS:{wood:[1,12,30,70],stone:[1,12,36,100],gems:[1,2,5,10]},
   WORK:{build:4,clear:5,ruins:6,patrol:3,pave:2,harvest:3},
-  COSTS:{hut:{wood:6},farm:{wood:6},fisher:{wood:8},lumber:{wood:8},mine:{wood:8},tavern:{wood:14,stone:8,food:4},tower:{wood:8,food:4},port:{wood:20,stone:14},guild:{wood:8,stone:6},advguild:{wood:12,stone:10},crafters:{wood:14,stone:18,gems:1},library:{wood:26,stone:18}},
-  GATE:{hut:{wood:1},farm:{wood:1},fisher:{wood:1},lumber:{wood:1},mine:{wood:1},tavern:{wood:2,stone:1,food:1},tower:{wood:2,food:1},port:{wood:2,stone:1},guild:{wood:1,stone:1},advguild:{wood:2,stone:1},crafters:{wood:2,stone:2,gems:1},library:{wood:2,stone:2}},
+  COSTS:{hut:{wood:6},farm:{wood:6},fisher:{wood:8},lumber:{wood:8},mine:{wood:8},tavern:{wood:14,stone:8,food:4},tower:{wood:8,food:4},port:{wood:20,stone:14},guild:{wood:8,stone:6},advguild:{wood:12,stone:10},crafters:{wood:14,stone:18,gems:1},library:{wood:26,stone:18},tradepost:{wood:10,stone:4}},
+  GATE:{hut:{wood:1},farm:{wood:1},fisher:{wood:1},lumber:{wood:1},mine:{wood:1},tavern:{wood:2,stone:1,food:1},tower:{wood:2,food:1},port:{wood:2,stone:1},guild:{wood:1,stone:1},advguild:{wood:2,stone:1},crafters:{wood:2,stone:2,gems:1},library:{wood:2,stone:2},tradepost:{wood:1}},
   BUILD_WORK:3, BUILD_EVERY:1,
   HOUSE:{townhall:3,hut:2,tavern:1,tent:4},
-  BNAME:{townhall:'Ратуша',tent:'Палатка переселенцев',hut:'Лачуга',farm:'Ферма',fisher:'Рыбацкий причал',lumber:'Лесопилка',mine:'Шахта',tavern:'Таверна',tower:'Дозорная вышка',port:'Порт',guild:'Торговая гильдия',advguild:'Гильдия авантюристов',crafters:'Гильдия ремесленников',library:'Библиотека'},
+  BNAME:{townhall:'Ратуша',tent:'Палатка переселенцев',hut:'Лачуга',farm:'Ферма',fisher:'Рыбацкий причал',lumber:'Лесопилка',mine:'Шахта',tavern:'Таверна',tower:'Дозорная вышка',port:'Порт',guild:'Торговая гильдия',advguild:'Гильдия авантюристов',crafters:'Гильдия ремесленников',library:'Библиотека',tradepost:'Торговый пост'},
   RUINS_GOLD:8,
   UPKEEP:{mine:{wood:0.2}, portSail:{wood:1}, portTradeWoodPerBatch:0.25, towerDaily:{food:1,wood:0.25}, libraryDaily:{food:1}},
   // v2.1: локальные припасы зданий. Расход идёт из b.store; пополняет складской
@@ -84,12 +90,13 @@ const FNAME=['','Ягодник','Бурелом (завал)','Каменная
 const RACES=['human','dwarf','elf','troll'];
 const RNAME={human:'Человек',dwarf:'Гном',elf:'Эльф',troll:'Тролль'};
 const ACTNAME={idle:'без дела',goto:'в пути',work:'работает'};
+// v2.3: n — сколько таких логовищ сеять (карте нужно больше энкаунтеров)
 const LAIR_DEFS=[
-  {id:'tower', name:'Заброшенная башня', tier:1, ring:[12,20], terr:[T.GRASS]},
-  {id:'camp',  name:'Лагерь в чащобе',   tier:1, ring:[13,22], terr:[T.FOREST]},
-  {id:'den',   name:'Звериное логово',   tier:1, ring:[11,20], terr:[T.FOREST]}, // п.11: лесной энкаунтер со зверями
-  {id:'cliff', name:'Скалистый утёс',    tier:2, ring:[20,30], terr:[T.ROCK,T.GRASS]},
-  {id:'graves',name:'Заброшенное кладбище',tier:2, ring:[20,30], terr:[T.GRASS]},
-  {id:'necro', name:'Башня некроманта',  tier:3, ring:[32,90], terr:[T.GRASS,T.ROCK]},
+  {id:'tower', name:'Заброшенная башня', tier:1, ring:[12,20], terr:[T.GRASS], n:2},
+  {id:'camp',  name:'Лагерь в чащобе',   tier:1, ring:[13,22], terr:[T.FOREST], n:2},
+  {id:'den',   name:'Звериное логово',   tier:1, ring:[11,20], terr:[T.FOREST], n:2}, // п.11: лесной энкаунтер со зверями
+  {id:'cliff', name:'Скалистый утёс',    tier:2, ring:[20,30], terr:[T.ROCK,T.GRASS], n:2},
+  {id:'graves',name:'Заброшенное кладбище',tier:2, ring:[20,30], terr:[T.GRASS], n:2},
+  {id:'necro', name:'Башня некроманта',  tier:3, ring:[32,90], terr:[T.GRASS,T.ROCK], n:1},
 ];
 

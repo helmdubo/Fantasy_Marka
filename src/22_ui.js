@@ -135,8 +135,9 @@ function renderParty(){
     const items=(u.hero.items||[]).map(i=>i.name.split(' ')[0]).join(', ');
     hh+='<div class="row"><label style="display:flex;gap:6px;align-items:center'+(inSlot?';opacity:.5':'')+'">'+
       '<input type="checkbox" data-hid="'+u.id+'"'+(PICK.has(u.id)?' checked':'')+(inSlot||u.inside===-2?' disabled':'')+'>'+
-      '<span><b>'+u.hero.name+'</b> · '+CFG.HERO.CLS[u.hero.cls].nm.toLowerCase()+(u.hero.thief?' · вор':'')+
-      ' · HP '+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+(items?'<br><span style="font-size:10px;color:var(--gold)">'+items+'</span>':'')+
+      '<span><b>'+u.hero.name+'</b> · ур.'+(u.hero.lvl||1)+' '+CFG.HERO.CLS[u.hero.cls].nm.toLowerCase()+(u.hero.thief?' · вор':'')+
+      ' · HP '+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+
+      ' · оп '+(u.hero.xp||0)+'/'+((u.hero.lvl||1)*20)+(items?'<br><span style="font-size:10px;color:var(--gold)">'+items+'</span>':'')+
       (inSlot?'<br><span style="font-size:10px;color:var(--dim)">'+inSlot.name+'</span>':'')+'</span></label></div>';
   }
   el('party_heroes').innerHTML=hh||'<div class="row" style="color:var(--dim)">Героев пока нет — гильдия наймёт засидевшихся.</div>';
@@ -220,6 +221,7 @@ function buildUI(){
   el('spd1').onclick=()=>setSpeed(1);
   el('spd2').onclick=()=>setSpeed(2);
   el('spd4').onclick=()=>setSpeed(4);
+  {const tb=el('btnTower');if(tb)tb.onclick=()=>togglePlaceTower()} // v2.3: вышки ставит игрок
   el('seed').value=S.seedStr;
   el('btnNew').onclick=()=>{
     let v=el('seed').value.trim();
@@ -248,6 +250,12 @@ function updateUI(fps){
   el('st_hero').style.cursor='pointer';
   el('st_heroN').textContent=hn+(S.party?'·⚔':'');
   el('rolename').textContent=S.role+(S.hungry?' · ГОЛОД!':'');
+  {const tb=el('btnTower');
+   if(tb){
+     tb.textContent=(S.placeMode==='tower')?'🗼 Тап по карте…':'🗼 Вышка ('+towerPopNeed()+'ж)';
+     tb.classList.toggle('on',S.placeMode==='tower');
+     tb.disabled=(S.phase!=='play')||(!towerPlaceable()&&S.placeMode!=='tower');
+   }}
   for(const r of ['food','wood','stone','gems']){
     const lv=S.lvl[r]||0;
     const w=el('lv_'+r);
@@ -310,7 +318,7 @@ function updateInspector(){
       '<div class="row">выносливость <b>'+(u.stam|0)+'</b><div class="stambar"><div style="width:'+(u.stam|0)+'%;background:'+(u.stam<CFG.STAM_LOW?'#d05a4e':'#8fbf5a')+'"></div></div></div>'+
       '<div class="row">ход '+RC.move+' · работа '+RC.work+' · стройка '+RC.build+' · разведка '+RC.scout+'</div>'+
       (topSkills(u,3).length?'<div class="row">⭐ навыки: <b>'+topSkills(u,3).join(' · ')+'</b></div>':'')+
-      (u.hero?('<div class="row">'+CFG.HERO.CLS[u.hero.cls].nm+(u.hero.thief?' · черта «Вор»':'')+' · HP <b>'+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+'</b></div>'):'');
+      (u.hero?('<div class="row">'+CFG.HERO.CLS[u.hero.cls].nm+' ур.'+(u.hero.lvl||1)+(u.hero.thief?' · черта «Вор»':'')+' · HP <b>'+u.hero.hp.toFixed(0)+'/'+u.hero.maxHp+'</b> · оп '+(u.hero.xp||0)+'/'+((u.hero.lvl||1)*20)+'</div>'):'');
   }else if(S.pin.kind==='bld'){
     const b=S.buildings[S.pin.id];
     if(!b){S.pin=null;box.style.display='none';return}

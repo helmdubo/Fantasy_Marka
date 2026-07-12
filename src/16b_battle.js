@@ -4,15 +4,15 @@
    заклинатели бьют любой ряд, саппорт лечит. Раунды периодические.
    Одно ядро на всех: headless/autoQuest прокручивает бой мгновенно,
    в браузере экран боя (22b_battle_ui) анимирует те же раунды. */
-const ENEMY_DEFS={
-  goblin:    {nm:'Гоблин',          row:'front', hpW:1.0, atkW:1.0, grid:'G_GOBLIN',    map:'GOBLIN_MAP'},
-  gobshaman: {nm:'Гоблин-шаман',    row:'back',  hpW:0.7, atkW:1.3, grid:'G_GOBSHAMAN', map:'GOBSHAMAN_MAP', caster:true},
-  bandit:    {nm:'Разбойник',       row:'front', hpW:1.1, atkW:1.1, grid:'G_RAIDER',    map:'RAIDER_MAP'},
-  skeleton:  {nm:'Скелет',          row:'front', hpW:0.9, atkW:0.9, grid:'G_SKELETON',  map:'SKELETON_MAP'},
-  necromancer:{nm:'Некромант',      row:'back',  hpW:0.8, atkW:1.6, grid:'G_NECRO_U',   map:'NECRO_U_MAP', caster:true},
-  beast:     {nm:'Лютый зверь',     row:'front', hpW:1.2, atkW:1.2, grid:'G_BEAST',     map:'BEAST_MAP'},
-  fireatr:   {nm:'Огненный атронах',row:'back',  hpW:1.0, atkW:1.8, grid:'G_FIREATR',   map:'FIREATR_MAP', caster:true},
-  magmaatr:  {nm:'Магмовый атронах',row:'front', hpW:1.6, atkW:1.2, grid:'G_MAGMAATR',  map:'MAGMAATR_MAP'},
+const ENEMY_DEFS={ // xp (v2.3): опыт за убийство, делится на выживших героев
+  goblin:    {nm:'Гоблин',          row:'front', hpW:1.0, atkW:1.0, xp:4,  grid:'G_GOBLIN',    map:'GOBLIN_MAP'},
+  gobshaman: {nm:'Гоблин-шаман',    row:'back',  hpW:0.7, atkW:1.3, xp:6,  grid:'G_GOBSHAMAN', map:'GOBSHAMAN_MAP', caster:true},
+  bandit:    {nm:'Разбойник',       row:'front', hpW:1.1, atkW:1.1, xp:5,  grid:'G_RAIDER',    map:'RAIDER_MAP'},
+  skeleton:  {nm:'Скелет',          row:'front', hpW:0.9, atkW:0.9, xp:4,  grid:'G_SKELETON',  map:'SKELETON_MAP'},
+  necromancer:{nm:'Некромант',      row:'back',  hpW:0.8, atkW:1.6, xp:9,  grid:'G_NECRO_U',   map:'NECRO_U_MAP', caster:true},
+  beast:     {nm:'Лютый зверь',     row:'front', hpW:1.2, atkW:1.2, xp:6,  grid:'G_BEAST',     map:'BEAST_MAP'},
+  fireatr:   {nm:'Огненный атронах',row:'back',  hpW:1.0, atkW:1.8, xp:10, grid:'G_FIREATR',   map:'FIREATR_MAP', caster:true},
+  magmaatr:  {nm:'Магмовый атронах',row:'front', hpW:1.6, atkW:1.2, xp:12, grid:'G_MAGMAATR',  map:'MAGMAATR_MAP'},
 };
 // составы врагов: по типу логова и этапу (или этажу шахты для delve)
 const BATTLE_COMPS={
@@ -46,13 +46,15 @@ function makeBattle(opts){
     cd:0,cdMax:CD_CLS[u.hero.cls]||2.8,
     caster:u.hero.cls==='mage',healer:u.hero.cls==='support',uref:u}));
   const comp=battleComp(L.id,stageIdx);
-  const ehp=L.str*6*mul, eatk=L.str*0.95*Math.sqrt(mul);
+  // v2.3: бои заметно жёстче (были «супер лёгкие») — компенсируется
+  // уровнями героев и кованым оружием ремесленника
+  const ehp=L.str*9*mul, eatk=L.str*1.25*Math.sqrt(mul);
   let hpW=0,atkW=0;
   for(const k of comp){hpW+=ENEMY_DEFS[k].hpW;atkW+=ENEMY_DEFS[k].atkW}
   const enemies=comp.map(k=>{const d=ENEMY_DEFS[k];
     const hp=Math.max(3,Math.round(ehp*d.hpW/hpW));
     return {side:'enemy',name:d.nm,key:k,row:d.row,hp,maxHp:hp,
-      atk:eatk*d.atkW/atkW,cd:0,cdMax:(d.caster?4.0:3.1)+(S.rng()*0.6-0.3),
+      atk:eatk*d.atkW/atkW,cd:0,cdMax:(d.caster?3.6:2.8)+(S.rng()*0.6-0.3),
       caster:!!d.caster,def:d};
   });
   return {party,enemies,round:0,over:false,win:false,retreat:false,
@@ -85,6 +87,8 @@ function btStrike(bt,att,foes,mulDmg){
   if(!t)return;
   const dmg=att.atk*(mulDmg||1);
   t.hp-=dmg;
+  // v2.3: опыт за убитого врага (btPickTarget не бьёт мёртвых — без даблкаунта)
+  if(t.hp<=0&&t.side==='enemy'&&t.def)bt.xp=(bt.xp||0)+(t.def.xp||5);
   bt.events.push({t:'hit',a:att.name,b:t.name,v:dmg,kill:t.hp<=0});
 }
 function stepBattleRound(bt){
@@ -112,6 +116,15 @@ function finishBattle(bt){
   // перенести исход на героев: HP, лечение знахаря, гибель
   for(const c of bt.party)if(c.uref&&c.uref.hero)c.uref.hero.hp=Math.max(0,c.hp);
   const hs=partyHeroes();
+  // v2.3: опыт за убитых врагов делится между ВЫЖИВШИМИ героями
+  if(bt.xp>0){
+    const alive=hs.filter(u=>u.hero.hp>0);
+    if(alive.length){
+      const share=Math.max(1,Math.round(bt.xp/alive.length));
+      for(const u of alive)addHeroXp(u,share);
+      log('📈 Опыт боя: '+bt.xp+' (по '+share+' на выжившего).');
+    }
+  }
   if(bt.win){
     const healed=partyHerbHeal(hs);
     if(healed>=3)log('🌿 Знахарь отряда перевязывает раны (+'+healed.toFixed(0)+' HP).');

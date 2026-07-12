@@ -140,6 +140,26 @@ function tradeDaily(){
   if(bought>0)log('📦 Закуплено у королевства '+bought+' ед — из казны.');
   if(sold||bought)computeLevels();
 }
+/* v2.3: торговый пост — малая караванная точка. Торгует излишками как
+   гильдия, но вполовину объёма и по худшему курсу; работает и без гильдии. */
+function tradepostDaily(){
+  let sold=0;
+  for(const tp of S.buildings){
+    if(!tp.built||tp.ruined||tp.abandoned||tp.type!=='tradepost'||!connected(tp))continue;
+    for(const r of ['food','wood','stone','gems']){
+      if(S.policy[r]!=='export')continue;
+      const thr=(r==='food')?S.settlers.length*CFG.FOOD_DAYS[3]:CFG.BANDS[r][3];
+      const ex=Math.floor(S.stock[r]-thr);
+      if(ex<=0)continue;
+      const q=Math.min(ex,Math.ceil(CFG.TRADE_Q/2));
+      const g=q*CFG.PRICE[r]*0.25;
+      S.stock[r]-=q;addResourcePopup(r,-q,tp.x,tp.y);
+      S.gold+=g;addResourcePopup('gold',g,tp.x,tp.y);
+      S.tradeGold+=g;sold+=q;
+    }
+  }
+  if(sold>0){log('🛒 Торговый пост сторговал излишки ('+sold+' ед) заезжим купцам.');computeLevels()}
+}
 const SQUATS=[
   {id:'camp',name:'Разбойничий притон'},
   {id:'cliff',name:'Гоблинское гнездо'},
